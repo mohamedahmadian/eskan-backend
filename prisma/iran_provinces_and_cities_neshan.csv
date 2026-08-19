@@ -7,166 +7,590 @@
 خراسان رضوی,قوچان,https://neshan.org/maps/places/quchan-city#c37.1060-58.5095-12z-0p,37.106,58.5095,quchan-city,خیر
 خراسان رضوی,کاشمر,https://neshan.org/maps/places/kashmar-city#c35.2383-58.4656-12z-0p,35.2383,58.4656,kashmar-city,خیر
 خراسان رضوی,تربت جام,https://neshan.org/maps/places/torbat-jam-city#c35.2442-60.6225-12z-0p,35.2442,60.6225,torbat-jam-city,خیر
-خراسان رضوی,گناباد,https://neshan.org/maps/places/gonabad-city#c34.3529-58.6837-12z-0p,34.3529,58.6837,gonabad-city,خیر
+خراسان رضوی,تایباد,https://neshan.org/maps/places/taybad-city#c34.7400-60.7756-12z-0p,34.74,60.7756,taybad-city,خیر
+خراسان رضوی,چناران,https://neshan.org/maps/places/chenaran-city#c36.6453-59.1214-12z-0p,36.6453,59.1214,chenaran-city,خیر
+خراسان رضوی,سرخس,https://neshan.org/maps/places/sarakhs-city#c36.5444-61.1578-12z-0p,36.5444,61.1578,sarakhs-city,خیر
+خراسان رضوی,گناباد,https://neshan.org/maps/places/gonabad-city#c34.3528-58.6839-12z-0p,34.3528,58.6839,gonabad-city,خیر
+خراسان رضوی,فریمان,https://neshan.org/maps/places/fariman-city#c35.7067-59.8489-12z-0p,35.7067,59.8489,fariman-city,خیر
+خراسان رضوی,درگز,https://neshan.org/maps/places/dargaz-city#c37.4444-59.1089-12z-0p,37.4444,59.1089,dargaz-city,خیر
+خراسان رضوی,خواف,https://neshan.org/maps/places/khaf-city#c34.5719-60.1417-12z-0p,34.5719,60.1417,khaf-city,خیر
+خراسان رضوی,بردسکن,https://neshan.org/maps/places/bardaskan-city#c35.2606-57.9714-12z-0p,35.2606,57.9714,bardaskan-city,خیر
+خراسان رضوی,کلات نادری,https://neshan.org/maps/places/kalat-city#c36.9953-59.7644-12z-0p,36.9953,59.7644,kalat-city,خیر
+خراسان رضوی,رشتخوار,https://neshan.org/maps/places/rashtkhar-city#c34.9744-59.6272-12z-0p,34.9744,59.6272,rashtkhar-city,خیر
+خراسان رضوی,مه‌ولات (فیض‌آباد),https://neshan.org/maps/places/feyzabad-khorasan-city#c35.0167-58.7806-12z-0p,35.0167,58.7806,feyzabad-khorasan-city,خیر
+خراسان رضوی,خلیل‌آباد,https://neshan.org/maps/places/khalilabad-city#c35.2539-58.2858-12z-0p,35.2539,58.2858,khalilabad-city,خیر
+خراسان رضوی,باخرز,https://neshan.org/maps/places/bakharz-city#c34.9922-60.3139-12z-0p,34.9922,60.3139,bakharz-city,خیر
+خراسان رضوی,بجستان,https://neshan.org/maps/places/bajestan-city#c34.5161-58.1817-12z-0p,34.5161,58.1817,bajestan-city,خیر
+خراسان رضوی,جغتای,https://neshan.org/maps/places/joghatay-city#c36.6347-57.0147-12z-0p,36.6347,57.0147,joghatay-city,خیر
+خراسان رضوی,جوین (نقاب),https://neshan.org/maps/places/neqab-city#c36.7083-57.4194-12z-0p,36.7083,57.4194,neqab-city,خیر
+خراسان رضوی,خوشاب (سلطان‌آباد),https://neshan.org/maps/places/soltanabad-khorasan-city#c36.4028-58.0417-12z-0p,36.4028,58.0417,soltanabad-khorasan-city,خیر
+خراسان رضوی,داورزن,https://neshan.org/maps/places/davarzan-city#c36.3400-56.8800-12z-0p,36.34,56.88,davarzan-city,خیر
+خراسان رضوی,فیروزه,https://neshan.org/maps/places/firuzeh-city#c36.2847-58.5861-12z-0p,36.2847,58.5861,firuzeh-city,خیر
+خراسان رضوی,طرقبه,https://neshan.org/maps/places/torqabeh-city#c36.3117-59.3739-12z-0p,36.3117,59.3739,torqabeh-city,خیر
+خراسان رضوی,شاندیز,https://neshan.org/maps/places/shandiz-city#c36.3986-59.3089-12z-0p,36.3986,59.3089,shandiz-city,خیر
+خراسان رضوی,گلبهار,https://neshan.org/maps/places/golbahar-city#c36.6000-59.2000-12z-0p,36.6,59.2,golbahar-city,خیر
+خراسان رضوی,صالح‌آباد,https://neshan.org/maps/places/salehabad-khorasan-city#c35.6889-61.0972-12z-0p,35.6889,61.0972,salehabad-khorasan-city,خیر
+خراسان رضوی,زبرخان (قدمگاه),https://neshan.org/maps/places/qadamgah-city#c36.1056-59.0583-12z-0p,36.1056,59.0583,qadamgah-city,خیر
+خراسان رضوی,کوهسرخ (ریوش),https://neshan.org/maps/places/rivash-city#c35.4639-58.4556-12z-0p,35.4639,58.4556,rivash-city,خیر
+خراسان رضوی,ششتمد,https://neshan.org/maps/places/sheshtamad-city#c35.9583-57.7667-12z-0p,35.9583,57.7667,sheshtamad-city,خیر
 تهران,مرکزیت / کل استان (تهران),https://neshan.org/maps/places/tehran-province#c35.6892-51.3890-8z-0p,35.6892,51.389,tehran-province,بله (استان)
 تهران,تهران,https://neshan.org/maps/places/tehran-city#c35.6892-51.3890-12z-0p,35.6892,51.389,tehran-city,بله
-تهران,شهریار,https://neshan.org/maps/places/shahriar-city#c35.6596-51.0592-12z-0p,35.6596,51.0592,shahriar-city,خیر
-تهران,اسلامشهر,https://neshan.org/maps/places/eslamshahr-city#c35.5381-51.2319-12z-0p,35.5381,51.2319,eslamshahr-city,خیر
-تهران,ری,https://neshan.org/maps/places/rey-city#c35.5908-51.4361-12z-0p,35.5908,51.4361,rey-city,خیر
-تهران,ورامین,https://neshan.org/maps/places/varamin-city#c35.3242-51.6467-12z-0p,35.3242,51.6467,varamin-city,خیر
-تهران,دماوند,https://neshan.org/maps/places/damavand-city#c35.7196-52.0649-12z-0p,35.7196,52.0649,damavand-city,خیر
-تهران,پردیس,https://neshan.org/maps/places/pardis-city#c35.7381-51.8156-12z-0p,35.7381,51.8156,pardis-city,خیر
-تهران,پرند,https://neshan.org/maps/places/parand-city#c35.4594-50.9702-12z-0p,35.4594,50.9702,parand-city,خیر
+تهران,ری (شهرری),https://neshan.org/maps/places/rey-city#c35.5899-51.4344-12z-0p,35.5899,51.4344,rey-city,خیر
+تهران,شمیرانات (تجریش),https://neshan.org/maps/places/tajrish-city#c35.8053-51.4283-12z-0p,35.8053,51.4283,tajrish-city,خیر
+تهران,اسلامشهر,https://neshan.org/maps/places/eslamshahr-city#c35.5411-51.2306-12z-0p,35.5411,51.2306,eslamshahr-city,خیر
+تهران,شهریار,https://neshan.org/maps/places/shahriar-city#c35.6597-51.0592-12z-0p,35.6597,51.0592,shahriar-city,خیر
+تهران,قدس (شهرقدس),https://neshan.org/maps/places/qods-city#c35.7119-51.1092-12z-0p,35.7119,51.1092,qods-city,خیر
+تهران,ملارد,https://neshan.org/maps/places/malard-city#c35.6661-50.9767-12z-0p,35.6661,50.9767,malard-city,خیر
+تهران,ورامین,https://neshan.org/maps/places/varamin-city#c35.3242-51.6469-12z-0p,35.3242,51.6469,varamin-city,خیر
+تهران,پاکدشت,https://neshan.org/maps/places/pakdasht-city#c35.4819-51.6806-12z-0p,35.4819,51.6806,pakdasht-city,خیر
+تهران,بهارستان (گلستان),https://neshan.org/maps/places/golestan-tehran-city#c35.5292-51.1611-12z-0p,35.5292,51.1611,golestan-tehran-city,خیر
+تهران,رباط کریم,https://neshan.org/maps/places/robat-karim-city#c35.4847-51.0828-12z-0p,35.4847,51.0828,robat-karim-city,خیر
+تهران,دماوند,https://neshan.org/maps/places/damavand-city#c35.7194-52.0628-12z-0p,35.7194,52.0628,damavand-city,خیر
+تهران,فیروزکوه,https://neshan.org/maps/places/firoozkooh-city#c35.7569-52.7711-12z-0p,35.7569,52.7711,firoozkooh-city,خیر
+تهران,پیشوا,https://neshan.org/maps/places/pishva-city#c35.3086-51.7267-12z-0p,35.3086,51.7267,pishva-city,خیر
+تهران,قرچک,https://neshan.org/maps/places/qarchak-city#c35.4383-51.5689-12z-0p,35.4383,51.5689,qarchak-city,خیر
+تهران,پردیس,https://neshan.org/maps/places/pardis-city#c35.7411-51.7906-12z-0p,35.7411,51.7906,pardis-city,خیر
+تهران,اندیشه,https://neshan.org/maps/places/andisheh-city#c35.6983-51.0189-12z-0p,35.6983,51.0189,andisheh-city,خیر
+تهران,لواسان,https://neshan.org/maps/places/lavasan-city#c35.8197-51.6319-12z-0p,35.8197,51.6319,lavasan-city,خیر
+تهران,فشم (او your),https://neshan.org/maps/places/fasham-city#c35.9333-51.5278-12z-0p,35.9333,51.5278,fasham-city,خیر
+تهران,بومهن,https://neshan.org/maps/places/bumehen-city#c35.7278-51.8653-12z-0p,35.7278,51.8653,bumehen-city,خیر
+تهران,رودهن,https://neshan.org/maps/places/rudehen-city#c35.7389-51.9111-12z-0p,35.7389,51.9111,rudehen-city,خیر
+تهران,کهریزک,https://neshan.org/maps/places/kahrizak-city#c35.5167-51.3667-12z-0p,35.5167,51.3667,kahrizak-city,خیر
+تهران,باقرشهر,https://neshan.org/maps/places/baghershahr-city#c35.5342-51.4014-12z-0p,35.5342,51.4014,baghershahr-city,خیر
+تهران,صباشهر,https://neshan.org/maps/places/sabashahr-city#c35.5892-51.0928-12z-0p,35.5892,51.0928,sabashahr-city,خیر
+تهران,وحیدیه,https://neshan.org/maps/places/vahidieh-city#c35.6083-51.0250-12z-0p,35.6083,51.025,vahidieh-city,خیر
+تهران,فردوسیه,https://neshan.org/maps/places/ferdosieh-city#c35.6178-51.0667-12z-0p,35.6178,51.0667,ferdosieh-city,خیر
+تهران,شریف‌آباد,https://neshan.org/maps/places/sharifabad-city#c35.4267-51.7828-12z-0p,35.4267,51.7828,sharifabad-city,خیر
+تهران,حسن‌آباد فشافویه,https://neshan.org/maps/places/hasanabad-rey-city#c35.3683-51.2389-12z-0p,35.3683,51.2389,hasanabad-rey-city,خیر
+تهران,نسیم‌شهر,https://neshan.org/maps/places/nasimshahr-city#c35.5619-51.1736-12z-0p,35.5619,51.1736,nasimshahr-city,خیر
+تهران,صالحیه,https://neshan.org/maps/places/salehieh-city#c35.5028-51.1444-12z-0p,35.5028,51.1444,salehieh-city,خیر
+تهران,آبسرد,https://neshan.org/maps/places/absard-city#c35.6444-52.0167-12z-0p,35.6444,52.0167,absard-city,خیر
+تهران,کیلان,https://neshan.org/maps/places/kilan-city#c35.5528-52.1694-12z-0p,35.5528,52.1694,kilan-city,خیر
+تهران,آبعلی,https://neshan.org/maps/places/abali-city#c35.7556-51.9722-12z-0p,35.7556,51.9722,abali-city,خیر
 اصفهان,مرکزیت / کل استان (اصفهان),https://neshan.org/maps/places/isfahan-province#c32.6546-51.6680-7z-0p,32.6546,51.668,isfahan-province,بله (استان)
 اصفهان,اصفهان,https://neshan.org/maps/places/isfahan-city#c32.6546-51.6680-12z-0p,32.6546,51.668,isfahan-city,بله
 اصفهان,کاشان,https://neshan.org/maps/places/kashan-city#c33.9850-51.4100-12z-0p,33.985,51.41,kashan-city,خیر
-اصفهان,نجف‌آباد,https://neshan.org/maps/places/najafabad-city#c32.6342-51.3668-12z-0p,32.6342,51.3668,najafabad-city,خیر
-اصفهان,شاهین‌شهر,https://neshan.org/maps/places/shahin-shahr-city#c32.8624-51.5583-12z-0p,32.8624,51.5583,shahin-shahr-city,خیر
-اصفهان,خمینی‌شهر,https://neshan.org/maps/places/khomeini-shahr-city#c32.6841-51.5239-12z-0p,32.6841,51.5239,khomeini-shahr-city,خیر
-اصفهان,شهرضا,https://neshan.org/maps/places/shahreza-city#c32.0102-51.8665-12z-0p,32.0102,51.8665,shahreza-city,خیر
-اصفهان,نطنز,https://neshan.org/maps/places/natanz-city#c33.5113-51.9167-12z-0p,33.5113,51.9167,natanz-city,خیر
+اصفهان,نجف‌آباد,https://neshan.org/maps/places/najafabad-city#c32.6342-51.3664-12z-0p,32.6342,51.3664,najafabad-city,خیر
+اصفهان,خمینی‌شهر,https://neshan.org/maps/places/khomeyni-shahr-city#c32.7000-51.5200-12z-0p,32.7,51.52,khomeyni-shahr-city,خیر
+اصفهان,شاهین‌شهر,https://neshan.org/maps/places/shahin-shahr-city#c32.8647-51.5489-12z-0p,32.8647,51.5489,shahin-shahr-city,خیر
+اصفهان,لنجان (زرین‌شهر),https://neshan.org/maps/places/zarrin-shahr-city#c32.3900-51.3764-12z-0p,32.39,51.3764,zarrin-shahr-city,خیر
+اصفهان,فلاورجان,https://neshan.org/maps/places/falavarjan-city#c32.5539-51.5097-12z-0p,32.5539,51.5097,falavarjan-city,خیر
+اصفهان,مبارکه,https://neshan.org/maps/places/mobarakeh-city#c32.3486-51.5042-12z-0p,32.3486,51.5042,mobarakeh-city,خیر
+اصفهان,شهرضا,https://neshan.org/maps/places/shahreza-city#c31.9950-51.8667-12z-0p,31.995,51.8667,shahreza-city,خیر
+اصفهان,آران و بیدگل,https://neshan.org/maps/places/aran-bidgol-city#c34.0578-51.4839-12z-0p,34.0578,51.4839,aran-bidgol-city,خیر
+اصفهان,برخوار (دولت‌آباد),https://neshan.org/maps/places/dowlatabad-isfahan-city#c32.7989-51.6961-12z-0p,32.7989,51.6961,dowlatabad-isfahan-city,خیر
+اصفهان,نائین,https://neshan.org/maps/places/nain-city#c32.8600-53.0867-12z-0p,32.86,53.0867,nain-city,خیر
+اصفهان,نطنز,https://neshan.org/maps/places/natanz-city#c33.5133-51.9167-12z-0p,33.5133,51.9167,natanz-city,خیر
+اصفهان,سمیرم,https://neshan.org/maps/places/semirom-city#c31.4147-51.5694-12z-0p,31.4147,51.5694,semirom-city,خیر
+اصفهان,گلپایگان,https://neshan.org/maps/places/golpayegan-city#c33.4539-50.2883-12z-0p,33.4539,50.2883,golpayegan-city,خیر
+اصفهان,فریدن (داران),https://neshan.org/maps/places/daran-city#c32.9889-50.4139-12z-0p,32.9889,50.4139,daran-city,خیر
+اصفهان,فریدون‌شهر,https://neshan.org/maps/places/fereydunshahr-city#c32.9417-50.1208-12z-0p,32.9417,50.1208,fereydunshahr-city,خیر
+اصفهان,خوانسار,https://neshan.org/maps/places/khvansar-city#c33.2206-50.3150-12z-0p,33.2206,50.315,khvansar-city,خیر
+اصفهان,دهاقان,https://neshan.org/maps/places/dehaqan-city#c31.9406-51.6483-12z-0p,31.9406,51.6483,dehaqan-city,خیر
+اصفهان,چادگان,https://neshan.org/maps/places/chadegan-city#c32.7708-50.6278-12z-0p,32.7708,50.6278,chadegan-city,خیر
+اصفهان,تیران و کرون,https://neshan.org/maps/places/tiran-city#c32.7028-51.1542-12z-0p,32.7028,51.1542,tiran-city,خیر
+اصفهان,اردستان,https://neshan.org/maps/places/ardestan-city#c33.3789-52.3719-12z-0p,33.3789,52.3719,ardestan-city,خیر
+اصفهان,خور و بیابانک,https://neshan.org/maps/places/khur-city#c33.7750-55.0833-12z-0p,33.775,55.0833,khur-city,خیر
+اصفهان,بوئین و میاندشت,https://neshan.org/maps/places/buin-miandasht-city#c33.0722-50.1417-12z-0p,33.0722,50.1417,buin-miandasht-city,خیر
+اصفهان,هرند,https://neshan.org/maps/places/harand-city#c32.5583-52.3667-12z-0p,32.5583,52.3667,harand-city,خیر
+اصفهان,کوهپایه,https://neshan.org/maps/places/kuhpayeh-city#c32.7125-52.4333-12z-0p,32.7125,52.4333,kuhpayeh-city,خیر
+اصفهان,ورزنه,https://neshan.org/maps/places/varzaneh-city#c32.4208-52.6542-12z-0p,32.4208,52.6542,varzaneh-city,خیر
+اصفهان,جرقویه (نیک‌آباد),https://neshan.org/maps/places/nikabad-city#c32.2833-52.2333-12z-0p,32.2833,52.2333,nikabad-city,خیر
+اصفهان,فولادشهر,https://neshan.org/maps/places/fooladshahr-city#c32.4939-51.4206-12z-0p,32.4939,51.4206,fooladshahr-city,خیر
+اصفهان,بهارستان اصفهان,https://neshan.org/maps/places/baharestan-isfahan-city#c32.4833-51.6833-12z-0p,32.4833,51.6833,baharestan-isfahan-city,خیر
 فارس,مرکزیت / کل استان (فارس),https://neshan.org/maps/places/fars-province#c29.5918-52.5837-7z-0p,29.5918,52.5837,fars-province,بله (استان)
 فارس,شیراز,https://neshan.org/maps/places/shiraz-city#c29.5918-52.5837-12z-0p,29.5918,52.5837,shiraz-city,بله
 فارس,مرودشت,https://neshan.org/maps/places/marvdasht-city#c29.8742-52.8025-12z-0p,29.8742,52.8025,marvdasht-city,خیر
+فارس,کازرون,https://neshan.org/maps/places/kazerun-city#c29.6194-51.6542-12z-0p,29.6194,51.6542,kazerun-city,خیر
 فارس,جهرم,https://neshan.org/maps/places/jahrom-city#c28.5000-53.5600-12z-0p,28.5,53.56,jahrom-city,خیر
-فارس,فسا,https://neshan.org/maps/places/fasa-city#c28.9383-53.6482-12z-0p,28.9383,53.6482,fasa-city,خیر
-فارس,کازرون,https://neshan.org/maps/places/kazerun-city#c29.6195-51.6541-12z-0p,29.6195,51.6541,kazerun-city,خیر
-فارس,لار,https://neshan.org/maps/places/lar-city#c27.6833-54.3333-12z-0p,27.6833,54.3333,lar-city,خیر
+فارس,لارستان (لار),https://neshan.org/maps/places/lar-city#c27.6833-54.3333-12z-0p,27.6833,54.3333,lar-city,خیر
+فارس,فسا,https://neshan.org/maps/places/fasa-city#c28.9383-53.6481-12z-0p,28.9383,53.6481,fasa-city,خیر
+فارس,داراب,https://neshan.org/maps/places/darab-city#c28.7519-54.5444-12z-0p,28.7519,54.5444,darab-city,خیر
+فارس,فیروزآباد,https://neshan.org/maps/places/firoozabad-city#c28.8439-52.5706-12z-0p,28.8439,52.5706,firoozabad-city,خیر
+فارس,ممسنی (نورآباد),https://neshan.org/maps/places/noorabad-mamasani-city#c30.1142-51.5217-12z-0p,30.1142,51.5217,noorabad-mamasani-city,خیر
+فارس,آباده,https://neshan.org/maps/places/abadeh-city#c31.1608-52.6500-12z-0p,31.1608,52.65,abadeh-city,خیر
+فارس,اقلید,https://neshan.org/maps/places/eqlid-city#c30.8897-52.6842-12z-0p,30.8897,52.6842,eqlid-city,خیر
+فارس,سپیدان (اردکان),https://neshan.org/maps/places/ardakan-fars-city#c30.2606-51.9842-12z-0p,30.2606,51.9842,ardakan-fars-city,خیر
+فارس,لامرد,https://neshan.org/maps/places/lamerd-city#c27.3339-53.1789-12z-0p,27.3339,53.1789,lamerd-city,خیر
+فارس,نی‌ریز,https://neshan.org/maps/places/neyriz-city#c29.1986-54.3278-12z-0p,29.1986,54.3278,neyriz-city,خیر
+فارس,استهبان,https://neshan.org/maps/places/estehban-city#c29.1264-54.0419-12z-0p,29.1264,54.0419,estehban-city,خیر
+فارس,قیر و کارزین,https://neshan.org/maps/places/qir-city#c28.4839-53.0333-12z-0p,28.4839,53.0333,qir-city,خیر
+فارس,زرین‌دشت (حاجی‌آباد),https://neshan.org/maps/places/hajiabad-fars-city#c28.3556-54.4239-12z-0p,28.3556,54.4239,hajiabad-fars-city,خیر
+فارس,مهر,https://neshan.org/maps/places/mohr-city#c27.5539-52.8833-12z-0p,27.5539,52.8833,mohr-city,خیر
+فارس,خرم‌بید (صفاشهر),https://neshan.org/maps/places/safashahr-city#c30.6139-53.1972-12z-0p,30.6139,53.1972,safashahr-city,خیر
+فارس,بوانات,https://neshan.org/maps/places/bavanat-city#c30.4639-53.6542-12z-0p,30.4639,53.6542,bavanat-city,خیر
+فارس,ارسنجان,https://neshan.org/maps/places/arsanjan-city#c29.9139-53.3083-12z-0p,29.9139,53.3083,arsanjan-city,خیر
+فارس,خنج,https://neshan.org/maps/places/khonj-city#c27.8889-53.4417-12z-0p,27.8889,53.4417,khonj-city,خیر
+فارس,گراش,https://neshan.org/maps/places/gerash-city#c27.6639-54.1361-12z-0p,27.6639,54.1361,gerash-city,خیر
+فارس,کوار,https://neshan.org/maps/places/kavar-city#c29.2056-52.6889-12z-0p,29.2056,52.6889,kavar-city,خیر
+فارس,رستم (مصیری),https://neshan.org/maps/places/masiri-city#c30.2458-51.5208-12z-0p,30.2458,51.5208,masiri-city,خیر
+فارس,خرامه,https://neshan.org/maps/places/kherameh-city#c29.5000-53.3167-12z-0p,29.5,53.3167,kherameh-city,خیر
+فارس,سروستان,https://neshan.org/maps/places/sarvestan-city#c29.2736-53.2208-12z-0p,29.2736,53.2208,sarvestan-city,خیر
+فارس,پاسارگاد (سعادت‌شهر),https://neshan.org/maps/places/saadatshahr-city#c30.0819-53.1361-12z-0p,30.0819,53.1361,saadatshahr-city,خیر
+فارس,کوه‌چنار (قائمیه),https://neshan.org/maps/places/qaemieh-city#c29.6917-51.6250-12z-0p,29.6917,51.625,qaemieh-city,خیر
+فارس,زرقان,https://neshan.org/maps/places/zarqan-city#c29.7708-52.7167-12z-0p,29.7708,52.7167,zarqan-city,خیر
+فارس,بیضا,https://neshan.org/maps/places/beyza-city#c29.9833-52.4167-12z-0p,29.9833,52.4167,beyza-city,خیر
+فارس,اوز,https://neshan.org/maps/places/evaz-city#c27.7611-54.0083-12z-0p,27.7611,54.0083,evaz-city,خیر
+فارس,سرچهان (کره‌ای),https://neshan.org/maps/places/korei-city#c30.2833-53.8667-12z-0p,30.2833,53.8667,korei-city,خیر
+فارس,بختگان (آباده طشک),https://neshan.org/maps/places/abadeh-tashk-city#c29.7417-53.8583-12z-0p,29.7417,53.8583,abadeh-tashk-city,خیر
+فارس,جویم,https://neshan.org/maps/places/juyom-city#c28.2500-53.9833-12z-0p,28.25,53.9833,juyom-city,خیر
 آذربایجان شرقی,مرکزیت / کل استان (آذربایجان شرقی),https://neshan.org/maps/places/east-azerbaijan-province#c38.0800-46.2919-7z-0p,38.08,46.2919,east-azerbaijan-province,بله (استان)
 آذربایجان شرقی,تبریز,https://neshan.org/maps/places/tabriz-city#c38.0800-46.2919-12z-0p,38.08,46.2919,tabriz-city,بله
-آذربایجان شرقی,مراغه,https://neshan.org/maps/places/maragheh-city#c37.3919-46.2392-12z-0p,37.3919,46.2392,maragheh-city,خیر
-آذربایجان شرقی,مرند,https://neshan.org/maps/places/marand-city#c38.4329-45.7749-12z-0p,38.4329,45.7749,marand-city,خیر
-آذربایجان شرقی,میانه,https://neshan.org/maps/places/mianeh-city#c37.4222-47.7153-12z-0p,37.4222,47.7153,mianeh-city,خیر
-آذربایجان شرقی,اهر,https://neshan.org/maps/places/ahar-city#c38.4774-47.0697-12z-0p,38.4774,47.0697,ahar-city,خیر
+آذربایجان شرقی,مراغه,https://neshan.org/maps/places/maragheh-city#c37.3917-46.2394-12z-0p,37.3917,46.2394,maragheh-city,خیر
+آذربایجان شرقی,مرند,https://neshan.org/maps/places/marand-city#c38.4328-45.7750-12z-0p,38.4328,45.775,marand-city,خیر
+آذربایجان شرقی,میانه,https://neshan.org/maps/places/mianeh-city#c37.4225-47.7153-12z-0p,37.4225,47.7153,mianeh-city,خیر
+آذربایجان شرقی,اهر,https://neshan.org/maps/places/ahar-city#c38.4772-47.0697-12z-0p,38.4772,47.0697,ahar-city,خیر
+آذربایجان شرقی,بناب,https://neshan.org/maps/places/bonab-city#c37.3400-46.0561-12z-0p,37.34,46.0561,bonab-city,خیر
+آذربایجان شرقی,شبستر,https://neshan.org/maps/places/shabestar-city#c38.1806-45.7028-12z-0p,38.1806,45.7028,shabestar-city,خیر
+آذربایجان شرقی,سراب,https://neshan.org/maps/places/sarab-city#c37.9408-47.5367-12z-0p,37.9408,47.5367,sarab-city,خیر
+آذربایجان شرقی,آذرشهر,https://neshan.org/maps/places/azarshahr-city#c37.7583-45.9750-12z-0p,37.7583,45.975,azarshahr-city,خیر
+آذربایجان شرقی,اسکو,https://neshan.org/maps/places/osku-city#c37.9158-46.1239-12z-0p,37.9158,46.1239,osku-city,خیر
+آذربایجان شرقی,بستان‌آباد,https://neshan.org/maps/places/bostanabad-city#c37.8461-46.8350-12z-0p,37.8461,46.835,bostanabad-city,خیر
+آذربایجان شرقی,عجب‌شیر,https://neshan.org/maps/places/ajabshir-city#c37.4778-45.8953-12z-0p,37.4778,45.8953,ajabshir-city,خیر
+آذربایجان شرقی,ملکان,https://neshan.org/maps/places/malekan-city#c37.1436-46.1039-12z-0p,37.1436,46.1039,malekan-city,خیر
+آذربایجان شرقی,کلیبر,https://neshan.org/maps/places/kaleybar-city#c38.8719-47.0347-12z-0p,38.8719,47.0347,kaleybar-city,خیر
+آذربایجان شرقی,جلفا,https://neshan.org/maps/places/jolfa-city#c38.9400-45.6319-12z-0p,38.94,45.6319,jolfa-city,خیر
+آذربایجان شرقی,هریس,https://neshan.org/maps/places/heris-city#c38.2472-47.1167-12z-0p,38.2472,47.1167,heris-city,خیر
+آذربایجان شرقی,هشترود,https://neshan.org/maps/places/hashtrud-city#c37.4778-47.0506-12z-0p,37.4778,47.0506,hashtrud-city,خیر
+آذربایجان شرقی,ورزقان,https://neshan.org/maps/places/varzaqan-city#c38.5083-46.6542-12z-0p,38.5083,46.6542,varzaqan-city,خیر
+آذربایجان شرقی,چاراویماق (قره‌آغاج),https://neshan.org/maps/places/qarah-aghaj-city#c37.2189-47.0028-12z-0p,37.2189,47.0028,qarah-aghaj-city,خیر
+آذربایجان شرقی,خداآفرین (خمارلو),https://neshan.org/maps/places/khomarlu-city#c39.1517-47.0342-12z-0p,39.1517,47.0342,khomarlu-city,خیر
+آذربایجان شرقی,هوراند,https://neshan.org/maps/places/hoorand-city#c38.8806-47.3739-12z-0p,38.8806,47.3739,hoorand-city,خیر
+آذربایجان شرقی,ترکمانچای,https://neshan.org/maps/places/torkamanchay-city#c37.5833-47.3833-12z-0p,37.5833,47.3833,torkamanchay-city,خیر
+آذربایجان شرقی,سهند,https://neshan.org/maps/places/sahand-city#c37.9500-46.1167-12z-0p,37.95,46.1167,sahand-city,خیر
+آذربایجان شرقی,خسروشاه,https://neshan.org/maps/places/khosrowshah-city#c37.9667-46.0500-12z-0p,37.9667,46.05,khosrowshah-city,خیر
+آذربایجان شرقی,ایلخچی,https://neshan.org/maps/places/ilkhchi-city#c37.9400-45.9600-12z-0p,37.94,45.96,ilkhchi-city,خیر
+آذربایجان شرقی,صوفیان,https://neshan.org/maps/places/sufian-city#c38.2833-45.9833-12z-0p,38.2833,45.9833,sufian-city,خیر
+آذربایجان شرقی,ممقان,https://neshan.org/maps/places/mamqan-city#c37.8400-45.9750-12z-0p,37.84,45.975,mamqan-city,خیر
 آذربایجان غربی,مرکزیت / کل استان (آذربایجان غربی),https://neshan.org/maps/places/west-azerbaijan-province#c37.5527-45.0761-7z-0p,37.5527,45.0761,west-azerbaijan-province,بله (استان)
 آذربایجان غربی,ارومیه,https://neshan.org/maps/places/urmia-city#c37.5527-45.0761-12z-0p,37.5527,45.0761,urmia-city,بله
-آذربایجان غربی,خوی,https://neshan.org/maps/places/khoy-city#c38.5503-44.9583-12z-0p,38.5503,44.9583,khoy-city,خیر
+آذربایجان غربی,خوی,https://neshan.org/maps/places/khoy-city#c38.5503-44.9575-12z-0p,38.5503,44.9575,khoy-city,خیر
+آذربایجان غربی,بوکان,https://neshan.org/maps/places/bukan-city#c36.5208-46.2089-12z-0p,36.5208,46.2089,bukan-city,خیر
 آذربایجان غربی,مهاباد,https://neshan.org/maps/places/mahabad-city#c36.7631-45.7222-12z-0p,36.7631,45.7222,mahabad-city,خیر
-آذربایجان غربی,بوکان,https://neshan.org/maps/places/bukan-city#c36.5210-46.2089-12z-0p,36.521,46.2089,bukan-city,خیر
-آذربایجان غربی,میاندوآب,https://neshan.org/maps/places/miandoab-city#c36.9667-46.1028-12z-0p,36.9667,46.1028,miandoab-city,خیر
+آذربایجان غربی,میاندوآب,https://neshan.org/maps/places/miandoab-city#c36.9686-46.1039-12z-0p,36.9686,46.1039,miandoab-city,خیر
+آذربایجان غربی,سلماس,https://neshan.org/maps/places/salmas-city#c38.1972-44.7653-12z-0p,38.1972,44.7653,salmas-city,خیر
+آذربایجان غربی,پیرانشهر,https://neshan.org/maps/places/piranshahr-city#c36.7011-45.1414-12z-0p,36.7011,45.1414,piranshahr-city,خیر
+آذربایجان غربی,نقده,https://neshan.org/maps/places/naqadeh-city#c36.9553-45.3881-12z-0p,36.9553,45.3881,naqadeh-city,خیر
+آذربایجان غربی,سردشت,https://neshan.org/maps/places/sardasht-city#c36.1553-45.4789-12z-0p,36.1553,45.4789,sardasht-city,خیر
+آذربایجان غربی,شاهین‌دژ,https://neshan.org/maps/places/shahin-dezh-city#c36.6789-46.5667-12z-0p,36.6789,46.5667,shahin-dezh-city,خیر
+آذربایجان غربی,تکاب,https://neshan.org/maps/places/takab-city#c36.4008-47.1133-12z-0p,36.4008,47.1133,takab-city,خیر
+آذربایجان غربی,ماکو,https://neshan.org/maps/places/maku-city#c39.2947-44.5122-12z-0p,39.2947,44.5122,maku-city,خیر
+آذربایجان غربی,اشنویه,https://neshan.org/maps/places/oshnavieh-city#c37.0397-45.0983-12z-0p,37.0397,45.0983,oshnavieh-city,خیر
+آذربایجان غربی,چالدران (سیه‌چشمه),https://neshan.org/maps/places/siah-cheshmeh-city#c39.0667-44.3833-12z-0p,39.0667,44.3833,siah-cheshmeh-city,خیر
+آذربایجان غربی,پلدشت,https://neshan.org/maps/places/poldasht-city#c39.3478-45.0683-12z-0p,39.3478,45.0683,poldasht-city,خیر
+آذربایجان غربی,شوط,https://neshan.org/maps/places/showt-city#c39.2194-44.9806-12z-0p,39.2194,44.9806,showt-city,خیر
+آذربایجان غربی,چایپاره (قره‌ضیاءالدین),https://neshan.org/maps/places/qarah-ziaeddin-city#c38.8950-45.0256-12z-0p,38.895,45.0256,qarah-ziaeddin-city,خیر
+آذربایجان غربی,باروق,https://neshan.org/maps/places/baruq-city#c37.0167-46.2667-12z-0p,37.0167,46.2667,baruq-city,خیر
+آذربایجان غربی,چهاربرج,https://neshan.org/maps/places/chaharborj-city#c37.1167-45.9833-12z-0p,37.1167,45.9833,chaharborj-city,خیر
+آذربایجان غربی,میرآباد,https://neshan.org/maps/places/mirabad-city#c36.3167-45.3667-12z-0p,36.3167,45.3667,mirabad-city,خیر
 خوزستان,مرکزیت / کل استان (خوزستان),https://neshan.org/maps/places/khuzestan-province#c31.3203-48.6693-7z-0p,31.3203,48.6693,khuzestan-province,بله (استان)
-خوزستان,اهواز,https://neshan.org/maps/places/ahvaz-city#c31.3203-48.6693-12z-0p,31.3203,48.6693,ahvaz-city,بله
-خوزستان,دزفول,https://neshan.org/maps/places/dezful-city#c32.3811-48.4058-12z-0p,32.3811,48.4058,dezful-city,خیر
-خوزستان,آبادان,https://neshan.org/maps/places/abadan-city#c30.3392-48.3043-12z-0p,30.3392,48.3043,abadan-city,خیر
+خوزستان,اهواز,https://neshan.org/maps/places/ahvaz-city#c31.3183-48.6706-12z-0p,31.3183,48.6706,ahvaz-city,بله
+خوزستان,دزفول,https://neshan.org/maps/places/dezful-city#c32.3839-48.4000-12z-0p,32.3839,48.4,dezful-city,خیر
+خوزستان,آبادان,https://neshan.org/maps/places/abadan-city#c30.3392-48.3042-12z-0p,30.3392,48.3042,abadan-city,خیر
 خوزستان,خرمشهر,https://neshan.org/maps/places/khorramshahr-city#c30.4397-48.1803-12z-0p,30.4397,48.1803,khorramshahr-city,خیر
 خوزستان,بندر ماهشهر,https://neshan.org/maps/places/bandar-mahshahr-city#c30.5589-49.1981-12z-0p,30.5589,49.1981,bandar-mahshahr-city,خیر
-خوزستان,شوشتر,https://neshan.org/maps/places/shushtar-city#c32.0456-48.8567-12z-0p,32.0456,48.8567,shushtar-city,خیر
+خوزستان,بهبهان,https://neshan.org/maps/places/behbahan-city#c30.5958-50.2417-12z-0p,30.5958,50.2417,behbahan-city,خیر
+خوزستان,ایذه,https://neshan.org/maps/places/izeh-city#c31.8333-49.8667-12z-0p,31.8333,49.8667,izeh-city,خیر
+خوزستان,شوشتر,https://neshan.org/maps/places/shushtar-city#c32.0456-48.8569-12z-0p,32.0456,48.8569,shushtar-city,خیر
+خوزستان,مسجد سلیمان,https://neshan.org/maps/places/masjed-soleyman-city#c31.9364-49.3039-12z-0p,31.9364,49.3039,masjed-soleyman-city,خیر
+خوزستان,اندیمشک,https://neshan.org/maps/places/andimeshk-city#c32.4600-48.3564-12z-0p,32.46,48.3564,andimeshk-city,خیر
+خوزستان,شوش,https://neshan.org/maps/places/shush-city#c32.1942-48.2436-12z-0p,32.1942,48.2436,shush-city,خیر
+خوزستان,رامهرمز,https://neshan.org/maps/places/ramhormoz-city#c31.2789-49.6036-12z-0p,31.2789,49.6036,ramhormoz-city,خیر
+خوزستان,شادگان,https://neshan.org/maps/places/shadegan-city#c30.6497-48.6644-12z-0p,30.6497,48.6644,shadegan-city,خیر
+خوزستان,دشت آزادگان (سوسنگرد),https://neshan.org/maps/places/susangerd-city#c31.5606-48.1839-12z-0p,31.5606,48.1839,susangerd-city,خیر
+خوزستان,امیدیه,https://neshan.org/maps/places/omidiyeh-city#c30.7597-49.7050-12z-0p,30.7597,49.705,omidiyeh-city,خیر
+خوزستان,باغ‌ملک,https://neshan.org/maps/places/baghmalek-city#c31.5239-49.8889-12z-0p,31.5239,49.8889,baghmalek-city,خیر
+خوزستان,بندر امام خمینی,https://neshan.org/maps/places/bandar-emam-khomeyni-city#c30.4333-49.0833-12z-0p,30.4333,49.0833,bandar-emam-khomeyni-city,خیر
+خوزستان,هندیجان,https://neshan.org/maps/places/hendijan-city#c30.2364-49.7119-12z-0p,30.2364,49.7119,hendijan-city,خیر
+خوزستان,لالی,https://neshan.org/maps/places/lali-city#c32.3278-49.0917-12z-0p,32.3278,49.0917,lali-city,خیر
+خوزستان,رامشیر,https://neshan.org/maps/places/ramshir-city#c30.8931-49.4067-12z-0p,30.8931,49.4067,ramshir-city,خیر
+خوزستان,گتوند,https://neshan.org/maps/places/gotvand-city#c32.2472-48.8139-12z-0p,32.2472,48.8139,gotvand-city,خیر
+خوزستان,هفتکل,https://neshan.org/maps/places/haftkel-city#c31.4422-49.5317-12z-0p,31.4422,49.5317,haftkel-city,خیر
+خوزستان,هویزه,https://neshan.org/maps/places/hoveyzeh-city#c31.4619-48.0739-12z-0p,31.4619,48.0739,hoveyzeh-city,خیر
+خوزستان,باوی (ملاثانی),https://neshan.org/maps/places/molasani-city#c31.5833-48.8833-12z-0p,31.5833,48.8833,molasani-city,خیر
+خوزستان,کارون (کوت عبدالله),https://neshan.org/maps/places/kut-abdollah-city#c31.2500-48.6500-12z-0p,31.25,48.65,kut-abdollah-city,خیر
+خوزستان,حمیدیه,https://neshan.org/maps/places/hamidiyeh-city#c31.4889-48.4333-12z-0p,31.4889,48.4333,hamidiyeh-city,خیر
+خوزستان,آغاجاری,https://neshan.org/maps/places/aghajari-city#c30.7000-49.8333-12z-0p,30.7,49.8333,aghajari-city,خیر
+خوزستان,کرخه (الوان),https://neshan.org/maps/places/alvan-city#c32.0833-48.3333-12z-0p,32.0833,48.3333,alvan-city,خیر
+خوزستان,دزپارت (دهدز),https://neshan.org/maps/places/dehdez-city#c31.7000-50.2833-12z-0p,31.7,50.2833,dehdez-city,خیر
+خوزستان,صیدون,https://neshan.org/maps/places/seydun-city#c31.3667-50.0833-12z-0p,31.3667,50.0833,seydun-city,خیر
 مازندران,مرکزیت / کل استان (مازندران),https://neshan.org/maps/places/mazandaran-province#c36.5659-53.0586-7z-0p,36.5659,53.0586,mazandaran-province,بله (استان)
 مازندران,ساری,https://neshan.org/maps/places/sari-city#c36.5659-53.0586-12z-0p,36.5659,53.0586,sari-city,بله
-مازندران,بابل,https://neshan.org/maps/places/babol-city#c36.5447-52.6789-12z-0p,36.5447,52.6789,babol-city,خیر
-مازندران,آمل,https://neshan.org/maps/places/amol-city#c36.4674-52.3507-12z-0p,36.4674,52.3507,amol-city,خیر
-مازندران,قائم‌شهر,https://neshan.org/maps/places/qaem-shahr-city#c36.4636-52.8600-12z-0p,36.4636,52.86,qaem-shahr-city,خیر
-مازندران,چالوس,https://neshan.org/maps/places/chalus-city#c36.6550-51.4204-12z-0p,36.655,51.4204,chalus-city,خیر
-مازندران,رامسر,https://neshan.org/maps/places/ramsar-city#c36.9176-50.6653-12z-0p,36.9176,50.6653,ramsar-city,خیر
+مازندران,بابل,https://neshan.org/maps/places/babol-city#c36.5513-52.6789-12z-0p,36.5513,52.6789,babol-city,خیر
+مازندران,آمل,https://neshan.org/maps/places/amol-city#c36.4697-52.3589-12z-0p,36.4697,52.3589,amol-city,خیر
+مازندران,قائم‌شهر,https://neshan.org/maps/places/qaemshahr-city#c36.4639-52.8597-12z-0p,36.4639,52.8597,qaemshahr-city,خیر
+مازندران,بهشهر,https://neshan.org/maps/places/behshahr-city#c36.6978-53.5519-12z-0p,36.6978,53.5519,behshahr-city,خیر
+مازندران,تنکابن (شهسوار),https://neshan.org/maps/places/tonekabon-city#c36.8164-50.8739-12z-0p,36.8164,50.8739,tonekabon-city,خیر
+مازندران,چالوس,https://neshan.org/maps/places/chalus-city#c36.6550-51.4206-12z-0p,36.655,51.4206,chalus-city,خیر
+مازندران,نوشهر,https://neshan.org/maps/places/nowshahr-city#c36.6492-51.4961-12z-0p,36.6492,51.4961,nowshahr-city,خیر
+مازندران,بابلسر,https://neshan.org/maps/places/babolsar-city#c36.7022-52.6575-12z-0p,36.7022,52.6575,babolsar-city,خیر
+مازندران,رامسر,https://neshan.org/maps/places/ramsar-city#c36.9178-50.6681-12z-0p,36.9178,50.6681,ramsar-city,خیر
+مازندران,محمودآباد,https://neshan.org/maps/places/mahmudabad-city#c36.6319-52.2628-12z-0p,36.6319,52.2628,mahmudabad-city,خیر
+مازندران,نکا,https://neshan.org/maps/places/neka-city#c36.6508-53.2989-12z-0p,36.6508,53.2989,neka-city,خیر
+مازندران,نور,https://neshan.org/maps/places/nur-city#c36.5719-52.0150-12z-0p,36.5719,52.015,nur-city,خیر
+مازندران,فریدونکنار,https://neshan.org/maps/places/fereydunkenar-city#c36.6864-52.5239-12z-0p,36.6864,52.5239,fereydunkenar-city,خیر
+مازندران,جویبار,https://neshan.org/maps/places/juybar-city#c36.6422-52.9119-12z-0p,36.6422,52.9119,juybar-city,خیر
+مازندران,عباس‌آباد,https://neshan.org/maps/places/abbasabad-mazandaran-city#c36.7267-51.1072-12z-0p,36.7267,51.1072,abbasabad-mazandaran-city,خیر
+مازندران,سوادکوه (پل‌سفید),https://neshan.org/maps/places/pol-sefid-city#c36.1189-53.0567-12z-0p,36.1189,53.0567,pol-sefid-city,خیر
+مازندران,سوادکوه شمالی (شیرگاه),https://neshan.org/maps/places/shirgah-city#c36.2972-52.8878-12z-0p,36.2972,52.8878,shirgah-city,خیر
+مازندران,گلوگاه,https://neshan.org/maps/places/galugah-city#c36.7275-53.8089-12z-0p,36.7275,53.8089,galugah-city,خیر
+مازندران,میاندورود (سورک),https://neshan.org/maps/places/surak-city#c36.5956-53.2106-12z-0p,36.5956,53.2106,surak-city,خیر
+مازندران,کلاردشت,https://neshan.org/maps/places/kelardasht-city#c36.4917-51.1542-12z-0p,36.4917,51.1542,kelardasht-city,خیر
+مازندران,سیمرغ (کیاکلا),https://neshan.org/maps/places/kiakola-city#c36.5778-52.8194-12z-0p,36.5778,52.8194,kiakola-city,خیر
+مازندران,سلمان‌شهر (متل قو),https://neshan.org/maps/places/salmanshahr-city#c36.7028-51.2189-12z-0p,36.7028,51.2189,salmanshahr-city,خیر
+مازندران,سرخرود,https://neshan.org/maps/places/sorkhrud-city#c36.6667-52.4500-12z-0p,36.6667,52.45,sorkhrud-city,خیر
+مازندران,رویان,https://neshan.org/maps/places/royan-city#c36.5667-51.9667-12z-0p,36.5667,51.9667,royan-city,خیر
 گیلان,مرکزیت / کل استان (گیلان),https://neshan.org/maps/places/gilan-province#c37.2809-49.5924-8z-0p,37.2809,49.5924,gilan-province,بله (استان)
 گیلان,رشت,https://neshan.org/maps/places/rasht-city#c37.2809-49.5924-12z-0p,37.2809,49.5924,rasht-city,بله
-گیلان,بندرانزلی,https://neshan.org/maps/places/bandar-anzali-city#c37.4722-49.4622-12z-0p,37.4722,49.4622,bandar-anzali-city,خیر
-گیلان,لاهیجان,https://neshan.org/maps/places/lahijan-city#c37.2072-50.0034-12z-0p,37.2072,50.0034,lahijan-city,خیر
-گیلان,تالش,https://neshan.org/maps/places/talesh-city#c37.8014-48.9056-12z-0p,37.8014,48.9056,talesh-city,خیر
-گیلان,آستارا,https://neshan.org/maps/places/astara-city#c38.4294-48.8720-12z-0p,38.4294,48.872,astara-city,خیر
+گیلان,بندر انزلی,https://neshan.org/maps/places/bandar-anzali-city#c37.4728-49.4622-12z-0p,37.4728,49.4622,bandar-anzali-city,خیر
+گیلان,لاهیجان,https://neshan.org/maps/places/lahijan-city#c37.2072-50.0036-12z-0p,37.2072,50.0036,lahijan-city,خیر
+گیلان,لنگرود,https://neshan.org/maps/places/langerud-city#c37.1972-50.1536-12z-0p,37.1972,50.1536,langerud-city,خیر
+گیلان,تالش (هشتپر),https://neshan.org/maps/places/talesh-city#c37.7989-48.9039-12z-0p,37.7989,48.9039,talesh-city,خیر
+گیلان,رودسر,https://neshan.org/maps/places/rudsar-city#c37.1378-50.2881-12z-0p,37.1378,50.2881,rudsar-city,خیر
+گیلان,صومعه‌سرا,https://neshan.org/maps/places/sowmehsara-city#c37.3022-49.3139-12z-0p,37.3022,49.3139,sowmehsara-city,خیر
+گیلان,آستارا,https://neshan.org/maps/places/astara-city#c38.4294-48.8719-12z-0p,38.4294,48.8719,astara-city,خیر
 گیلان,فومن,https://neshan.org/maps/places/fuman-city#c37.2239-49.3125-12z-0p,37.2239,49.3125,fuman-city,خیر
+گیلان,آستانه اشرفیه,https://neshan.org/maps/places/astaneh-ashrafiyeh-city#c37.2597-49.9444-12z-0p,37.2597,49.9444,astaneh-ashrafiyeh-city,خیر
+گیلان,رودبار,https://neshan.org/maps/places/rudbar-city#c36.8094-49.4267-12z-0p,36.8094,49.4267,rudbar-city,خیر
+گیلان,املش,https://neshan.org/maps/places/amlesh-city#c37.0983-50.1869-12z-0p,37.0983,50.1869,amlesh-city,خیر
+گیلان,شفت,https://neshan.org/maps/places/shaft-city#c37.1683-49.4011-12z-0p,37.1683,49.4011,shaft-city,خیر
+گیلان,رضوانشهر,https://neshan.org/maps/places/rezvanshahr-city#c37.5542-49.1389-12z-0p,37.5542,49.1389,rezvanshahr-city,خیر
+گیلان,ماسال,https://neshan.org/maps/places/masal-city#c37.3631-49.1328-12z-0p,37.3631,49.1328,masal-city,خیر
+گیلان,سیاهکل,https://neshan.org/maps/places/siahkal-city#c37.1528-49.8708-12z-0p,37.1528,49.8708,siahkal-city,خیر
+گیلان,خمام,https://neshan.org/maps/places/khomam-city#c37.3878-49.6586-12z-0p,37.3878,49.6586,khomam-city,خیر
+گیلان,ماسوله,https://neshan.org/maps/places/masuleh-city#c37.1556-48.9889-12z-0p,37.1556,48.9889,masuleh-city,خیر
+گیلان,منجیل,https://neshan.org/maps/places/manjil-city#c36.7417-49.4139-12z-0p,36.7417,49.4139,manjil-city,خیر
+گیلان,چابکسر,https://neshan.org/maps/places/chaboksar-city#c36.9722-50.5750-12z-0p,36.9722,50.575,chaboksar-city,خیر
 کرمان,مرکزیت / کل استان (کرمان),https://neshan.org/maps/places/kerman-province#c30.2839-57.0788-6z-0p,30.2839,57.0788,kerman-province,بله (استان)
-کرمان,کرمان,https://neshan.org/maps/places/kerman-city#c30.2839-57.0788-12z-0p,30.2839,57.0788,kerman-city,بله
+کرمان,کرمان,https://neshan.org/maps/places/kerman-city#c30.2839-57.0834-12z-0p,30.2839,57.0834,kerman-city,بله
 کرمان,سیرجان,https://neshan.org/maps/places/sirjan-city#c29.4520-55.6814-12z-0p,29.452,55.6814,sirjan-city,خیر
 کرمان,رفسنجان,https://neshan.org/maps/places/rafsanjan-city#c30.4067-55.9939-12z-0p,30.4067,55.9939,rafsanjan-city,خیر
-کرمان,جیرفت,https://neshan.org/maps/places/jiroft-city#c28.6781-57.7406-12z-0p,28.6781,57.7406,jiroft-city,خیر
+کرمان,جیرفت,https://neshan.org/maps/places/jiroft-city#c28.6689-57.7397-12z-0p,28.6689,57.7397,jiroft-city,خیر
 کرمان,بم,https://neshan.org/maps/places/bam-city#c29.1060-58.3570-12z-0p,29.106,58.357,bam-city,خیر
+کرمان,زرند,https://neshan.org/maps/places/zarand-city#c30.8128-56.5639-12z-0p,30.8128,56.5639,zarand-city,خیر
+کرمان,بافت,https://neshan.org/maps/places/baft-city#c29.2331-56.6022-12z-0p,29.2331,56.6022,baft-city,خیر
+کرمان,کهنوج,https://neshan.org/maps/places/kahnooj-city#c27.9544-57.7011-12z-0p,27.9544,57.7011,kahnooj-city,خیر
+کرمان,شهربابک,https://neshan.org/maps/places/shahr-e-babak-city#c30.1164-55.1186-12z-0p,30.1164,55.1186,shahr-e-babak-city,خیر
+کرمان,بردسیر,https://neshan.org/maps/places/bardsir-city#c29.9278-56.5739-12z-0p,29.9278,56.5739,bardsir-city,خیر
+کرمان,عنبرآباد,https://neshan.org/maps/places/anbarabad-city#c28.4739-57.8481-12z-0p,28.4739,57.8481,anbarabad-city,خیر
+کرمان,راور,https://neshan.org/maps/places/ravar-city#c31.2656-56.8056-12z-0p,31.2656,56.8056,ravar-city,خیر
+کرمان,منوجان,https://neshan.org/maps/places/manoojan-city#c27.4042-57.5014-12z-0p,27.4042,57.5014,manoojan-city,خیر
+کرمان,رودبار جنوب,https://neshan.org/maps/places/rudbar-jonub-city#c27.9150-58.2611-12z-0p,27.915,58.2611,rudbar-jonub-city,خیر
+کرمان,قلعه‌گنج,https://neshan.org/maps/places/qaleh-ganj-city#c27.5239-57.8819-12z-0p,27.5239,57.8819,qaleh-ganj-city,خیر
+کرمان,ریگان,https://neshan.org/maps/places/rigan-city#c28.6653-59.0436-12z-0p,28.6653,59.0436,rigan-city,خیر
+کرمان,فهرج,https://neshan.org/maps/places/fahraj-city#c28.9519-58.8839-12z-0p,28.9519,58.8839,fahraj-city,خیر
+کرمان,نرماشیر,https://neshan.org/maps/places/narmashir-city#c28.9483-58.6947-12z-0p,28.9483,58.6947,narmashir-city,خیر
+کرمان,ارزوئیه,https://neshan.org/maps/places/orzuiyeh-city#c28.4406-56.3725-12z-0p,28.4406,56.3725,orzuiyeh-city,خیر
+کرمان,انار,https://neshan.org/maps/places/anar-city#c30.8739-55.2711-12z-0p,30.8739,55.2711,anar-city,خیر
+کرمان,رابر,https://neshan.org/maps/places/rabor-city#c29.2906-56.9133-12z-0p,29.2906,56.9133,rabor-city,خیر
+کرمان,فاریاب,https://neshan.org/maps/places/faryab-city#c28.0986-57.2319-12z-0p,28.0986,57.2319,faryab-city,خیر
+کرمان,گنبکی,https://neshan.org/maps/places/gonbaki-city#c28.5333-59.0833-12z-0p,28.5333,59.0833,gonbaki-city,خیر
+کرمان,جازموریان (زهکلوت),https://neshan.org/maps/places/zahkalut-city#c27.6500-58.6167-12z-0p,27.65,58.6167,zahkalut-city,خیر
 سیستان و بلوچستان,مرکزیت / کل استان (سیستان و بلوچستان),https://neshan.org/maps/places/sistan-and-baluchestan-province#c29.4963-60.8629-6z-0p,29.4963,60.8629,sistan-and-baluchestan-province,بله (استان)
 سیستان و بلوچستان,زاهدان,https://neshan.org/maps/places/zahedan-city#c29.4963-60.8629-12z-0p,29.4963,60.8629,zahedan-city,بله
-سیستان و بلوچستان,چابهار,https://neshan.org/maps/places/chabahar-city#c25.2919-60.6430-12z-0p,25.2919,60.643,chabahar-city,خیر
-سیستان و بلوچستان,زابل,https://neshan.org/maps/places/zabol-city#c31.0292-61.5006-12z-0p,31.0292,61.5006,zabol-city,خیر
+سیستان و بلوچستان,زابل,https://neshan.org/maps/places/zabol-city#c31.0292-61.4958-12z-0p,31.0292,61.4958,zabol-city,خیر
 سیستان و بلوچستان,ایرانشهر,https://neshan.org/maps/places/iranshahr-city#c27.2025-60.6847-12z-0p,27.2025,60.6847,iranshahr-city,خیر
+سیستان و بلوچستان,چابهار,https://neshan.org/maps/places/chabahar-city#c25.2919-60.6430-12z-0p,25.2919,60.643,chabahar-city,خیر
+سیستان و بلوچستان,سراوان,https://neshan.org/maps/places/saravan-city#c27.3711-62.3342-12z-0p,27.3711,62.3342,saravan-city,خیر
+سیستان و بلوچستان,خاش,https://neshan.org/maps/places/khash-city#c28.2211-61.2158-12z-0p,28.2211,61.2158,khash-city,خیر
+سیستان و بلوچستان,نیک‌شهر,https://neshan.org/maps/places/nikshahr-city#c26.2258-60.2142-12z-0p,26.2258,60.2142,nikshahr-city,خیر
+سیستان و بلوچستان,کنارک,https://neshan.org/maps/places/konarak-city#c25.3603-60.3989-12z-0p,25.3603,60.3989,konarak-city,خیر
+سیستان و بلوچستان,راسک,https://neshan.org/maps/places/rask-city#c26.2367-61.3986-12z-0p,26.2367,61.3986,rask-city,خیر
+سیستان و بلوچستان,سرباز (کلات),https://neshan.org/maps/places/kalat-sarbaz-city#c26.6300-61.2561-12z-0p,26.63,61.2561,kalat-sarbaz-city,خیر
+سیستان و بلوچستان,هیرمند (دوست‌محمد),https://neshan.org/maps/places/dust-mohammad-city#c31.1469-61.7931-12z-0p,31.1469,61.7931,dust-mohammad-city,خیر
+سیستان و بلوچستان,زهک,https://neshan.org/maps/places/zehak-city#c30.8953-61.6811-12z-0p,30.8953,61.6811,zehak-city,خیر
+سیستان و بلوچستان,نیمروز (ادیمی),https://neshan.org/maps/places/adimi-city#c31.1069-61.4283-12z-0p,31.1069,61.4283,adimi-city,خیر
+سیستان و بلوچستان,هامون (محمدآباد),https://neshan.org/maps/places/mohammadabad-sistan-city#c30.8258-61.4681-12z-0p,30.8258,61.4681,mohammadabad-sistan-city,خیر
+سیستان و بلوچستان,میرجاوه,https://neshan.org/maps/places/mirjaveh-city#c29.0236-61.4542-12z-0p,29.0236,61.4542,mirjaveh-city,خیر
+سیستان و بلوچستان,قصرقند,https://neshan.org/maps/places/qasr-e-qand-city#c26.2392-60.7417-12z-0p,26.2392,60.7417,qasr-e-qand-city,خیر
+سیستان و بلوچستان,دلگان (گلمورتی),https://neshan.org/maps/places/galmurti-city#c27.4764-59.4678-12z-0p,27.4764,59.4678,galmurti-city,خیر
+سیستان و بلوچستان,سیب و سوران,https://neshan.org/maps/places/suran-city#c27.2858-61.9961-12z-0p,27.2858,61.9961,suran-city,خیر
+سیستان و بلوچستان,مهرستان (زابلی),https://neshan.org/maps/places/zaboli-city#c27.1311-61.6664-12z-0p,27.1311,61.6664,zaboli-city,خیر
+سیستان و بلوچستان,بمپور,https://neshan.org/maps/places/bampur-city#c27.1950-60.4550-12z-0p,27.195,60.455,bampur-city,خیر
+سیستان و بلوچستان,تفتان (نوک‌آباد),https://neshan.org/maps/places/nowkabad-city#c28.5306-61.1272-12z-0p,28.5306,61.1272,nowkabad-city,خیر
+سیستان و بلوچستان,دشتیاری (نگور),https://neshan.org/maps/places/negur-city#c25.3889-61.1378-12z-0p,25.3889,61.1378,negur-city,خیر
+سیستان و بلوچستان,فنوج,https://neshan.org/maps/places/fannuj-city#c26.5750-59.6417-12z-0p,26.575,59.6417,fannuj-city,خیر
+سیستان و بلوچستان,لاشار (اسپکه),https://neshan.org/maps/places/espakeh-city#c26.8333-60.0333-12z-0p,26.8333,60.0333,espakeh-city,خیر
+سیستان و بلوچستان,گلشن (جالق),https://neshan.org/maps/places/jaleq-city#c27.6000-62.7000-12z-0p,27.6,62.7,jaleq-city,خیر
+سیستان و بلوچستان,زرآباد,https://neshan.org/maps/places/zarabad-city#c25.5833-59.3667-12z-0p,25.5833,59.3667,zarabad-city,خیر
 البرز,مرکزیت / کل استان (البرز),https://neshan.org/maps/places/alborz-province#c35.8400-50.9391-8z-0p,35.84,50.9391,alborz-province,بله (استان)
-البرز,کرج,https://neshan.org/maps/places/karaj-city#c35.8400-50.9391-12z-0p,35.84,50.9391,karaj-city,بله
-البرز,فردیس,https://neshan.org/maps/places/fardis-city#c35.7264-50.9856-12z-0p,35.7264,50.9856,fardis-city,خیر
-البرز,هشتگرد,https://neshan.org/maps/places/hashtgerd-city#c35.9611-50.6811-12z-0p,35.9611,50.6811,hashtgerd-city,خیر
-البرز,نظرآباد,https://neshan.org/maps/places/nazarabad-city#c35.9528-50.6067-12z-0p,35.9528,50.6067,nazarabad-city,خیر
+البرز,کرج,https://neshan.org/maps/places/karaj-city#c35.8327-50.9915-12z-0p,35.8327,50.9915,karaj-city,بله
+البرز,فردیس,https://neshan.org/maps/places/fardis-city#c35.7242-50.9856-12z-0p,35.7242,50.9856,fardis-city,خیر
+البرز,ساوجبلاغ (هشتگرد),https://neshan.org/maps/places/hashtgerd-city#c35.9625-50.6806-12z-0p,35.9625,50.6806,hashtgerd-city,خیر
+البرز,نظرآباد,https://neshan.org/maps/places/nazarabad-city#c35.9547-50.6053-12z-0p,35.9547,50.6053,nazarabad-city,خیر
+البرز,اشتهارد,https://neshan.org/maps/places/eshtehard-city#c35.7225-50.3664-12z-0p,35.7225,50.3664,eshtehard-city,خیر
+البرز,طالقان,https://neshan.org/maps/places/taleqan-city#c36.1772-50.7675-12z-0p,36.1772,50.7675,taleqan-city,خیر
+البرز,چهارباغ,https://neshan.org/maps/places/chaharbagh-city#c35.8450-50.8406-12z-0p,35.845,50.8406,chaharbagh-city,خیر
+البرز,کمال‌شهر,https://neshan.org/maps/places/kamalshahr-city#c35.8653-50.8719-12z-0p,35.8653,50.8719,kamalshahr-city,خیر
+البرز,محمدشهر,https://neshan.org/maps/places/mohammadshahr-city#c35.7583-50.9167-12z-0p,35.7583,50.9167,mohammadshahr-city,خیر
+البرز,ماهدشت,https://neshan.org/maps/places/mahdasht-city#c35.7289-50.8144-12z-0p,35.7289,50.8144,mahdasht-city,خیر
+البرز,مشکین‌دشت,https://neshan.org/maps/places/meshkindasht-city#c35.7600-50.9400-12z-0p,35.76,50.94,meshkindasht-city,خیر
+البرز,گرمدره,https://neshan.org/maps/places/garmdarreh-city#c35.7417-51.0833-12z-0p,35.7417,51.0833,garmdarreh-city,خیر
+البرز,کوهسار,https://neshan.org/maps/places/kuhsar-city#c36.0000-50.7833-12z-0p,36,50.7833,kuhsar-city,خیر
+البرز,گلسار,https://neshan.org/maps/places/golsar-city#c35.9167-50.7333-12z-0p,35.9167,50.7333,golsar-city,خیر
+البرز,آسارا (جاده چالوس),https://neshan.org/maps/places/asara-city#c36.0167-51.2167-12z-0p,36.0167,51.2167,asara-city,خیر
 قم,مرکزیت / کل استان (قم),https://neshan.org/maps/places/qom-province#c34.6401-50.8764-8z-0p,34.6401,50.8764,qom-province,بله (استان)
-قم,قم,https://neshan.org/maps/places/qom-city#c34.6401-50.8764-12z-0p,34.6401,50.8764,qom-city,بله
-قم,قنوات,https://neshan.org/maps/places/qanavat-city#c34.6192-51.0189-12z-0p,34.6192,51.0189,qanavat-city,خیر
+قم,قم,https://neshan.org/maps/places/qom-city#c34.6399-50.8759-12z-0p,34.6399,50.8759,qom-city,بله
+قم,قنوات,https://neshan.org/maps/places/qanavat-city#c34.6128-51.0189-12z-0p,34.6128,51.0189,qanavat-city,خیر
+قم,جعفرآباد (جعفریه),https://neshan.org/maps/places/jafariyeh-city#c34.7944-50.5222-12z-0p,34.7944,50.5222,jafariyeh-city,خیر
+قم,کهک,https://neshan.org/maps/places/kahak-city#c34.3850-50.8653-12z-0p,34.385,50.8653,kahak-city,خیر
+قم,دستجرد (خلجستان),https://neshan.org/maps/places/dastjerd-city#c34.5517-50.2478-12z-0p,34.5517,50.2478,dastjerd-city,خیر
+قم,سلفچگان,https://neshan.org/maps/places/salfechegan-city#c34.4694-50.4619-12z-0p,34.4694,50.4619,salfechegan-city,خیر
 کرمانشاه,مرکزیت / کل استان (کرمانشاه),https://neshan.org/maps/places/kermanshah-province#c34.3277-47.0778-7z-0p,34.3277,47.0778,kermanshah-province,بله (استان)
 کرمانشاه,کرمانشاه,https://neshan.org/maps/places/kermanshah-city#c34.3277-47.0778-12z-0p,34.3277,47.0778,kermanshah-city,بله
-کرمانشاه,اسلام‌آباد غرب,https://neshan.org/maps/places/eslamabad-e-gharb-city#c34.1094-46.5275-12z-0p,34.1094,46.5275,eslamabad-e-gharb-city,خیر
+کرمانشاه,اسلام‌آباد غرب,https://neshan.org/maps/places/eslamabad-gharb-city#c34.1094-46.5275-12z-0p,34.1094,46.5275,eslamabad-gharb-city,خیر
+کرمانشاه,سنقر,https://neshan.org/maps/places/sonqor-city#c34.7836-47.6003-12z-0p,34.7836,47.6003,sonqor-city,خیر
 کرمانشاه,کنگاور,https://neshan.org/maps/places/kangavar-city#c34.5044-47.9653-12z-0p,34.5044,47.9653,kangavar-city,خیر
-کرمانشاه,پاوه,https://neshan.org/maps/places/paveh-city#c35.0433-46.3606-12z-0p,35.0433,46.3606,paveh-city,خیر
+کرمانشاه,جوانرود,https://neshan.org/maps/places/javanrud-city#c34.7961-46.4950-12z-0p,34.7961,46.495,javanrud-city,خیر
+کرمانشاه,هرسین,https://neshan.org/maps/places/harsin-city#c34.2722-47.5861-12z-0p,34.2722,47.5861,harsin-city,خیر
+کرمانشاه,صحنه,https://neshan.org/maps/places/sahneh-city#c34.4844-47.6881-12z-0p,34.4844,47.6881,sahneh-city,خیر
+کرمانشاه,پاوه,https://neshan.org/maps/places/paveh-city#c35.0433-46.3567-12z-0p,35.0433,46.3567,paveh-city,خیر
+کرمانشاه,سرپل ذهاب,https://neshan.org/maps/places/sarpol-zahab-city#c34.4614-45.8628-12z-0p,34.4614,45.8628,sarpol-zahab-city,خیر
+کرمانشاه,گیلانغرب,https://neshan.org/maps/places/gilangharb-city#c34.1422-45.9203-12z-0p,34.1422,45.9203,gilangharb-city,خیر
+کرمانشاه,روانسر,https://neshan.org/maps/places/ravansar-city#c34.7181-46.6533-12z-0p,34.7181,46.6533,ravansar-city,خیر
+کرمانشاه,دالاهو (کرند غرب),https://neshan.org/maps/places/kerend-gharb-city#c34.2608-46.2425-12z-0p,34.2608,46.2425,kerend-gharb-city,خیر
+کرمانشاه,قصر شیرین,https://neshan.org/maps/places/qasr-shirin-city#c34.5153-45.5786-12z-0p,34.5153,45.5786,qasr-shirin-city,خیر
+کرمانشاه,ثلاث باباجانی (تازه‌آباد),https://neshan.org/maps/places/tazehabad-city#c34.7431-46.1481-12z-0p,34.7431,46.1481,tazehabad-city,خیر
 یزد,مرکزیت / کل استان (یزد),https://neshan.org/maps/places/yazd-province#c31.8974-54.3569-7z-0p,31.8974,54.3569,yazd-province,بله (استان)
 یزد,یزد,https://neshan.org/maps/places/yazd-city#c31.8974-54.3569-12z-0p,31.8974,54.3569,yazd-city,بله
 یزد,میبد,https://neshan.org/maps/places/meybod-city#c32.2500-54.0167-12z-0p,32.25,54.0167,meybod-city,خیر
-یزد,اردکان,https://neshan.org/maps/places/ardakan-city#c32.3100-54.0175-12z-0p,32.31,54.0175,ardakan-city,خیر
-یزد,بافق,https://neshan.org/maps/places/bafq-city#c31.6036-55.4050-12z-0p,31.6036,55.405,bafq-city,خیر
+یزد,اردکان,https://neshan.org/maps/places/ardakan-yazd-city#c32.3100-54.0175-12z-0p,32.31,54.0175,ardakan-yazd-city,خیر
+یزد,بافق,https://neshan.org/maps/places/bafq-city#c31.6036-55.4022-12z-0p,31.6036,55.4022,bafq-city,خیر
+یزد,مهریز,https://neshan.org/maps/places/mehriz-city#c31.5833-54.4333-12z-0p,31.5833,54.4333,mehriz-city,خیر
+یزد,ابرکوه,https://neshan.org/maps/places/abarkuh-city#c31.1294-53.2825-12z-0p,31.1294,53.2825,abarkuh-city,خیر
+یزد,تفت,https://neshan.org/maps/places/taft-city#c31.7456-54.2056-12z-0p,31.7456,54.2056,taft-city,خیر
+یزد,خاتم (هرات),https://neshan.org/maps/places/harat-city#c30.0547-54.3739-12z-0p,30.0547,54.3739,harat-city,خیر
+یزد,اشکذر,https://neshan.org/maps/places/ashkezar-city#c32.0006-54.2047-12z-0p,32.0006,54.2047,ashkezar-city,خیر
+یزد,بهاباد,https://neshan.org/maps/places/bahabad-city#c31.8719-56.0236-12z-0p,31.8719,56.0236,bahabad-city,خیر
+یزد,مروست,https://neshan.org/maps/places/marvast-city#c30.4764-53.9786-12z-0p,30.4764,53.9786,marvast-city,خیر
+یزد,زارچ,https://neshan.org/maps/places/zarch-city#c31.9772-54.2239-12z-0p,31.9772,54.2239,zarch-city,خیر
+یزد,عقدا,https://neshan.org/maps/places/aqda-city#c32.4417-53.6333-12z-0p,32.4417,53.6333,aqda-city,خیر
+یزد,ندوشن,https://neshan.org/maps/places/nadoshan-city#c31.9667-53.5667-12z-0p,31.9667,53.5667,nadoshan-city,خیر
 هرمزگان,مرکزیت / کل استان (هرمزگان),https://neshan.org/maps/places/hormozgan-province#c27.1832-56.2666-7z-0p,27.1832,56.2666,hormozgan-province,بله (استان)
 هرمزگان,بندرعباس,https://neshan.org/maps/places/bandar-abbas-city#c27.1832-56.2666-12z-0p,27.1832,56.2666,bandar-abbas-city,بله
-هرمزگان,کیش,https://neshan.org/maps/places/kish-island#c26.5325-53.9878-12z-0p,26.5325,53.9878,kish-island,خیر
-هرمزگان,قشم,https://neshan.org/maps/places/qeshm-city#c26.9583-56.2719-12z-0p,26.9583,56.2719,qeshm-city,خیر
 هرمزگان,میناب,https://neshan.org/maps/places/minab-city#c27.1467-57.0800-12z-0p,27.1467,57.08,minab-city,خیر
+هرمزگان,قشم,https://neshan.org/maps/places/qeshm-city#c26.9581-56.2719-12z-0p,26.9581,56.2719,qeshm-city,خیر
+هرمزگان,بندرلنگه,https://neshan.org/maps/places/bandar-lengeh-city#c26.5578-54.8808-12z-0p,26.5578,54.8808,bandar-lengeh-city,خیر
+هرمزگان,رودان (دهبارز),https://neshan.org/maps/places/dehbarez-city#c27.4419-57.1925-12z-0p,27.4419,57.1925,dehbarez-city,خیر
+هرمزگان,جاسک (بندر جاسک),https://neshan.org/maps/places/bandar-jask-city#c25.6439-57.7744-12z-0p,25.6439,57.7744,bandar-jask-city,خیر
+هرمزگان,بستک,https://neshan.org/maps/places/bastak-city#c27.1989-54.3667-12z-0p,27.1989,54.3667,bastak-city,خیر
+هرمزگان,حاجی‌آباد,https://neshan.org/maps/places/hajiabad-hormozgan-city#c28.3092-55.9017-12z-0p,28.3092,55.9017,hajiabad-hormozgan-city,خیر
+هرمزگان,پارسیان (گاوبندی),https://neshan.org/maps/places/parsian-city#c27.2039-53.0456-12z-0p,27.2039,53.0456,parsian-city,خیر
+هرمزگان,بندر خمیر,https://neshan.org/maps/places/bandar-khamir-city#c26.9522-55.5861-12z-0p,26.9522,55.5861,bandar-khamir-city,خیر
+هرمزگان,سیریک,https://neshan.org/maps/places/sirik-city#c26.5161-57.0806-12z-0p,26.5161,57.0806,sirik-city,خیر
+هرمزگان,ابوموسی,https://neshan.org/maps/places/abu-musa-city#c25.8756-55.0328-12z-0p,25.8756,55.0328,abu-musa-city,خیر
+هرمزگان,بشاگرد (سردشت),https://neshan.org/maps/places/sardasht-bashagard-city#c26.4542-57.9022-12z-0p,26.4542,57.9022,sardasht-bashagard-city,خیر
+هرمزگان,جزیره کیش,https://neshan.org/maps/places/kish-city#c26.5325-53.9875-12z-0p,26.5325,53.9875,kish-city,خیر
+هرمزگان,جزیره هرمز,https://neshan.org/maps/places/hormuz-city#c27.0983-56.4542-12z-0p,27.0983,56.4542,hormuz-city,خیر
+هرمزگان,بندر کنگ,https://neshan.org/maps/places/bandar-kong-city#c26.6000-54.9167-12z-0p,26.6,54.9167,bandar-kong-city,خیر
+هرمزگان,درگهان,https://neshan.org/maps/places/dargahan-city#c26.9667-56.0667-12z-0p,26.9667,56.0667,dargahan-city,خیر
 مرکزی,مرکزیت / کل استان (مرکزی),https://neshan.org/maps/places/markazi-province#c34.0954-49.7013-7z-0p,34.0954,49.7013,markazi-province,بله (استان)
-مرکزی,اراک,https://neshan.org/maps/places/arak-city#c34.0954-49.7013-12z-0p,34.0954,49.7013,arak-city,بله
+مرکزی,اراک,https://neshan.org/maps/places/arak-city#c34.0917-49.6892-12z-0p,34.0917,49.6892,arak-city,بله
 مرکزی,ساوه,https://neshan.org/maps/places/saveh-city#c35.0211-50.3564-12z-0p,35.0211,50.3564,saveh-city,خیر
-مرکزی,خمین,https://neshan.org/maps/places/khomein-city#c33.6422-50.0789-12z-0p,33.6422,50.0789,khomein-city,خیر
-مرکزی,محلات,https://neshan.org/maps/places/mahallat-city#c33.9100-50.4500-12z-0p,33.91,50.45,mahallat-city,خیر
+مرکزی,خمین,https://neshan.org/maps/places/khomeyn-city#c33.6422-50.0789-12z-0p,33.6422,50.0789,khomeyn-city,خیر
+مرکزی,محلات,https://neshan.org/maps/places/mahallat-city#c33.9139-50.4578-12z-0p,33.9139,50.4578,mahallat-city,خیر
+مرکزی,دلیجان,https://neshan.org/maps/places/delijan-city#c33.9906-50.6839-12z-0p,33.9906,50.6839,delijan-city,خیر
+مرکزی,شازند,https://neshan.org/maps/places/shazand-city#c33.9269-49.4119-12z-0p,33.9269,49.4119,shazand-city,خیر
+مرکزی,زرندیه (مامونیه),https://neshan.org/maps/places/mamuniyeh-city#c35.3056-50.4986-12z-0p,35.3056,50.4986,mamuniyeh-city,خیر
+مرکزی,تفرش,https://neshan.org/maps/places/tafresh-city#c34.6908-50.0139-12z-0p,34.6908,50.0139,tafresh-city,خیر
+مرکزی,فراهان (فرمهین),https://neshan.org/maps/places/farmahin-city#c34.5028-49.6806-12z-0p,34.5028,49.6806,farmahin-city,خیر
+مرکزی,آشتیان,https://neshan.org/maps/places/ashtian-city#c34.5219-50.0056-12z-0p,34.5219,50.0056,ashtian-city,خیر
+مرکزی,خنداب,https://neshan.org/maps/places/khondab-city#c34.3917-49.1833-12z-0p,34.3917,49.1833,khondab-city,خیر
+مرکزی,کمیجان,https://neshan.org/maps/places/komijan-city#c34.7194-49.3250-12z-0p,34.7194,49.325,komijan-city,خیر
+مرکزی,مهاجران,https://neshan.org/maps/places/mohajeran-city#c34.0500-49.4167-12z-0p,34.05,49.4167,mohajeran-city,خیر
+مرکزی,نراق,https://neshan.org/maps/places/naraq-city#c34.0167-50.8333-12z-0p,34.0167,50.8333,naraq-city,خیر
+مرکزی,نیم‌ور,https://neshan.org/maps/places/nimvar-city#c33.8667-50.5667-12z-0p,33.8667,50.5667,nimvar-city,خیر
 همدان,مرکزیت / کل استان (همدان),https://neshan.org/maps/places/hamedan-province#c34.7989-48.5150-8z-0p,34.7989,48.515,hamedan-province,بله (استان)
-همدان,همدان,https://neshan.org/maps/places/hamedan-city#c34.7989-48.5150-12z-0p,34.7989,48.515,hamedan-city,بله
-همدان,ملایر,https://neshan.org/maps/places/malayer-city#c34.2967-48.8239-12z-0p,34.2967,48.8239,malayer-city,خیر
+همدان,همدان,https://neshan.org/maps/places/hamadan-city#c34.7989-48.5150-12z-0p,34.7989,48.515,hamadan-city,بله
+همدان,ملایر,https://neshan.org/maps/places/malayer-city#c34.2969-48.8236-12z-0p,34.2969,48.8236,malayer-city,خیر
 همدان,نهاوند,https://neshan.org/maps/places/nahavand-city#c34.1886-48.3769-12z-0p,34.1886,48.3769,nahavand-city,خیر
 همدان,تویسرکان,https://neshan.org/maps/places/tuyserkan-city#c34.5481-48.4469-12z-0p,34.5481,48.4469,tuyserkan-city,خیر
+همدان,اسدآباد,https://neshan.org/maps/places/asadabad-city#c34.7825-48.1183-12z-0p,34.7825,48.1183,asadabad-city,خیر
+همدان,کبودرآهنگ,https://neshan.org/maps/places/kabudarahang-city#c35.2081-48.7244-12z-0p,35.2081,48.7244,kabudarahang-city,خیر
+همدان,بهار,https://neshan.org/maps/places/bahar-city#c34.9069-48.4414-12z-0p,34.9069,48.4414,bahar-city,خیر
+همدان,رزن,https://neshan.org/maps/places/razan-city#c35.3861-49.0336-12z-0p,35.3861,49.0336,razan-city,خیر
+همدان,فامنین,https://neshan.org/maps/places/famenin-city#c35.1147-48.9719-12z-0p,35.1147,48.9719,famenin-city,خیر
+همدان,درگزین (قروه درجزین),https://neshan.org/maps/places/qorveh-darjazin-city#c35.3500-49.1667-12z-0p,35.35,49.1667,qorveh-darjazin-city,خیر
+همدان,لالجین,https://neshan.org/maps/places/lalejin-city#c34.9667-48.4833-12z-0p,34.9667,48.4833,lalejin-city,خیر
 کردستان,مرکزیت / کل استان (کردستان),https://neshan.org/maps/places/kurdistan-province#c35.3219-46.9862-7z-0p,35.3219,46.9862,kurdistan-province,بله (استان)
-کردستان,سنندج,https://neshan.org/maps/places/sanandaj-city#c35.3219-46.9862-12z-0p,35.3219,46.9862,sanandaj-city,بله
+کردستان,سنندج,https://neshan.org/maps/places/sanandaj-city#c35.3144-46.9922-12z-0p,35.3144,46.9922,sanandaj-city,بله
 کردستان,سقز,https://neshan.org/maps/places/saqqez-city#c36.2497-46.2733-12z-0p,36.2497,46.2733,saqqez-city,خیر
 کردستان,مریوان,https://neshan.org/maps/places/marivan-city#c35.5269-46.1761-12z-0p,35.5269,46.1761,marivan-city,خیر
 کردستان,بانه,https://neshan.org/maps/places/baneh-city#c35.9975-45.8853-12z-0p,35.9975,45.8853,baneh-city,خیر
+کردستان,قروه,https://neshan.org/maps/places/qorveh-city#c35.1664-47.8044-12z-0p,35.1664,47.8044,qorveh-city,خیر
+کردستان,کامیاران,https://neshan.org/maps/places/kamyaran-city#c34.7956-46.9356-12z-0p,34.7956,46.9356,kamyaran-city,خیر
+کردستان,بیجار,https://neshan.org/maps/places/bijar-city#c35.8728-47.6050-12z-0p,35.8728,47.605,bijar-city,خیر
+کردستان,دیواندره,https://neshan.org/maps/places/divandarreh-city#c35.8986-47.0242-12z-0p,35.8986,47.0242,divandarreh-city,خیر
+کردستان,دهگلان,https://neshan.org/maps/places/dehgolan-city#c35.2778-47.4183-12z-0p,35.2778,47.4183,dehgolan-city,خیر
+کردستان,سروآباد,https://neshan.org/maps/places/sarvabad-city#c35.3131-46.3606-12z-0p,35.3131,46.3606,sarvabad-city,خیر
+کردستان,اورامان تخت,https://neshan.org/maps/places/uraman-takht-city#c35.2917-46.2667-12z-0p,35.2917,46.2667,uraman-takht-city,خیر
 لرستان,مرکزیت / کل استان (لرستان),https://neshan.org/maps/places/lorestan-province#c33.4878-48.3558-7z-0p,33.4878,48.3558,lorestan-province,بله (استان)
 لرستان,خرم‌آباد,https://neshan.org/maps/places/khorramabad-city#c33.4878-48.3558-12z-0p,33.4878,48.3558,khorramabad-city,بله
 لرستان,بروجرد,https://neshan.org/maps/places/borujerd-city#c33.8972-48.7517-12z-0p,33.8972,48.7517,borujerd-city,خیر
 لرستان,دورود,https://neshan.org/maps/places/dorud-city#c33.4933-49.0750-12z-0p,33.4933,49.075,dorud-city,خیر
-لرستان,کوهدشت,https://neshan.org/maps/places/kuhdasht-city#c33.5350-47.6061-12z-0p,33.535,47.6061,kuhdasht-city,خیر
+لرستان,کوهدشت,https://neshan.org/maps/places/kuhdasht-city#c33.5336-47.6067-12z-0p,33.5336,47.6067,kuhdasht-city,خیر
+لرستان,الیگودرز,https://neshan.org/maps/places/aligudarz-city#c33.4006-49.6947-12z-0p,33.4006,49.6947,aligudarz-city,خیر
+لرستان,دلفان (نورآباد),https://neshan.org/maps/places/noorabad-lorestan-city#c34.0736-47.9725-12z-0p,34.0736,47.9725,noorabad-lorestan-city,خیر
+لرستان,سلسله (الشتر),https://neshan.org/maps/places/aleshtar-city#c33.8631-48.2617-12z-0p,33.8631,48.2617,aleshtar-city,خیر
+لرستان,پلدختر,https://neshan.org/maps/places/poldokhtar-city#c33.1536-47.7139-12z-0p,33.1536,47.7139,poldokhtar-city,خیر
+لرستان,ازنا,https://neshan.org/maps/places/azna-city#c33.4542-49.4550-12z-0p,33.4542,49.455,azna-city,خیر
+لرستان,چگنی (سراب‌دوره),https://neshan.org/maps/places/sarab-dowreh-city#c33.5681-48.0208-12z-0p,33.5681,48.0208,sarab-dowreh-city,خیر
+لرستان,رومشکان (چقابل),https://neshan.org/maps/places/choqabal-city#c33.2981-47.5939-12z-0p,33.2981,47.5939,choqabal-city,خیر
+لرستان,معمولان,https://neshan.org/maps/places/mamulan-city#c33.3000-47.9667-12z-0p,33.3,47.9667,mamulan-city,خیر
 بوشهر,مرکزیت / کل استان (بوشهر),https://neshan.org/maps/places/bushehr-province#c28.9234-50.8203-7z-0p,28.9234,50.8203,bushehr-province,بله (استان)
 بوشهر,بوشهر,https://neshan.org/maps/places/bushehr-city#c28.9234-50.8203-12z-0p,28.9234,50.8203,bushehr-city,بله
-بوشهر,برازجان,https://neshan.org/maps/places/borazjan-city#c29.2667-51.2167-12z-0p,29.2667,51.2167,borazjan-city,خیر
-بوشهر,بندر گناوه,https://neshan.org/maps/places/bandar-ganaveh-city#c29.5792-50.5178-12z-0p,29.5792,50.5178,bandar-ganaveh-city,خیر
+بوشهر,دشتستان (برازجان),https://neshan.org/maps/places/borazjan-city#c29.2667-51.2167-12z-0p,29.2667,51.2167,borazjan-city,خیر
+بوشهر,بندر گناوه,https://neshan.org/maps/places/bandar-genaveh-city#c29.5789-50.5186-12z-0p,29.5789,50.5186,bandar-genaveh-city,خیر
+بوشهر,بندر کنگان,https://neshan.org/maps/places/bandar-kangan-city#c27.8339-52.0628-12z-0p,27.8339,52.0628,bandar-kangan-city,خیر
+بوشهر,دشتی (خورموج),https://neshan.org/maps/places/khormoj-city#c28.6542-51.3800-12z-0p,28.6542,51.38,khormoj-city,خیر
+بوشهر,تنگستان (اهرم),https://neshan.org/maps/places/ahram-city#c28.8828-51.2747-12z-0p,28.8828,51.2747,ahram-city,خیر
 بوشهر,عسلویه,https://neshan.org/maps/places/asaluyeh-city#c27.4761-52.6078-12z-0p,27.4761,52.6078,asaluyeh-city,خیر
+بوشهر,جم,https://neshan.org/maps/places/jam-city#c27.8281-52.3275-12z-0p,27.8281,52.3275,jam-city,خیر
+بوشهر,بندر دیر,https://neshan.org/maps/places/bandar-dayyer-city#c27.8397-51.9378-12z-0p,27.8397,51.9378,bandar-dayyer-city,خیر
+بوشهر,بندر دیلم,https://neshan.org/maps/places/bandar-deylam-city#c30.0542-50.1589-12z-0p,30.0542,50.1589,bandar-deylam-city,خیر
+بوشهر,جزیره خارگ,https://neshan.org/maps/places/kharg-city#c29.2611-50.3167-12z-0p,29.2611,50.3167,kharg-city,خیر
+بوشهر,عالیشهر,https://neshan.org/maps/places/alishahr-city#c28.9167-51.0167-12z-0p,28.9167,51.0167,alishahr-city,خیر
+بوشهر,آب‌پخش,https://neshan.org/maps/places/abpakhsh-city#c29.3667-51.0667-12z-0p,29.3667,51.0667,abpakhsh-city,خیر
+بوشهر,نخل تقی,https://neshan.org/maps/places/nakhl-taqi-city#c27.4833-52.5833-12z-0p,27.4833,52.5833,nakhl-taqi-city,خیر
+بوشهر,دلوار,https://neshan.org/maps/places/delvar-city#c28.7500-51.0667-12z-0p,28.75,51.0667,delvar-city,خیر
 زنجان,مرکزیت / کل استان (زنجان),https://neshan.org/maps/places/zanjan-province#c36.6736-48.4787-7z-0p,36.6736,48.4787,zanjan-province,بله (استان)
-زنجان,زنجان,https://neshan.org/maps/places/zanjan-city#c36.6736-48.4787-12z-0p,36.6736,48.4787,zanjan-city,بله
+زنجان,زنجان,https://neshan.org/maps/places/zanjan-city#c36.6744-48.4844-12z-0p,36.6744,48.4844,zanjan-city,بله
 زنجان,ابهر,https://neshan.org/maps/places/abhar-city#c36.1467-49.2181-12z-0p,36.1467,49.2181,abhar-city,خیر
-زنجان,خرمدره,https://neshan.org/maps/places/khorramdarreh-city#c36.2044-49.1906-12z-0p,36.2044,49.1906,khorramdarreh-city,خیر
+زنجان,خدابنده (قیدار),https://neshan.org/maps/places/qeydar-city#c35.8575-48.5919-12z-0p,35.8575,48.5919,qeydar-city,خیر
+زنجان,خرمدره,https://neshan.org/maps/places/khorramdarreh-city#c36.2047-49.1867-12z-0p,36.2047,49.1867,khorramdarreh-city,خیر
+زنجان,طارم (آب‌بر),https://neshan.org/maps/places/ab-bar-city#c36.9208-48.9619-12z-0p,36.9208,48.9619,ab-bar-city,خیر
+زنجان,ماه‌نشان,https://neshan.org/maps/places/mahneshan-city#c36.7444-47.5322-12z-0p,36.7444,47.5322,mahneshan-city,خیر
+زنجان,ایجرود (زرین‌آباد),https://neshan.org/maps/places/zarrinabad-city#c36.4258-48.2936-12z-0p,36.4258,48.2936,zarrinabad-city,خیر
+زنجان,سلطانیه,https://neshan.org/maps/places/soltaniyeh-city#c36.4328-48.7969-12z-0p,36.4328,48.7969,soltaniyeh-city,خیر
+زنجان,صائین‌قلعه,https://neshan.org/maps/places/sain-qaleh-city#c36.2417-49.0667-12z-0p,36.2417,49.0667,sain-qaleh-city,خیر
+زنجان,هیدج,https://neshan.org/maps/places/hidaj-city#c36.2444-49.1333-12z-0p,36.2444,49.1333,hidaj-city,خیر
+زنجان,سهرورد,https://neshan.org/maps/places/sohrevard-city#c36.0333-48.4667-12z-0p,36.0333,48.4667,sohrevard-city,خیر
 قزوین,مرکزیت / کل استان (قزوین),https://neshan.org/maps/places/qazvin-province#c36.2688-50.0041-8z-0p,36.2688,50.0041,qazvin-province,بله (استان)
 قزوین,قزوین,https://neshan.org/maps/places/qazvin-city#c36.2688-50.0041-12z-0p,36.2688,50.0041,qazvin-city,بله
-قزوین,الوند,https://neshan.org/maps/places/alvand-city#c36.1892-50.0639-12z-0p,36.1892,50.0639,alvand-city,خیر
-قزوین,تاکستان,https://neshan.org/maps/places/takestan-city#c36.0694-49.6958-12z-0p,36.0694,49.6958,takestan-city,خیر
+قزوین,تاکستان,https://neshan.org/maps/places/takestan-city#c36.0697-49.6958-12z-0p,36.0697,49.6958,takestan-city,خیر
+قزوین,بوئین‌زهرا,https://neshan.org/maps/places/buin-zahra-city#c35.7669-50.0578-12z-0p,35.7669,50.0578,buin-zahra-city,خیر
+قزوین,البرز (الوند),https://neshan.org/maps/places/alvand-city#c36.1892-50.0644-12z-0p,36.1892,50.0644,alvand-city,خیر
+قزوین,آبیک,https://neshan.org/maps/places/abyek-city#c36.0542-50.5333-12z-0p,36.0542,50.5333,abyek-city,خیر
+قزوین,آوج,https://neshan.org/maps/places/avaj-city#c35.5786-49.2267-12z-0p,35.5786,49.2267,avaj-city,خیر
+قزوین,محمدیه (زیباشهر),https://neshan.org/maps/places/mohammadiyeh-qazvin-city#c36.2167-50.1500-12z-0p,36.2167,50.15,mohammadiyeh-qazvin-city,خیر
+قزوین,اقبالیه,https://neshan.org/maps/places/eqbaliyeh-city#c36.2167-49.9167-12z-0p,36.2167,49.9167,eqbaliyeh-city,خیر
+قزوین,محمودآباد نمونه,https://neshan.org/maps/places/mahmudabad-nemooneh-city#c36.2833-49.9000-12z-0p,36.2833,49.9,mahmudabad-nemooneh-city,خیر
+قزوین,اسفرورین,https://neshan.org/maps/places/esfarvarin-city#c35.9167-49.7500-12z-0p,35.9167,49.75,esfarvarin-city,خیر
+قزوین,شال,https://neshan.org/maps/places/shal-city#c35.8983-49.9961-12z-0p,35.8983,49.9961,shal-city,خیر
+قزوین,ضیاءآباد,https://neshan.org/maps/places/ziaabad-city#c36.0000-49.5333-12z-0p,36,49.5333,ziaabad-city,خیر
+قزوین,رازمیان (الموت غربی),https://neshan.org/maps/places/razmian-city#c36.5500-50.1833-12z-0p,36.55,50.1833,razmian-city,خیر
+قزوین,معلم‌کلایه (الموت شرقی),https://neshan.org/maps/places/moallem-kalayeh-city#c36.4333-50.4500-12z-0p,36.4333,50.45,moallem-kalayeh-city,خیر
 گلستان,مرکزیت / کل استان (گلستان),https://neshan.org/maps/places/golestan-province#c36.8427-54.4439-7z-0p,36.8427,54.4439,golestan-province,بله (استان)
 گلستان,گرگان,https://neshan.org/maps/places/gorgan-city#c36.8427-54.4439-12z-0p,36.8427,54.4439,gorgan-city,بله
-گلستان,گنبد کاووس,https://neshan.org/maps/places/gonbad-e-kavus-city#c37.2500-55.1672-12z-0p,37.25,55.1672,gonbad-e-kavus-city,خیر
-گلستان,علی‌آباد کتول,https://neshan.org/maps/places/aliabad-e-katul-city#c36.9083-54.8689-12z-0p,36.9083,54.8689,aliabad-e-katul-city,خیر
-گلستان,بندر ترکمن,https://neshan.org/maps/places/bandar-torkaman-city#c36.9000-54.0333-12z-0p,36.9,54.0333,bandar-torkaman-city,خیر
+گلستان,گنبد کاووس,https://neshan.org/maps/places/gonbad-kavus-city#c37.2500-55.1672-12z-0p,37.25,55.1672,gonbad-kavus-city,خیر
+گلستان,علی‌آباد کتول,https://neshan.org/maps/places/aliabad-katul-city#c36.9083-54.8689-12z-0p,36.9083,54.8689,aliabad-katul-city,خیر
+گلستان,بندر ترکمن,https://neshan.org/maps/places/bandar-torkaman-city#c36.9000-54.0700-12z-0p,36.9,54.07,bandar-torkaman-city,خیر
+گلستان,آق‌قلا,https://neshan.org/maps/places/aq-qala-city#c37.0139-54.4550-12z-0p,37.0139,54.455,aq-qala-city,خیر
+گلستان,کلاله,https://neshan.org/maps/places/kalaleh-city#c37.3806-55.4917-12z-0p,37.3806,55.4917,kalaleh-city,خیر
+گلستان,آزادشهر,https://neshan.org/maps/places/azadshahr-city#c37.0869-55.1739-12z-0p,37.0869,55.1739,azadshahr-city,خیر
+گلستان,کردکوی,https://neshan.org/maps/places/kordkuy-city#c36.7931-54.1128-12z-0p,36.7931,54.1128,kordkuy-city,خیر
+گلستان,مینودشت,https://neshan.org/maps/places/minudasht-city#c37.2289-55.3747-12z-0p,37.2289,55.3747,minudasht-city,خیر
+گلستان,رامیان,https://neshan.org/maps/places/ramian-city#c37.0161-55.1417-12z-0p,37.0161,55.1417,ramian-city,خیر
+گلستان,گمیشان (گمیش‌تپه),https://neshan.org/maps/places/gomish-tappeh-city#c37.0717-54.0767-12z-0p,37.0717,54.0767,gomish-tappeh-city,خیر
+گلستان,مراوه‌تپه,https://neshan.org/maps/places/maraveh-tapeh-city#c37.9000-55.9500-12z-0p,37.9,55.95,maraveh-tapeh-city,خیر
+گلستان,بندر گز,https://neshan.org/maps/places/bandar-gaz-city#c36.7744-53.9478-12z-0p,36.7744,53.9478,bandar-gaz-city,خیر
+گلستان,گالیکش,https://neshan.org/maps/places/galikesh-city#c37.2667-55.4333-12z-0p,37.2667,55.4333,galikesh-city,خیر
+گلستان,اینچه‌برون,https://neshan.org/maps/places/incheh-borun-city#c37.4667-54.7167-12z-0p,37.4667,54.7167,incheh-borun-city,خیر
 اردبیل,مرکزیت / کل استان (اردبیل),https://neshan.org/maps/places/ardabil-province#c38.2498-48.2933-8z-0p,38.2498,48.2933,ardabil-province,بله (استان)
 اردبیل,اردبیل,https://neshan.org/maps/places/ardabil-city#c38.2498-48.2933-12z-0p,38.2498,48.2933,ardabil-city,بله
-اردبیل,مشگین‌شهر,https://neshan.org/maps/places/meshginshahr-city#c38.3986-47.6822-12z-0p,38.3986,47.6822,meshginshahr-city,خیر
-اردبیل,پارس‌آباد,https://neshan.org/maps/places/parsabad-city#c39.6486-47.9175-12z-0p,39.6486,47.9175,parsabad-city,خیر
+اردبیل,پارس‌آباد,https://neshan.org/maps/places/parsabad-city#c39.6483-47.9175-12z-0p,39.6483,47.9175,parsabad-city,خیر
+اردبیل,مشگین‌شهر,https://neshan.org/maps/places/meshginshahr-city#c38.3989-47.6822-12z-0p,38.3989,47.6822,meshginshahr-city,خیر
 اردبیل,خلخال,https://neshan.org/maps/places/khalkhal-city#c37.6189-48.5258-12z-0p,37.6189,48.5258,khalkhal-city,خیر
+اردبیل,گرمی,https://neshan.org/maps/places/germi-city#c39.0214-48.0800-12z-0p,39.0214,48.08,germi-city,خیر
+اردبیل,نمین,https://neshan.org/maps/places/namin-city#c38.4267-48.4839-12z-0p,38.4267,48.4839,namin-city,خیر
+اردبیل,بیله‌سوار,https://neshan.org/maps/places/bilesavar-city#c39.3800-48.3547-12z-0p,39.38,48.3547,bilesavar-city,خیر
+اردبیل,کوثر (گیوی),https://neshan.org/maps/places/givi-city#c37.6861-48.3389-12z-0p,37.6861,48.3389,givi-city,خیر
+اردبیل,سرعین,https://neshan.org/maps/places/sareyn-city#c38.1517-48.0708-12z-0p,38.1517,48.0708,sareyn-city,خیر
+اردبیل,نیر,https://neshan.org/maps/places/nir-city#c38.0347-47.9942-12z-0p,38.0347,47.9942,nir-city,خیر
+اردبیل,اصلاندوز,https://neshan.org/maps/places/aslanduz-city#c39.4444-47.4106-12z-0p,39.4444,47.4106,aslanduz-city,خیر
+اردبیل,انگوت (انگوت‌پایین),https://neshan.org/maps/places/ongut-city#c39.0167-47.7833-12z-0p,39.0167,47.7833,ongut-city,خیر
+اردبیل,لاهرود,https://neshan.org/maps/places/lahrood-city#c38.5167-47.8167-12z-0p,38.5167,47.8167,lahrood-city,خیر
+اردبیل,کلور,https://neshan.org/maps/places/kolor-city#c37.3833-48.7167-12z-0p,37.3833,48.7167,kolor-city,خیر
 چهارمحال و بختیاری,مرکزیت / کل استان (چهارمحال و بختیاری),https://neshan.org/maps/places/chaharmahal-and-bakhtiari-province#c32.3256-50.8644-8z-0p,32.3256,50.8644,chaharmahal-and-bakhtiari-province,بله (استان)
-چهارمحال و بختیاری,شهرکرد,https://neshan.org/maps/places/shahr-e-kord-city#c32.3256-50.8644-12z-0p,32.3256,50.8644,shahr-e-kord-city,بله
-چهارمحال و بختیاری,بروجن,https://neshan.org/maps/places/borujen-city#c31.9667-51.2833-12z-0p,31.9667,51.2833,borujen-city,خیر
-چهارمحال و بختیاری,فارسان,https://neshan.org/maps/places/farsan-city#c32.2567-50.5639-12z-0p,32.2567,50.5639,farsan-city,خیر
+چهارمحال و بختیاری,شهرکرد,https://neshan.org/maps/places/shahrekord-city#c32.3256-50.8644-12z-0p,32.3256,50.8644,shahrekord-city,بله
+چهارمحال و بختیاری,بروجن,https://neshan.org/maps/places/borujen-city#c31.9689-51.2889-12z-0p,31.9689,51.2889,borujen-city,خیر
+چهارمحال و بختیاری,لردگان,https://neshan.org/maps/places/lordegan-city#c31.5103-50.8286-12z-0p,31.5103,50.8286,lordegan-city,خیر
+چهارمحال و بختیاری,فارسان,https://neshan.org/maps/places/farsan-city#c32.2575-50.5647-12z-0p,32.2575,50.5647,farsan-city,خیر
+چهارمحال و بختیاری,کیار (شلمزار),https://neshan.org/maps/places/shalamzar-city#c32.0461-50.8178-12z-0p,32.0461,50.8178,shalamzar-city,خیر
+چهارمحال و بختیاری,اردل,https://neshan.org/maps/places/ardal-city#c31.9961-50.6569-12z-0p,31.9961,50.6569,ardal-city,خیر
+چهارمحال و بختیاری,کوهرنگ (چلگرد),https://neshan.org/maps/places/chelgerd-city#c32.4636-50.1256-12z-0p,32.4636,50.1256,chelgerd-city,خیر
+چهارمحال و بختیاری,سامان,https://neshan.org/maps/places/saman-city#c32.4519-50.9139-12z-0p,32.4519,50.9139,saman-city,خیر
+چهارمحال و بختیاری,بن,https://neshan.org/maps/places/ben-city#c32.5317-50.7456-12z-0p,32.5317,50.7456,ben-city,خیر
+چهارمحال و بختیاری,خانمیرزا (آلونی),https://neshan.org/maps/places/aluni-city#c31.5342-51.0547-12z-0p,31.5342,51.0547,aluni-city,خیر
+چهارمحال و بختیاری,فلارد (مال‌خلیفه),https://neshan.org/maps/places/mal-khalifeh-city#c31.3361-51.2722-12z-0p,31.3361,51.2722,mal-khalifeh-city,خیر
+چهارمحال و بختیاری,فرخ‌شهر,https://neshan.org/maps/places/farokhshahr-city#c32.2833-50.9833-12z-0p,32.2833,50.9833,farokhshahr-city,خیر
+چهارمحال و بختیاری,هفشجان,https://neshan.org/maps/places/hafshejan-city#c32.2167-50.7833-12z-0p,32.2167,50.7833,hafshejan-city,خیر
+چهارمحال و بختیاری,بلداجی,https://neshan.org/maps/places/boldaji-city#c31.9333-51.0500-12z-0p,31.9333,51.05,boldaji-city,خیر
 کهگیلویه و بویراحمد,مرکزیت / کل استان (کهگیلویه و بویراحمد),https://neshan.org/maps/places/kohgiluyeh-and-boyer-ahmad-province#c30.6684-51.5876-8z-0p,30.6684,51.5876,kohgiluyeh-and-boyer-ahmad-province,بله (استان)
-کهگیلویه و بویراحمد,یاسوج,https://neshan.org/maps/places/yasuj-city#c30.6684-51.5876-12z-0p,30.6684,51.5876,yasuj-city,بله
-کهگیلویه و بویراحمد,دوگنبدان (گچساران),https://neshan.org/maps/places/dogonbadan-city#c30.3586-50.7981-12z-0p,30.3586,50.7981,dogonbadan-city,خیر
-کهگیلویه و بویراحمد,دهدشت,https://neshan.org/maps/places/dehdasht-city#c30.7936-50.5650-12z-0p,30.7936,50.565,dehdasht-city,خیر
+کهگیلویه و بویراحمد,یاسوج (بویراحمد),https://neshan.org/maps/places/yasuj-city#c30.6684-51.5876-12z-0p,30.6684,51.5876,yasuj-city,بله
+کهگیلویه و بویراحمد,گچساران (دوگنبدان),https://neshan.org/maps/places/dogonbadan-city#c30.3586-50.7981-12z-0p,30.3586,50.7981,dogonbadan-city,خیر
+کهگیلویه و بویراحمد,کهگیلویه (دهدشت),https://neshan.org/maps/places/dehdasht-city#c30.7939-50.5650-12z-0p,30.7939,50.565,dehdasht-city,خیر
+کهگیلویه و بویراحمد,دنا (سی‌سخت),https://neshan.org/maps/places/sisakht-city#c30.8631-51.4561-12z-0p,30.8631,51.4561,sisakht-city,خیر
+کهگیلویه و بویراحمد,بهمئی (لیکک),https://neshan.org/maps/places/likak-city#c30.9989-50.0911-12z-0p,30.9989,50.0911,likak-city,خیر
+کهگیلویه و بویراحمد,چرام,https://neshan.org/maps/places/charam-city#c30.7461-50.7461-12z-0p,30.7461,50.7461,charam-city,خیر
+کهگیلویه و بویراحمد,باشت,https://neshan.org/maps/places/basht-city#c30.3606-51.1611-12z-0p,30.3606,51.1611,basht-city,خیر
+کهگیلویه و بویراحمد,لنده,https://neshan.org/maps/places/landeh-city#c30.9506-50.4356-12z-0p,30.9506,50.4356,landeh-city,خیر
+کهگیلویه و بویراحمد,مارگون,https://neshan.org/maps/places/margown-city#c30.9833-51.1333-12z-0p,30.9833,51.1333,margown-city,خیر
+کهگیلویه و بویراحمد,پاتاوه,https://neshan.org/maps/places/pataveh-city#c30.9667-51.2667-12z-0p,30.9667,51.2667,pataveh-city,خیر
+کهگیلویه و بویراحمد,دیشموک,https://neshan.org/maps/places/dishmok-city#c31.1333-50.2333-12z-0p,31.1333,50.2333,dishmok-city,خیر
 سمنان,مرکزیت / کل استان (سمنان),https://neshan.org/maps/places/semnan-province#c35.5729-53.3971-7z-0p,35.5729,53.3971,semnan-province,بله (استان)
-سمنان,سمنان,https://neshan.org/maps/places/semnan-city#c35.5729-53.3971-12z-0p,35.5729,53.3971,semnan-city,بله
-سمنان,شاهرود,https://neshan.org/maps/places/shahrud-city#c36.4181-54.9764-12z-0p,36.4181,54.9764,shahrud-city,خیر
-سمنان,دامغان,https://neshan.org/maps/places/damghan-city#c36.1681-54.3475-12z-0p,36.1681,54.3475,damghan-city,خیر
+سمنان,سمنان,https://neshan.org/maps/places/semnan-city#c35.5769-53.3953-12z-0p,35.5769,53.3953,semnan-city,بله
+سمنان,شاهرود,https://neshan.org/maps/places/shahrood-city#c36.4182-54.9763-12z-0p,36.4182,54.9763,shahrood-city,خیر
+سمنان,دامغان,https://neshan.org/maps/places/damghan-city#c36.1683-54.3481-12z-0p,36.1683,54.3481,damghan-city,خیر
 سمنان,گرمسار,https://neshan.org/maps/places/garmsar-city#c35.2181-52.3408-12z-0p,35.2181,52.3408,garmsar-city,خیر
+سمنان,مهدیشهر (سنگسر),https://neshan.org/maps/places/mehdishahr-city#c35.7108-53.3539-12z-0p,35.7108,53.3539,mehdishahr-city,خیر
+سمنان,میامی,https://neshan.org/maps/places/meyami-city#c36.4111-55.6517-12z-0p,36.4111,55.6517,meyami-city,خیر
+سمنان,سرخه,https://neshan.org/maps/places/sorkheh-city#c35.4631-53.2147-12z-0p,35.4631,53.2147,sorkheh-city,خیر
+سمنان,آرادان,https://neshan.org/maps/places/aradan-city#c35.2500-52.4939-12z-0p,35.25,52.4939,aradan-city,خیر
+سمنان,شهمیرزاد,https://neshan.org/maps/places/shahmirzad-city#c35.7722-53.3194-12z-0p,35.7722,53.3194,shahmirzad-city,خیر
+سمنان,بسطام,https://neshan.org/maps/places/bastam-city#c36.4833-55.0000-12z-0p,36.4833,55,bastam-city,خیر
+سمنان,ایوانکی,https://neshan.org/maps/places/eyvanki-city#c35.3444-52.0722-12z-0p,35.3444,52.0722,eyvanki-city,خیر
+سمنان,بیارجمند,https://neshan.org/maps/places/biarjomand-city#c36.1167-55.8833-12z-0p,36.1167,55.8833,biarjomand-city,خیر
 ایلام,مرکزیت / کل استان (ایلام),https://neshan.org/maps/places/ilam-province#c33.6374-46.4227-8z-0p,33.6374,46.4227,ilam-province,بله (استان)
 ایلام,ایلام,https://neshan.org/maps/places/ilam-city#c33.6374-46.4227-12z-0p,33.6374,46.4227,ilam-city,بله
 ایلام,دهلران,https://neshan.org/maps/places/dehloran-city#c32.6942-47.2678-12z-0p,32.6942,47.2678,dehloran-city,خیر
-ایلام,ایوان,https://neshan.org/maps/places/ivan-city#c33.8292-46.3092-12z-0p,33.8292,46.3092,ivan-city,خیر
-ایلام,مهران,https://neshan.org/maps/places/mehran-city#c33.1222-46.1644-12z-0p,33.1222,46.1644,mehran-city,خیر
+ایلام,ایوان,https://neshan.org/maps/places/eyvan-city#c33.8267-46.3089-12z-0p,33.8267,46.3089,eyvan-city,خیر
+ایلام,آبدانان,https://neshan.org/maps/places/abdanan-city#c32.9928-47.4197-12z-0p,32.9928,47.4197,abdanan-city,خیر
+ایلام,دره‌شهر,https://neshan.org/maps/places/darreh-shahr-city#c33.1389-47.3764-12z-0p,33.1389,47.3764,darreh-shahr-city,خیر
+ایلام,مهران,https://neshan.org/maps/places/mehran-city#c33.1222-46.1647-12z-0p,33.1222,46.1647,mehran-city,خیر
+ایلام,چرداول (سرابله),https://neshan.org/maps/places/sarableh-city#c33.7667-46.5653-12z-0p,33.7667,46.5653,sarableh-city,خیر
+ایلام,بدره,https://neshan.org/maps/places/badreh-city#c33.3089-47.0378-12z-0p,33.3089,47.0378,badreh-city,خیر
+ایلام,ملکشاهی (ارکواز),https://neshan.org/maps/places/arkavaz-city#c33.3767-46.5989-12z-0p,33.3767,46.5989,arkavaz-city,خیر
+ایلام,سیروان (لومار),https://neshan.org/maps/places/lumar-city#c33.6267-46.8572-12z-0p,33.6267,46.8572,lumar-city,خیر
+ایلام,هلیلان (توحید),https://neshan.org/maps/places/towhid-city#c33.8444-47.1694-12z-0p,33.8444,47.1694,towhid-city,خیر
+ایلام,چوار,https://neshan.org/maps/places/chovar-city#c33.7006-46.2978-12z-0p,33.7006,46.2978,chovar-city,خیر
+ایلام,صالح‌آباد,https://neshan.org/maps/places/salehabad-ilam-city#c33.4833-46.1833-12z-0p,33.4833,46.1833,salehabad-ilam-city,خیر
 خراسان جنوبی,مرکزیت / کل استان (خراسان جنوبی),https://neshan.org/maps/places/south-khorasan-province#c32.8663-59.2211-6z-0p,32.8663,59.2211,south-khorasan-province,بله (استان)
 خراسان جنوبی,بیرجند,https://neshan.org/maps/places/birjand-city#c32.8663-59.2211-12z-0p,32.8663,59.2211,birjand-city,بله
-خراسان جنوبی,قائن,https://neshan.org/maps/places/qaen-city#c33.7275-59.1844-12z-0p,33.7275,59.1844,qaen-city,خیر
-خراسان جنوبی,فردوس,https://neshan.org/maps/places/ferdos-city#c34.0186-58.1722-12z-0p,34.0186,58.1722,ferdos-city,خیر
-خراسان جنوبی,طبس,https://neshan.org/maps/places/tabas-city#c33.5958-56.9244-12z-0p,33.5958,56.9244,tabas-city,خیر
+خراسان جنوبی,قائنات (قائن),https://neshan.org/maps/places/qaen-city#c33.7269-59.1844-12z-0p,33.7269,59.1844,qaen-city,خیر
+خراسان جنوبی,طبس,https://neshan.org/maps/places/tabas-city#c33.5959-56.9244-12z-0p,33.5959,56.9244,tabas-city,خیر
+خراسان جنوبی,فردوس,https://neshan.org/maps/places/ferdows-city#c34.0186-58.1722-12z-0p,34.0186,58.1722,ferdows-city,خیر
+خراسان جنوبی,نهبندان,https://neshan.org/maps/places/nehbandan-city#c31.5369-60.0389-12z-0p,31.5369,60.0389,nehbandan-city,خیر
+خراسان جنوبی,درمیان (اسدیه),https://neshan.org/maps/places/asadiyeh-city#c32.9439-59.9881-12z-0p,32.9439,59.9881,asadiyeh-city,خیر
+خراسان جنوبی,سرایان,https://neshan.org/maps/places/sarayan-city#c33.8617-58.5206-12z-0p,33.8617,58.5206,sarayan-city,خیر
+خراسان جنوبی,سربیشه,https://neshan.org/maps/places/sarbisheh-city#c32.5753-59.7978-12z-0p,32.5753,59.7978,sarbisheh-city,خیر
+خراسان جنوبی,بشرویه,https://neshan.org/maps/places/boshruyeh-city#c33.8711-57.4278-12z-0p,33.8711,57.4278,boshruyeh-city,خیر
+خراسان جنوبی,خوسف,https://neshan.org/maps/places/khusf-city#c32.7719-58.8950-12z-0p,32.7719,58.895,khusf-city,خیر
+خراسان جنوبی,زیرکوه (حاجی‌آباد),https://neshan.org/maps/places/hajiabad-zirkuh-city#c33.6050-59.9931-12z-0p,33.605,59.9931,hajiabad-zirkuh-city,خیر
+خراسان جنوبی,عشق‌آباد,https://neshan.org/maps/places/eshqabad-city#c34.3000-57.0667-12z-0p,34.3,57.0667,eshqabad-city,خیر
+خراسان جنوبی,خضری دشت‌بیاض,https://neshan.org/maps/places/khezri-city#c34.0167-58.8167-12z-0p,34.0167,58.8167,khezri-city,خیر
+خراسان جنوبی,آیسک,https://neshan.org/maps/places/ayask-city#c33.9167-58.6000-12z-0p,33.9167,58.6,ayask-city,خیر
 خراسان شمالی,مرکزیت / کل استان (خراسان شمالی),https://neshan.org/maps/places/north-khorasan-province#c37.4761-57.3283-7z-0p,37.4761,57.3283,north-khorasan-province,بله (استان)
 خراسان شمالی,بجنورد,https://neshan.org/maps/places/bojnurd-city#c37.4761-57.3283-12z-0p,37.4761,57.3283,bojnurd-city,بله
 خراسان شمالی,شیروان,https://neshan.org/maps/places/shirvan-city#c37.3967-57.9294-12z-0p,37.3967,57.9294,shirvan-city,خیر
 خراسان شمالی,اسفراین,https://neshan.org/maps/places/esfarayen-city#c37.0764-57.5100-12z-0p,37.0764,57.51,esfarayen-city,خیر
-خراسان شمالی,آشخانه,https://neshan.org/maps/places/ashkhaneh-city#c37.5619-56.9214-12z-0p,37.5619,56.9214,ashkhaneh-city,خیر
+خراسان شمالی,سملقان (آشخانه),https://neshan.org/maps/places/ashkhaneh-city#c37.5619-56.9214-12z-0p,37.5619,56.9214,ashkhaneh-city,خیر
+خراسان شمالی,جاجرم,https://neshan.org/maps/places/jajarm-city#c36.9500-56.3800-12z-0p,36.95,56.38,jajarm-city,خیر
+خراسان شمالی,فاروج,https://neshan.org/maps/places/faruj-city#c37.2319-58.2189-12z-0p,37.2319,58.2189,faruj-city,خیر
+خراسان شمالی,راز و جرگلان (راز),https://neshan.org/maps/places/raz-city#c37.9333-57.1167-12z-0p,37.9333,57.1167,raz-city,خیر
+خراسان شمالی,گرمه,https://neshan.org/maps/places/garmeh-city#c36.9833-56.2833-12z-0p,36.9833,56.2833,garmeh-city,خیر
+خراسان شمالی,بام و صفی‌آباد,https://neshan.org/maps/places/safiyabad-khorasan-city#c36.7000-57.8833-12z-0p,36.7,57.8833,safiyabad-khorasan-city,خیر
+خراسان شمالی,درق,https://neshan.org/maps/places/daraq-city#c36.9667-56.2333-12z-0p,36.9667,56.2333,daraq-city,خیر
+خراسان شمالی,ایور,https://neshan.org/maps/places/ivar-city#c36.9833-56.2500-12z-0p,36.9833,56.25,ivar-city,خیر
+خراسان شمالی,شوقان,https://neshan.org/maps/places/showqan-city#c37.1667-56.8833-12z-0p,37.1667,56.8833,showqan-city,خیر
+خراسان شمالی,سنخواست,https://neshan.org/maps/places/sankhvast-city#c37.0500-56.7667-12z-0p,37.05,56.7667,sankhvast-city,خیر
