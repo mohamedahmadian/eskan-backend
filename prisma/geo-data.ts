@@ -94,6 +94,7 @@ export const geoSeed: GeoCountrySeed[] = [
           { code: "golpayegan", nameFa: "گلپایگان", nameEn: "Golpayegan" },
           { code: "khansar", nameFa: "خوانسار", nameEn: "Khansar" },
           { code: "ardekan-esf", nameFa: "اردستان", nameEn: "Ardestan" },
+          { code: "natanz", nameFa: "نطنز", nameEn: "Natanz" },
         ],
       },
       {
@@ -155,6 +156,7 @@ export const geoSeed: GeoCountrySeed[] = [
           { code: "firuzkuh", nameFa: "فیروزکوه", nameEn: "Firuzkuh" },
           { code: "robatkarim", nameFa: "رباط‌کریم", nameEn: "Robat Karim" },
           { code: "baharstan", nameFa: "بهارستان", nameEn: "Baharestan" },
+          { code: "parand", nameFa: "پرند", nameEn: "Parand" },
         ],
       },
       {
@@ -307,7 +309,10 @@ export const geoSeed: GeoCountrySeed[] = [
         code: "QOM",
         nameFa: "قم",
         nameEn: "Qom",
-        cities: [{ code: "qom", nameFa: "قم", nameEn: "Qom" }],
+        cities: [
+          { code: "qom", nameFa: "قم", nameEn: "Qom" },
+          { code: "qanavat", nameFa: "قنوات", nameEn: "Qanavat" },
+        ],
       },
       {
         code: "KRD",

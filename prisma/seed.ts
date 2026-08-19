@@ -1,16 +1,18 @@
 import "dotenv/config";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as bcrypt from "bcrypt";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { geoSeed } from "./geo-data";
-
-type ProvinceNeshanLocation = {
-  neshanAddress: string;
-  latitude: number;
-  longitude: number;
-};
+import {
+  codeFromNeshanSlug,
+  displayCityNameFa,
+  loadIranProvincesAndCitiesNeshan,
+  matchCity,
+  nameEnFromNeshanSlug,
+  uniqueCityCode,
+  type IranCityNeshan,
+} from "./iran-neshan";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL as string,
@@ -392,34 +394,80 @@ async function main() {
   });
 }
 
-function loadIranProvinceNeshanLocations() {
-  const csvPath = join(__dirname, "iran_provinces_neshan.csv");
-  const csv = readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
-  const locations = new Map<string, ProvinceNeshanLocation>();
+function loadIranNeshanData() {
+  return loadIranProvincesAndCitiesNeshan(
+    join(__dirname, "iran_provinces_and_cities_neshan.csv"),
+  );
+}
 
-  for (const rawLine of csv.split(/\r?\n/).slice(1)) {
-    const line = rawLine.trim();
-    if (!line) continue;
+async function applyIranCityNeshan(provinceId: string, rows: IranCityNeshan[]) {
+  const existing = await prisma.city.findMany({
+    where: { provinceId },
+    select: {
+      id: true,
+      code: true,
+      nameFa: true,
+      sortOrder: true,
+    },
+  });
+  const usedCodes = new Set(existing.map((city) => city.code));
+  const matchedIds = new Set<string>();
+  let nextSortOrder =
+    existing.reduce((max, city) => Math.max(max, city.sortOrder), 0) + 1;
 
-    const [nameFa, neshanAddress, latitudeRaw, longitudeRaw] = line.split(",");
-    const latitude = Number(latitudeRaw);
-    const longitude = Number(longitudeRaw);
-    if (!nameFa || !neshanAddress || Number.isNaN(latitude) || Number.isNaN(longitude)) {
-      throw new Error(`Invalid Neshan location row: ${line}`);
+  await prisma.city.updateMany({
+    where: { provinceId },
+    data: { isProvinceCapital: false },
+  });
+
+  for (const row of rows) {
+    const unmatched = existing.filter((city) => !matchedIds.has(city.id));
+    const match = matchCity(unmatched, row) ?? matchCity(existing, row);
+
+    if (match && !matchedIds.has(match.id)) {
+      await prisma.city.update({
+        where: { id: match.id },
+        data: {
+          neshanAddress: row.neshanAddress,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          isProvinceCapital: row.isProvinceCapital,
+        },
+      });
+      matchedIds.add(match.id);
+      continue;
     }
 
-    locations.set(nameFa.trim(), {
-      neshanAddress: neshanAddress.trim(),
-      latitude,
-      longitude,
+    const code = uniqueCityCode(codeFromNeshanSlug(row.slug), usedCodes);
+    const created = await prisma.city.create({
+      data: {
+        provinceId,
+        code,
+        nameFa: displayCityNameFa(row.nameFa),
+        nameEn: nameEnFromNeshanSlug(row.slug) || displayCityNameFa(row.nameFa),
+        neshanAddress: row.neshanAddress,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        isProvinceCapital: row.isProvinceCapital,
+        sortOrder: nextSortOrder,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        code: true,
+        nameFa: true,
+        sortOrder: true,
+      },
     });
+    existing.push(created);
+    usedCodes.add(created.code);
+    matchedIds.add(created.id);
+    nextSortOrder += 1;
   }
-
-  return locations;
 }
 
 async function seedGeo() {
-  const iranProvinceLocations = loadIranProvinceNeshanLocations();
+  const iranNeshan = loadIranNeshanData();
 
   for (const country of geoSeed) {
     const record = await prisma.country.upsert({
@@ -446,7 +494,7 @@ async function seedGeo() {
     for (const [provinceIndex, province] of country.provinces.entries()) {
       const location =
         country.iso2 === "IR"
-          ? iranProvinceLocations.get(province.nameFa)
+          ? iranNeshan.provinces.get(province.nameFa)
           : undefined;
       if (country.iso2 === "IR" && !location) {
         throw new Error(
@@ -512,6 +560,16 @@ async function seedGeo() {
           },
         });
       }
+
+      if (country.iso2 === "IR") {
+        const cityRows = iranNeshan.citiesByProvince.get(province.nameFa) ?? [];
+        if (cityRows.length === 0) {
+          throw new Error(
+            `Neshan city rows missing for Iranian province: ${province.nameFa}`,
+          );
+        }
+        await applyIranCityNeshan(provinceRecord.id, cityRows);
+      }
     }
   }
 
@@ -520,9 +578,14 @@ async function seedGeo() {
       (province) => province.nameFa,
     ) ?? [],
   );
-  for (const nameFa of iranProvinceLocations.keys()) {
+  for (const nameFa of iranNeshan.provinces.keys()) {
     if (!iranNames.has(nameFa)) {
       throw new Error(`Neshan CSV province not in geo seed: ${nameFa}`);
+    }
+  }
+  for (const nameFa of iranNeshan.citiesByProvince.keys()) {
+    if (!iranNames.has(nameFa)) {
+      throw new Error(`Neshan CSV city province not in geo seed: ${nameFa}`);
     }
   }
 }

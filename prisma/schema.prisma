@@ -247,13 +247,14 @@ model City {
   code           String
   nameFa         String
   nameEn         String
-  neshanAddress  String?
-  latitude       Decimal?        @db.Decimal(10, 7)
-  longitude      Decimal?        @db.Decimal(10, 7)
-  hasRailway     Boolean         @default(false)
-  hasAirport     Boolean         @default(false)
-  isActive       Boolean         @default(true)
-  sortOrder      Int             @default(0)
+  neshanAddress      String?
+  latitude           Decimal?        @db.Decimal(10, 7)
+  longitude          Decimal?        @db.Decimal(10, 7)
+  isProvinceCapital  Boolean         @default(false)
+  hasRailway         Boolean         @default(false)
+  hasAirport         Boolean         @default(false)
+  isActive           Boolean         @default(true)
+  sortOrder          Int             @default(0)
   accommodations             Accommodation[]
   foodSuppliers              FoodSupplier[]
   medicalCenters             MedicalCenter[]

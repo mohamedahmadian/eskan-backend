@@ -59,6 +59,10 @@ export class CreateCityDto {
 
   @IsOptional()
   @IsBoolean()
+  isProvinceCapital?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   hasRailway?: boolean;
 
   @IsOptional()

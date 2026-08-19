@@ -71,6 +71,7 @@ const citySelect = {
   neshanAddress: true,
   latitude: true,
   longitude: true,
+  isProvinceCapital: true,
   hasRailway: true,
   hasAirport: true,
   isActive: true,
@@ -361,9 +362,14 @@ export class GeoService {
     await this.assertProvince(dto.provinceId);
     try {
       return withCoords(
-        await this.prisma.city.create({
-          data: this.cityData(dto),
-          select: citySelect,
+        await this.prisma.$transaction(async (tx) => {
+          if (dto.isProvinceCapital) {
+            await this.clearOtherProvinceCapitals(tx, dto.provinceId);
+          }
+          return tx.city.create({
+            data: this.cityData(dto),
+            select: citySelect,
+          });
         }),
       );
     } catch (error) {
@@ -372,16 +378,22 @@ export class GeoService {
   }
 
   async updateCity(id: string, dto: UpdateCityDto) {
-    await this.findCity(id);
+    const current = await this.findCity(id);
     if (dto.provinceId) {
       await this.assertProvince(dto.provinceId);
     }
+    const provinceId = dto.provinceId ?? current.provinceId;
     try {
       return withCoords(
-        await this.prisma.city.update({
-          where: { id },
-          data: this.cityData(dto),
-          select: citySelect,
+        await this.prisma.$transaction(async (tx) => {
+          if (dto.isProvinceCapital) {
+            await this.clearOtherProvinceCapitals(tx, provinceId, id);
+          }
+          return tx.city.update({
+            where: { id },
+            data: this.cityData(dto),
+            select: citySelect,
+          });
         }),
       );
     } catch (error) {
@@ -432,11 +444,27 @@ export class GeoService {
       neshanAddress: dto.neshanAddress,
       latitude: toDecimal(dto.latitude),
       longitude: toDecimal(dto.longitude),
+      isProvinceCapital: dto.isProvinceCapital,
       hasRailway: dto.hasRailway,
       hasAirport: dto.hasAirport,
       isActive: dto.isActive,
       sortOrder: dto.sortOrder,
     };
+  }
+
+  private async clearOtherProvinceCapitals(
+    tx: Prisma.TransactionClient,
+    provinceId: string,
+    exceptCityId?: string,
+  ) {
+    await tx.city.updateMany({
+      where: {
+        provinceId,
+        isProvinceCapital: true,
+        ...(exceptCityId ? { id: { not: exceptCityId } } : {}),
+      },
+      data: { isProvinceCapital: false },
+    });
   }
 
   private async assertCountry(id: string) {
