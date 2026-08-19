@@ -1,0 +1,32 @@
+﻿نام استان,آدرس نقشه نشان,عرض جغرافیایی (lat),طول جغرافیایی (lng),مرکز استان,نام انگلیسی (Slug),منطقه جغرافیایی
+خراسان رضوی,https://neshan.org/maps/places/razavi-khorasan-province#c35.817-60.919-6z-0p,35.817,60.919,مشهد,razavi-khorasan-province,شرق
+تهران,https://neshan.org/maps/places/tehran-province#c35.6892-51.3890-8z-0p,35.6892,51.389,تهران,tehran-province,مرکز
+اصفهان,https://neshan.org/maps/places/isfahan-province#c32.6546-51.6680-7z-0p,32.6546,51.668,اصفهان,isfahan-province,مرکز
+فارس,https://neshan.org/maps/places/fars-province#c29.5918-52.5837-7z-0p,29.5918,52.5837,شیراز,fars-province,جنوب
+آذربایجان شرقی,https://neshan.org/maps/places/east-azerbaijan-province#c38.0800-46.2919-7z-0p,38.08,46.2919,تبریز,east-azerbaijan-province,شمال‌غرب
+آذربایجان غربی,https://neshan.org/maps/places/west-azerbaijan-province#c37.5527-45.0761-7z-0p,37.5527,45.0761,ارومیه,west-azerbaijan-province,شمال‌غرب
+خوزستان,https://neshan.org/maps/places/khuzestan-province#c31.3203-48.6693-7z-0p,31.3203,48.6693,اهواز,khuzestan-province,جنوب‌غرب
+مازندران,https://neshan.org/maps/places/mazandaran-province#c36.5659-53.0586-7z-0p,36.5659,53.0586,ساری,mazandaran-province,شمال
+گیلان,https://neshan.org/maps/places/gilan-province#c37.2809-49.5924-8z-0p,37.2809,49.5924,رشت,gilan-province,شمال
+کرمان,https://neshan.org/maps/places/kerman-province#c30.2839-57.0788-6z-0p,30.2839,57.0788,کرمان,kerman-province,جنوب‌شرق
+سیستان و بلوچستان,https://neshan.org/maps/places/sistan-and-baluchestan-province#c29.4963-60.8629-6z-0p,29.4963,60.8629,زاهدان,sistan-and-baluchestan-province,جنوب‌شرق
+البرز,https://neshan.org/maps/places/alborz-province#c35.8400-50.9391-8z-0p,35.84,50.9391,کرج,alborz-province,مرکز
+قم,https://neshan.org/maps/places/qom-province#c34.6401-50.8764-8z-0p,34.6401,50.8764,قم,qom-province,مرکز
+کرمانشاه,https://neshan.org/maps/places/kermanshah-province#c34.3277-47.0778-7z-0p,34.3277,47.0778,کرمانشاه,kermanshah-province,غرب
+یزد,https://neshan.org/maps/places/yazd-province#c31.8974-54.3569-7z-0p,31.8974,54.3569,یزد,yazd-province,مرکز
+هرمزگان,https://neshan.org/maps/places/hormozgan-province#c27.1832-56.2666-7z-0p,27.1832,56.2666,بندرعباس,hormozgan-province,جنوب
+مرکزی,https://neshan.org/maps/places/markazi-province#c34.0954-49.7013-7z-0p,34.0954,49.7013,اراک,markazi-province,مرکز
+همدان,https://neshan.org/maps/places/hamedan-province#c34.7989-48.5150-8z-0p,34.7989,48.515,همدان,hamedan-province,غرب
+کردستان,https://neshan.org/maps/places/kurdistan-province#c35.3219-46.9862-7z-0p,35.3219,46.9862,سنندج,kurdistan-province,غرب
+لرستان,https://neshan.org/maps/places/lorestan-province#c33.4878-48.3558-7z-0p,33.4878,48.3558,خرم‌آباد,lorestan-province,غرب
+بوشهر,https://neshan.org/maps/places/bushehr-province#c28.9234-50.8203-7z-0p,28.9234,50.8203,بوشهر,bushehr-province,جنوب
+زنجان,https://neshan.org/maps/places/zanjan-province#c36.6736-48.4787-7z-0p,36.6736,48.4787,زنجان,zanjan-province,شمال‌غرب
+قزوین,https://neshan.org/maps/places/qazvin-province#c36.2688-50.0041-8z-0p,36.2688,50.0041,قزوین,qazvin-province,مرکز
+گلستان,https://neshan.org/maps/places/golestan-province#c36.8427-54.4439-7z-0p,36.8427,54.4439,گرگان,golestan-province,شمال
+اردبیل,https://neshan.org/maps/places/ardabil-province#c38.2498-48.2933-8z-0p,38.2498,48.2933,اردبیل,ardabil-province,شمال‌غرب
+چهارمحال و بختیاری,https://neshan.org/maps/places/chaharmahal-and-bakhtiari-province#c32.3256-50.8644-8z-0p,32.3256,50.8644,شهرکرد,chaharmahal-and-bakhtiari-province,مرکز
+کهگیلویه و بویراحمد,https://neshan.org/maps/places/kohgiluyeh-and-boyer-ahmad-province#c30.6684-51.5876-8z-0p,30.6684,51.5876,یاسوج,kohgiluyeh-and-boyer-ahmad-province,جنوب‌غرب
+سمنان,https://neshan.org/maps/places/semnan-province#c35.5729-53.3971-7z-0p,35.5729,53.3971,سمنان,semnan-province,مرکز
+ایلام,https://neshan.org/maps/places/ilam-province#c33.6374-46.4227-8z-0p,33.6374,46.4227,ایلام,ilam-province,غرب
+خراسان جنوبی,https://neshan.org/maps/places/south-khorasan-province#c32.8663-59.2211-6z-0p,32.8663,59.2211,بیرجند,south-khorasan-province,شرق
+خراسان شمالی,https://neshan.org/maps/places/north-khorasan-province#c37.4761-57.3283-7z-0p,37.4761,57.3283,بجنورد,north-khorasan-province,شمال

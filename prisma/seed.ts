@@ -1,8 +1,16 @@
 import "dotenv/config";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as bcrypt from "bcrypt";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { geoSeed } from "./geo-data";
+
+type ProvinceNeshanLocation = {
+  neshanAddress: string;
+  latitude: number;
+  longitude: number;
+};
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL as string,
@@ -384,7 +392,35 @@ async function main() {
   });
 }
 
+function loadIranProvinceNeshanLocations() {
+  const csvPath = join(__dirname, "iran_provinces_neshan.csv");
+  const csv = readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+  const locations = new Map<string, ProvinceNeshanLocation>();
+
+  for (const rawLine of csv.split(/\r?\n/).slice(1)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const [nameFa, neshanAddress, latitudeRaw, longitudeRaw] = line.split(",");
+    const latitude = Number(latitudeRaw);
+    const longitude = Number(longitudeRaw);
+    if (!nameFa || !neshanAddress || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      throw new Error(`Invalid Neshan location row: ${line}`);
+    }
+
+    locations.set(nameFa.trim(), {
+      neshanAddress: neshanAddress.trim(),
+      latitude,
+      longitude,
+    });
+  }
+
+  return locations;
+}
+
 async function seedGeo() {
+  const iranProvinceLocations = loadIranProvinceNeshanLocations();
+
   for (const country of geoSeed) {
     const record = await prisma.country.upsert({
       where: { iso2: country.iso2 },
@@ -408,6 +444,16 @@ async function seedGeo() {
     });
 
     for (const [provinceIndex, province] of country.provinces.entries()) {
+      const location =
+        country.iso2 === "IR"
+          ? iranProvinceLocations.get(province.nameFa)
+          : undefined;
+      if (country.iso2 === "IR" && !location) {
+        throw new Error(
+          `Neshan location missing for Iranian province: ${province.nameFa}`,
+        );
+      }
+
       const provinceRecord = await prisma.province.upsert({
         where: {
           countryId_code: { countryId: record.id, code: province.code },
@@ -417,6 +463,13 @@ async function seedGeo() {
           nameEn: province.nameEn,
           sortOrder: provinceIndex + 1,
           isActive: true,
+          ...(location
+            ? {
+                neshanAddress: location.neshanAddress,
+                latitude: location.latitude,
+                longitude: location.longitude,
+              }
+            : {}),
         },
         create: {
           countryId: record.id,
@@ -425,6 +478,13 @@ async function seedGeo() {
           nameEn: province.nameEn,
           sortOrder: provinceIndex + 1,
           isActive: true,
+          ...(location
+            ? {
+                neshanAddress: location.neshanAddress,
+                latitude: location.latitude,
+                longitude: location.longitude,
+              }
+            : {}),
         },
       });
 
@@ -452,6 +512,17 @@ async function seedGeo() {
           },
         });
       }
+    }
+  }
+
+  const iranNames = new Set(
+    geoSeed.find((country) => country.iso2 === "IR")?.provinces.map(
+      (province) => province.nameFa,
+    ) ?? [],
+  );
+  for (const nameFa of iranProvinceLocations.keys()) {
+    if (!iranNames.has(nameFa)) {
+      throw new Error(`Neshan CSV province not in geo seed: ${nameFa}`);
     }
   }
 }
