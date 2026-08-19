@@ -1,0 +1,53 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { CreateUserDto } from './dto/create-user.dto';
+import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UsersService } from './users.service';
+
+type RequestUser = { id: string };
+
+@Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
+export class UsersController {
+  constructor(private readonly users: UsersService) {}
+
+  @Get()
+  findAll(@Query() query: FindUsersQueryDto) {
+    return this.users.findAll(query);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.users.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateUserDto) {
+    return this.users.create(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
+    return this.users.update(id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.users.remove(id, actor.id);
+  }
+}

@@ -1,13 +1,486 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserGender {
+  MALE
+  FEMALE
+}
+
+enum Religion {
+  ISLAM
+  CHRISTIANITY
+  JUDAISM
+  ZOROASTRIANISM
+  OTHER
+}
+
+model Role {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  nameKey   String
+  userRoles UserRole[]
+  menus     RoleMenu[]
+  createdAt DateTime   @default(now())
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model User {
+  id                  String        @id @default(uuid())
+  username            String        @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  fullName            String
+  locale              String        @default("fa")
+  status              UserStatus    @default(ACTIVE)
+  gender              UserGender?
+  nationalId          String?       @unique
+  phone               String?       @unique
+  email               String?       @unique
+  address             String?
+  notes               String?
+  religion            Religion?
+  religionOther       String?
+  telegram            String?
+  bale                String?
+  eitaa               String?
+  whatsapp            String?
+  otherSocial         String?
+  vehiclePlates       String[]      @default([])
+  countryId           String?
+  country             Country?      @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  provinceId          String?
+  province            Province?     @relation("UserHomeProvince", fields: [provinceId], references: [id], onDelete: SetNull)
+  cityId              String?
+  city                City?         @relation("UserHomeCity", fields: [cityId], references: [id], onDelete: SetNull)
+  photoId             String?
+  photo               StoredImage?  @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
+  nationalCardPhotoId String?
+  nationalCardPhoto   StoredImage?  @relation("UserNationalCard", fields: [nationalCardPhotoId], references: [id], onDelete: SetNull)
+  passportPhotoId     String?
+  passportPhoto       StoredImage?  @relation("UserPassport", fields: [passportPhotoId], references: [id], onDelete: SetNull)
+  userRoles           UserRole[]
+  smsMessages         SmsMessage[]
+  managedAccommodations AccommodationManager[]
+  representedProvinces  Province[] @relation("ProvinceHeadquartersRep")
+  representedCities     City[]     @relation("CityHeadquartersRep")
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([status])
+  @@index([fullName])
+  @@map("users")
+}
+
+model NavModule {
+  id        String @id @default(uuid())
+  code      String @unique
+  nameKey   String
+  icon      String
+  sortOrder Int    @default(0)
+  menus     Menu[]
+
+  @@map("nav_modules")
+}
+
+model Menu {
+  id        String     @id @default(uuid())
+  moduleId  String
+  module    NavModule  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  code      String     @unique
+  nameKey   String
+  path      String
+  icon      String
+  sortOrder Int        @default(0)
+  roles     RoleMenu[]
+
+  @@map("menus")
+}
+
+model RoleMenu {
+  roleId String
+  menuId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu   Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, menuId])
+  @@map("role_menus")
+}
+
+model StoredImage {
+  id                String   @id @default(uuid())
+  mimeType          String
+  data              Bytes
+  byteSize          Int
+  width             Int?
+  height            Int?
+  originalName      String?
+  photoUsers        User[]   @relation("UserPhoto")
+  nationalCardUsers User[]   @relation("UserNationalCard")
+  passportUsers     User[]   @relation("UserPassport")
+  createdAt         DateTime @default(now())
+
+  @@map("stored_images")
+}
+
+model Caravan {
+  id             String    @id @default(uuid())
+  name           String
+  originCity     String
+  plannedArrival DateTime? @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("caravans")
+}
+
+enum SmsStatus {
+  SENT
+  FAILED
+}
+
+model SmsSettings {
+  id           String   @id @default("default")
+  endpoint     String
+  senderNumber String
+  username     String
+  password     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("sms_settings")
+}
+
+model SmsMessage {
+  id               String    @id @default(uuid())
+  phone            String
+  body             String
+  status           SmsStatus
+  providerResponse String?
+  sentById         String?
+  sentBy           User?     @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("sms_messages")
+}
+
+model Country {
+  id             String          @id @default(uuid())
+  iso2           String          @unique
+  iso3           String?         @unique
+  phoneCode      String?
+  nameFa         String
+  nameEn         String
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  provinces              Province[]
+  accommodations         Accommodation[]
+  users                  User[]
+  walkingRouteOrigins    WalkingRouteOriginCountry[]
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("countries")
+}
+
+model Province {
+  id             String          @id @default(uuid())
+  countryId      String
+  country        Country         @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  code           String
+  nameFa         String
+  nameEn         String
+  neshanAddress  String?
+  latitude       Decimal?        @db.Decimal(10, 7)
+  longitude      Decimal?        @db.Decimal(10, 7)
+  hasRailway     Boolean         @default(false)
+  hasAirport     Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  cities          City[]
+  accommodations  Accommodation[]
+  foodSuppliers   FoodSupplier[]
+  medicalCenters  MedicalCenter[]
+  redCrescents    RedCrescent[]
+  benefactors      Benefactor[]
+  users            User[]          @relation("UserHomeProvince")
+  representativeId String?
+  representative   User?           @relation("ProvinceHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([countryId, code])
+  @@index([countryId, isActive, sortOrder])
+  @@index([representativeId])
+  @@map("provinces")
+}
+
+model City {
+  id             String          @id @default(uuid())
+  provinceId     String
+  province       Province        @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  code           String
+  nameFa         String
+  nameEn         String
+  neshanAddress  String?
+  latitude       Decimal?        @db.Decimal(10, 7)
+  longitude      Decimal?        @db.Decimal(10, 7)
+  hasRailway     Boolean         @default(false)
+  hasAirport     Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  accommodations             Accommodation[]
+  foodSuppliers              FoodSupplier[]
+  medicalCenters             MedicalCenter[]
+  redCrescents               RedCrescent[]
+  benefactors                Benefactor[]
+  users                      User[]                    @relation("UserHomeCity")
+  representativeId           String?
+  representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
+  walkingRouteEntryBorders   WalkingRoute[]            @relation("WalkingRouteEntryBorder")
+  walkingRouteStages         WalkingRouteStage[]
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  @@unique([provinceId, code])
+  @@index([provinceId, isActive, sortOrder])
+  @@index([representativeId])
+  @@map("cities")
+}
+
+enum AccommodationType {
+  SCHOOL
+  MOSQUE
+  HUSSEINIEH
+  HALL
+  HOUSE
+  OTHER
+}
+
+enum AccommodationStatus {
+  ACTIVE
+  INACTIVE
+  FULL
+}
+
+enum GenderType {
+  MALE
+  FEMALE
+  MIXED
+}
+
+model Accommodation {
+  id                    String               @id @default(uuid())
+  name                  String
+  type                  AccommodationType
+  status                AccommodationStatus  @default(ACTIVE)
+  genderType            GenderType
+  maleCapacity          Int                  @default(0)
+  femaleCapacity        Int                  @default(0)
+  assignedMaleCapacity  Int                  @default(0)
+  assignedFemaleCapacity Int                 @default(0)
+  phone                 String?
+  address               String?
+  neshanAddress         String?
+  latitude              Decimal?             @db.Decimal(10, 7)
+  longitude             Decimal?             @db.Decimal(10, 7)
+  eitaa                 String?
+  bale                  String?
+  otherSocial           String?
+  description           String?
+  countryId             String?
+  country               Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  provinceId            String?
+  province              Province?            @relation(fields: [provinceId], references: [id], onDelete: SetNull)
+  cityId                String?
+  city                  City?                @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  distanceToShrineKm    Decimal?             @db.Decimal(8, 2)
+  distanceToMashhadKm   Decimal?             @db.Decimal(8, 2)
+  hasLaundry            Boolean              @default(false)
+  hasInternet           Boolean              @default(false)
+  hasPrayerRoom         Boolean              @default(false)
+  hasElevator           Boolean              @default(false)
+  heatingSystem         String?
+  coolingSystem         String?
+  parkingCapacity       Int?
+  bathroomCount         Int?
+  toiletCount           Int?
+  managers              AccommodationManager[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([name])
+  @@index([status, type])
+  @@index([cityId])
+  @@map("accommodations")
+}
+
+model AccommodationManager {
+  id               String        @id @default(uuid())
+  accommodationId  String
+  accommodation    Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isPrimary        Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+
+  @@unique([accommodationId, userId])
+  @@index([userId])
+  @@map("accommodation_managers")
+}
+
+model FoodSupplier {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String?
+  address     String?
+  description String?
+  provinceId  String
+  province    Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId      String
+  city        City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("food_suppliers")
+}
+
+model MedicalCenter {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String?
+  address       String?
+  neshanAddress String?
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  description   String?
+  provinceId    String
+  province      Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId        String
+  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("medical_centers")
+}
+
+model RedCrescent {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String?
+  address       String?
+  neshanAddress String?
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  description   String?
+  provinceId    String
+  province      Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId        String
+  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("red_crescents")
+}
+
+model Benefactor {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String?
+  address       String?
+  neshanAddress String?
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  description   String?
+  provinceId    String
+  province      Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId        String
+  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("benefactors")
+}
+
+model WalkingRoute {
+  id                  String                      @id @default(uuid())
+  name                String
+  distanceToMashhadKm Decimal                     @db.Decimal(8, 2)
+  entryBorderCityId   String
+  entryBorderCity     City                        @relation("WalkingRouteEntryBorder", fields: [entryBorderCityId], references: [id], onDelete: Restrict)
+  originCountries     WalkingRouteOriginCountry[]
+  stages              WalkingRouteStage[]
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  @@index([name])
+  @@index([entryBorderCityId])
+  @@map("walking_routes")
+}
+
+model WalkingRouteOriginCountry {
+  walkingRouteId String
+  countryId      String
+  walkingRoute   WalkingRoute @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
+  country        Country      @relation(fields: [countryId], references: [id], onDelete: Restrict)
+
+  @@id([walkingRouteId, countryId])
+  @@index([countryId])
+  @@map("walking_route_origin_countries")
+}
+
+model WalkingRouteStage {
+  id                   String       @id @default(uuid())
+  walkingRouteId       String
+  walkingRoute         WalkingRoute @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
+  cityId               String
+  city                 City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  stageNumber          Int
+  distanceToNextKm     Decimal?     @db.Decimal(8, 2)
+  distanceToPreviousKm Decimal?     @db.Decimal(8, 2)
+  distanceToMashhadKm  Decimal?     @db.Decimal(8, 2)
+  description          String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@unique([walkingRouteId, stageNumber])
+  @@index([cityId])
+  @@map("walking_route_stages")
 }
