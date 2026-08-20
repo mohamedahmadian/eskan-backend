@@ -12,7 +12,7 @@ import {
 import { Prisma, SmsStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSmsSettingsDto } from './dto/update-sms-settings.dto';
-import { sendSimpleSms } from './pejvak-soap.client';
+import { sendSimpleSms, clipProviderResponse } from './pejvak-soap.client';
 import { normalizePhone } from './phone.util';
 
 const SETTINGS_ID = 'default';
@@ -75,20 +75,25 @@ export class SmsService {
 
   async listMessages(query: PaginationQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
+    const q = query.q?.trim();
     const statusMatch =
-      query.q && ['SENT', 'FAILED'].includes(query.q.trim().toUpperCase())
-        ? (query.q.trim().toUpperCase() as SmsStatus)
+      q && ['SENT', 'FAILED'].includes(q.toUpperCase())
+        ? (q.toUpperCase() as SmsStatus)
         : undefined;
-    const where = query.q
-      ? {
-          OR: [
-            { phone: containsInsensitive(query.q) },
-            { body: containsInsensitive(query.q) },
-            { providerResponse: containsInsensitive(query.q) },
-            ...(statusMatch ? [{ status: statusMatch }] : []),
-          ],
-        }
-      : undefined;
+
+    let where: Prisma.SmsMessageWhereInput | undefined;
+    if (q) {
+      const recipientPhones = await this.recipientPhonesMatching(q);
+      where = {
+        OR: [
+          { phone: containsInsensitive(q) },
+          { body: containsInsensitive(q) },
+          { providerResponse: containsInsensitive(q) },
+          ...(recipientPhones.length ? [{ phone: { in: recipientPhones } }] : []),
+          ...(statusMatch ? [{ status: statusMatch }] : []),
+        ],
+      };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.smsMessage.findMany({
@@ -100,11 +105,12 @@ export class SmsService {
       }),
       this.prisma.smsMessage.count({ where }),
     ]);
-    return paginatedResult(items, total, page, pageSize);
+    return paginatedResult(await this.withRecipients(items), total, page, pageSize);
   }
 
   /**
    * ارسال پیامک از هر ماژول: SmsService را inject کنید و send را صدا بزنید.
+   * هر شماره جداگانه به وب‌سرویس ارسال می‌شود.
    */
   async send(input: SendSmsInput) {
     const settings = await this.ensureSettings();
@@ -122,30 +128,29 @@ export class SmsService {
       throw new BadRequestException('متن پیامک الزامی است');
     }
 
-    let results: { success: boolean; recId: string }[];
-    try {
-      results = await sendSimpleSms({
-        endpoint: settings.endpoint,
-        username: settings.username,
-        password: settings.password,
-        senderNumber: settings.senderNumber,
-        phones,
-        body,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'ارتباط با وب‌سرویس پیامک برقرار نشد';
-      await this.saveResults(
-        phones,
-        body,
-        phones.map(() => ({ success: false, recId: message })),
-        input.sentById,
-      );
-      throw new BadGatewayException(message);
-    }
-
-    while (results.length < phones.length) {
-      results.push({ success: false, recId: 'بدون پاسخ' });
+    const results: { success: boolean; recId: string; rawResponse: string }[] = [];
+    for (const phone of phones) {
+      try {
+        const batch = await sendSimpleSms({
+          endpoint: settings.endpoint,
+          username: settings.username,
+          password: settings.password,
+          senderNumber: settings.senderNumber,
+          phones: [phone],
+          body,
+        });
+        results.push(
+          batch[0] ?? {
+            success: false,
+            recId: 'بدون پاسخ',
+            rawResponse: 'بدون پاسخ',
+          },
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'ارتباط با وب‌سرویس پیامک برقرار نشد';
+        results.push({ success: false, recId: message, rawResponse: message });
+      }
     }
 
     const saved = await this.saveResults(phones, body, results, input.sentById);
@@ -157,6 +162,66 @@ export class SmsService {
     }
 
     return saved.length === 1 ? saved[0] : saved;
+  }
+
+  private async recipientPhonesMatching(q: string): Promise<string[]> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        phone: { not: null },
+        OR: [
+          { fullName: containsInsensitive(q) },
+          { firstName: containsInsensitive(q) },
+          { lastName: containsInsensitive(q) },
+        ],
+      },
+      select: { phone: true },
+    });
+    const phones = new Set<string>();
+    for (const user of users) {
+      if (!user.phone) {
+        continue;
+      }
+      phones.add(user.phone);
+      const normalized = normalizePhone(user.phone);
+      if (normalized) {
+        phones.add(normalized);
+      }
+    }
+    return [...phones];
+  }
+
+  private async withRecipients<T extends { phone: string }>(items: T[]) {
+    const phones = [...new Set(items.map((item) => item.phone))];
+    if (!phones.length) {
+      return items.map((item) => ({ ...item, recipientName: null as string | null }));
+    }
+
+    const lookupPhones = [
+      ...new Set(
+        phones.flatMap((phone) => {
+          const normalized = normalizePhone(phone);
+          return normalized && normalized !== phone ? [phone, normalized] : [phone];
+        }),
+      ),
+    ];
+    const users = await this.prisma.user.findMany({
+      where: { phone: { in: lookupPhones } },
+      select: { phone: true, fullName: true },
+    });
+    const byPhone = new Map<string, string>();
+    for (const user of users) {
+      if (!user.phone) {
+        continue;
+      }
+      byPhone.set(user.phone, user.fullName);
+      byPhone.set(normalizePhone(user.phone), user.fullName);
+    }
+
+    return items.map((item) => ({
+      ...item,
+      recipientName:
+        byPhone.get(item.phone) ?? byPhone.get(normalizePhone(item.phone)) ?? null,
+    }));
   }
 
   private collectPhones(input: SendSmsInput): string[] {
@@ -171,18 +236,24 @@ export class SmsService {
   private async saveResults(
     phones: string[],
     body: string,
-    results: { success: boolean; recId: string }[],
+    results: { success: boolean; recId: string; rawResponse: string }[],
     sentById?: string,
   ) {
     const rows = await Promise.all(
       phones.map((phone, index) => {
-        const result = results[index] ?? { success: false, recId: 'بدون پاسخ' };
+        const result = results[index] ?? {
+          success: false,
+          recId: 'بدون پاسخ',
+          rawResponse: 'بدون پاسخ',
+        };
         return this.prisma.smsMessage.create({
           data: {
             phone,
             body,
             status: result.success ? SmsStatus.SENT : SmsStatus.FAILED,
-            providerResponse: result.recId,
+            providerResponse: clipProviderResponse(
+              result.rawResponse || result.recId,
+            ),
             sentById,
           },
           select: messageSelect,

@@ -295,12 +295,19 @@ enum GenderType {
   MIXED
 }
 
+enum ManagementType {
+  SELF_SUFFICIENT
+  SEMI_SELF_SUFFICIENT
+  NON_SELF_SUFFICIENT
+}
+
 model Accommodation {
   id                    String               @id @default(uuid())
   name                  String
   type                  AccommodationType
   status                AccommodationStatus  @default(ACTIVE)
   genderType            GenderType
+  managementType        ManagementType       @default(SELF_SUFFICIENT)
   maleCapacity          Int                  @default(0)
   femaleCapacity        Int                  @default(0)
   assignedMaleCapacity  Int                  @default(0)
@@ -337,6 +344,7 @@ model Accommodation {
 
   @@index([name])
   @@index([status, type])
+  @@index([managementType, genderType])
   @@index([cityId])
   @@map("accommodations")
 }
@@ -347,11 +355,13 @@ model AccommodationManager {
   accommodation    Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
   userId           String
   user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year             Int
   isPrimary        Boolean       @default(false)
   createdAt        DateTime      @default(now())
 
-  @@unique([accommodationId, userId])
+  @@unique([userId, accommodationId, year])
   @@index([userId])
+  @@index([year])
   @@map("accommodation_managers")
 }
 

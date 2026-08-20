@@ -1,20 +1,25 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { isAdmin } from '../auth/roles.util';
+import { currentJalaliYear } from '../common/jalali-year';
 import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
+  wantsPagination,
 } from '../common/pagination';
+import * as ExcelJS from 'exceljs';
 import {
   Prisma,
   type AccommodationStatus,
   type AccommodationType,
   type GenderType,
+  type ManagementType,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
@@ -28,7 +33,11 @@ const accommodationInclude = {
   province: { select: { ...geoSelect, countryId: true } },
   city: { select: { ...geoSelect, provinceId: true } },
   managers: {
-    orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
+    orderBy: [
+      { year: 'desc' as const },
+      { isPrimary: 'desc' as const },
+      { createdAt: 'asc' as const },
+    ],
     include: {
       user: { select: { id: true, username: true, fullName: true } },
     },
@@ -49,16 +58,21 @@ export class AccommodationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: FindAccommodationsQueryDto, actor: Actor) {
-    const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query, actor);
+    const findMany = {
+      where,
+      orderBy: { createdAt: 'desc' as const },
+      include: accommodationInclude,
+    };
+
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.accommodation.findMany(findMany);
+      return items.map((item) => this.serialize(item));
+    }
+
+    const { page, pageSize, skip, take } = paginationArgs(query);
     const [items, total] = await Promise.all([
-      this.prisma.accommodation.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take,
-        include: accommodationInclude,
-      }),
+      this.prisma.accommodation.findMany({ ...findMany, skip, take }),
       this.prisma.accommodation.count({ where }),
     ]);
     return paginatedResult(
@@ -67,6 +81,70 @@ export class AccommodationsService {
       page,
       pageSize,
     );
+  }
+
+  async report(actor: Actor) {
+    const where = this.listWhere({}, actor);
+    const [total, genderRows, managementRows, comboRows] = await Promise.all([
+      this.prisma.accommodation.count({ where }),
+      this.prisma.accommodation.groupBy({
+        by: ['genderType'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.accommodation.groupBy({
+        by: ['managementType'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.accommodation.groupBy({
+        by: ['genderType', 'managementType'],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    const genderCount = new Map(
+      genderRows.map((row) => [row.genderType, row._count._all]),
+    );
+    const managementCount = new Map(
+      managementRows.map((row) => [row.managementType, row._count._all]),
+    );
+    const comboCount = new Map(
+      comboRows.map((row) => [
+        `${row.genderType}:${row.managementType}`,
+        row._count._all,
+      ]),
+    );
+
+    return {
+      total,
+      byGenderType: genderTypeOrder.map((genderType) => ({
+        genderType,
+        count: genderCount.get(genderType) ?? 0,
+      })),
+      byManagementType: managementTypeOrder.map((managementType) => ({
+        managementType,
+        count: managementCount.get(managementType) ?? 0,
+      })),
+      byCombination: genderTypeOrder.flatMap((genderType) =>
+        managementTypeOrder.map((managementType) => ({
+          genderType,
+          managementType,
+          count: comboCount.get(`${genderType}:${managementType}`) ?? 0,
+        })),
+      ),
+    };
+  }
+
+  async exportExcel(query: FindAccommodationsQueryDto, actor: Actor) {
+    const where = this.listWhere(query, actor);
+    const items = await this.prisma.accommodation.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: accommodationInclude,
+    });
+    return this.buildExcel(items.map((item) => this.serialize(item)));
   }
 
   async findOne(id: string, actor: Actor) {
@@ -170,6 +248,60 @@ export class AccommodationsService {
     return { ok: true };
   }
 
+  async assignManager(id: string, userId: string, year: number, actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    await this.findRecord(id, actor);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userRoles: { include: { role: { select: { code: true } } } } },
+    });
+    if (!user || !user.userRoles.some((item) => item.role.code === 'ACCOMMODATION_MANAGER')) {
+      throw new BadRequestException('مدیر اسکان انتخاب‌شده معتبر نیست');
+    }
+
+    const existing = await this.prisma.accommodationManager.findUnique({
+      where: {
+        userId_accommodationId_year: { userId, accommodationId: id, year },
+      },
+    });
+    if (existing) {
+      throw new ConflictException('این مدیر برای این سال قبلاً به این اسکان تخصیص داده شده است');
+    }
+
+    const hasPrimaryThisYear = await this.prisma.accommodationManager.findFirst({
+      where: { userId, year, isPrimary: true },
+      select: { id: true },
+    });
+
+    await this.prisma.accommodationManager.create({
+      data: {
+        userId,
+        accommodationId: id,
+        year,
+        isPrimary: !hasPrimaryThisYear,
+      },
+    });
+    return this.findOne(id, actor);
+  }
+
+  async unassignManager(id: string, assignmentId: string, actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    await this.findRecord(id, actor);
+    const link = await this.prisma.accommodationManager.findFirst({
+      where: { id: assignmentId, accommodationId: id },
+    });
+    if (!link) {
+      throw new NotFoundException('این تخصیص یافت نشد');
+    }
+    await this.prisma.accommodationManager.delete({ where: { id: assignmentId } });
+    return this.findOne(id, actor);
+  }
+
   private async findRecord(id: string, actor: Actor) {
     const item = await this.prisma.accommodation.findUnique({
       where: { id },
@@ -188,6 +320,26 @@ export class AccommodationsService {
     const filters: Prisma.AccommodationWhereInput[] = [];
     if (!isAdmin(actor)) {
       filters.push({ managers: { some: { userId: actor.id } } });
+    }
+    if (query.managementType) {
+      filters.push({ managementType: query.managementType });
+    }
+    if (query.genderType) {
+      filters.push({ genderType: query.genderType });
+    }
+    if (query.provinceId) {
+      filters.push({ provinceId: query.provinceId });
+    }
+    if (query.cityId) {
+      filters.push({ cityId: query.cityId });
+    }
+    if (query.hasManagerThisYear !== undefined) {
+      const year = currentJalaliYear();
+      filters.push(
+        query.hasManagerThisYear
+          ? { managers: { some: { year } } }
+          : { managers: { none: { year } } },
+      );
     }
     if (query.q) {
       filters.push({
@@ -310,6 +462,7 @@ export class AccommodationsService {
     set('type', dto.type as AccommodationType | undefined);
     set('status', dto.status as AccommodationStatus | undefined);
     set('genderType', dto.genderType as GenderType | undefined);
+    set('managementType', dto.managementType as ManagementType | undefined);
     set('maleCapacity', dto.maleCapacity);
     set('femaleCapacity', dto.femaleCapacity);
     set('assignedMaleCapacity', dto.assignedMaleCapacity);
@@ -341,6 +494,8 @@ export class AccommodationsService {
         name: (dto as CreateAccommodationDto).name.trim(),
         type: (dto as CreateAccommodationDto).type,
         genderType: (dto as CreateAccommodationDto).genderType,
+        managementType:
+          (dto as CreateAccommodationDto).managementType ?? 'SELF_SUFFICIENT',
         status: dto.status ?? 'ACTIVE',
       } as Prisma.AccommodationUncheckedCreateInput;
     }
@@ -358,6 +513,7 @@ export class AccommodationsService {
       forcePrimaryIfFirst: boolean;
     },
   ) {
+    const year = currentJalaliYear();
     const uniqueIds = [...new Set(input.managerUserIds)];
     if (input.primaryUserId && !uniqueIds.includes(input.primaryUserId)) {
       uniqueIds.push(input.primaryUserId);
@@ -385,23 +541,26 @@ export class AccommodationsService {
       where: uniqueIds.length
         ? {
             accommodationId: input.accommodationId,
+            year,
             userId: { notIn: uniqueIds },
           }
-        : { accommodationId: input.accommodationId },
+        : { accommodationId: input.accommodationId, year },
     });
 
     for (const userId of uniqueIds) {
       await tx.accommodationManager.upsert({
         where: {
-          accommodationId_userId: {
-            accommodationId: input.accommodationId,
+          userId_accommodationId_year: {
             userId,
+            accommodationId: input.accommodationId,
+            year,
           },
         },
         update: {},
         create: {
           accommodationId: input.accommodationId,
           userId,
+          year,
           isPrimary: false,
         },
       });
@@ -414,7 +573,7 @@ export class AccommodationsService {
     let primaryId = input.primaryUserId;
     if (input.forcePrimaryIfFirst && !primaryId && uniqueIds.length === 1) {
       const existingPrimary = await tx.accommodationManager.findFirst({
-        where: { userId: uniqueIds[0], isPrimary: true },
+        where: { userId: uniqueIds[0], year, isPrimary: true },
       });
       if (!existingPrimary) {
         primaryId = uniqueIds[0];
@@ -422,7 +581,7 @@ export class AccommodationsService {
     }
 
     if (primaryId) {
-      await this.setUserPrimary(tx, primaryId, input.accommodationId);
+      await this.setUserPrimary(tx, primaryId, input.accommodationId, year);
     }
   }
 
@@ -430,15 +589,18 @@ export class AccommodationsService {
     tx: Prisma.TransactionClient,
     userId: string,
     accommodationId: string,
+    year = currentJalaliYear(),
   ) {
     const link = await tx.accommodationManager.findUnique({
-      where: { accommodationId_userId: { accommodationId, userId } },
+      where: {
+        userId_accommodationId_year: { userId, accommodationId, year },
+      },
     });
     if (!link) {
       throw new ForbiddenException('این اسکان برای شما ثبت نشده است');
     }
     await tx.accommodationManager.updateMany({
-      where: { userId, isPrimary: true, NOT: { accommodationId } },
+      where: { userId, year, isPrimary: true, NOT: { accommodationId } },
       data: { isPrimary: false },
     });
     await tx.accommodationManager.update({
@@ -458,4 +620,122 @@ export class AccommodationsService {
       distanceToMashhadKm: num(item.distanceToMashhadKm),
     };
   }
+
+  private async buildExcel(items: ReturnType<AccommodationsService['serialize']>[]) {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'اسکان';
+    const sheet = workbook.addWorksheet('اسکان‌ها', {
+      views: [{ rightToLeft: true }],
+    });
+
+    const amenity = (value: boolean) => (value ? 'دارد' : 'ندارد');
+    const geoName = (item: { nameFa: string } | null) => item?.nameFa ?? '';
+
+    sheet.columns = [
+      { header: 'نام محل اسکان', key: 'name', width: 28 },
+      { header: 'نوع اسکان', key: 'type', width: 14 },
+      { header: 'نوع مدیریت', key: 'managementType', width: 16 },
+      { header: 'نوع پذیرش', key: 'genderType', width: 14 },
+      { header: 'وضعیت', key: 'status', width: 16 },
+      { header: 'کشور', key: 'country', width: 14 },
+      { header: 'استان', key: 'province', width: 16 },
+      { header: 'شهر', key: 'city', width: 16 },
+      { header: 'تلفن', key: 'phone', width: 16 },
+      { header: 'آدرس', key: 'address', width: 36 },
+      { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
+      { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
+      { header: 'ظرفیت اختصاص‌داده‌شده مرد', key: 'assignedMaleCapacity', width: 22 },
+      { header: 'ظرفیت اختصاص‌داده‌شده زن', key: 'assignedFemaleCapacity', width: 22 },
+      { header: 'فاصله تا حرم (کیلومتر)', key: 'distanceToShrineKm', width: 20 },
+      { header: 'فاصله تا مشهد (کیلومتر)', key: 'distanceToMashhadKm', width: 20 },
+      { header: 'لباسشویی', key: 'hasLaundry', width: 12 },
+      { header: 'اینترنت', key: 'hasInternet', width: 12 },
+      { header: 'نمازخانه', key: 'hasPrayerRoom', width: 12 },
+      { header: 'آسانسور', key: 'hasElevator', width: 12 },
+      { header: 'سیستم گرمایش', key: 'heatingSystem', width: 18 },
+      { header: 'سیستم سرمایش', key: 'coolingSystem', width: 18 },
+      { header: 'ظرفیت پارکینگ', key: 'parkingCapacity', width: 16 },
+      { header: 'تعداد حمام', key: 'bathroomCount', width: 12 },
+      { header: 'تعداد سرویس بهداشتی', key: 'toiletCount', width: 18 },
+      { header: 'مدیران', key: 'managers', width: 28 },
+      { header: 'توضیحات', key: 'description', width: 32 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    for (const item of items) {
+      sheet.addRow({
+        name: item.name,
+        type: accommodationTypeLabels[item.type],
+        managementType: managementTypeLabels[item.managementType],
+        genderType: genderTypeLabels[item.genderType],
+        status: accommodationStatusLabels[item.status],
+        country: geoName(item.country),
+        province: geoName(item.province),
+        city: geoName(item.city),
+        phone: item.phone ?? '',
+        address: item.address ?? '',
+        maleCapacity: item.maleCapacity,
+        femaleCapacity: item.femaleCapacity,
+        assignedMaleCapacity: item.assignedMaleCapacity,
+        assignedFemaleCapacity: item.assignedFemaleCapacity,
+        distanceToShrineKm: item.distanceToShrineKm,
+        distanceToMashhadKm: item.distanceToMashhadKm,
+        hasLaundry: amenity(item.hasLaundry),
+        hasInternet: amenity(item.hasInternet),
+        hasPrayerRoom: amenity(item.hasPrayerRoom),
+        hasElevator: amenity(item.hasElevator),
+        heatingSystem: item.heatingSystem ?? '',
+        coolingSystem: item.coolingSystem ?? '',
+        parkingCapacity: item.parkingCapacity,
+        bathroomCount: item.bathroomCount,
+        toiletCount: item.toiletCount,
+        managers: item.managers
+          .map((manager) => {
+            const primary = manager.isPrimary ? ' (اصلی)' : '';
+            return `${manager.user.fullName}${primary} — ${manager.year}`;
+          })
+          .join('، '),
+        description: item.description ?? '',
+      });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
 }
+
+const accommodationTypeLabels: Record<AccommodationType, string> = {
+  SCHOOL: 'مدرسه',
+  MOSQUE: 'مسجد',
+  HUSSEINIEH: 'حسینیه',
+  HALL: 'سالن',
+  HOUSE: 'منزل',
+  OTHER: 'سایر',
+};
+
+const accommodationStatusLabels: Record<AccommodationStatus, string> = {
+  ACTIVE: 'فعال',
+  INACTIVE: 'غیرفعال',
+  FULL: 'تکمیل ظرفیت',
+};
+
+const genderTypeOrder: GenderType[] = ['FEMALE', 'MALE', 'MIXED'];
+const managementTypeOrder: ManagementType[] = [
+  'SELF_SUFFICIENT',
+  'SEMI_SELF_SUFFICIENT',
+  'NON_SELF_SUFFICIENT',
+];
+
+const genderTypeLabels: Record<GenderType, string> = {
+  MALE: 'آقایان',
+  FEMALE: 'خانم‌ها',
+  MIXED: 'مختلط',
+};
+
+const managementTypeLabels: Record<ManagementType, string> = {
+  SELF_SUFFICIENT: 'خودکفا',
+  SEMI_SELF_SUFFICIENT: 'نیمه خودکفا',
+  NON_SELF_SUFFICIENT: 'غیرخودکفا',
+};

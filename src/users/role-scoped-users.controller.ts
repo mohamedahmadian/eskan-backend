@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
@@ -152,6 +153,19 @@ export class AccommodationManagersController extends RoleScopedUsersController {
   @Patch(':id')
   override update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return super.update(id, dto);
+  }
+
+  @Post(':id/accommodations')
+  assignAccommodation(@Param('id') id: string, @Body() dto: AssignAccommodationDto) {
+    return this.users.assignAccommodation(id, dto.accommodationId, dto.year);
+  }
+
+  @Delete(':id/accommodations/:assignmentId')
+  unassignAccommodation(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.users.unassignAccommodation(id, assignmentId);
   }
 
   @Delete(':id')

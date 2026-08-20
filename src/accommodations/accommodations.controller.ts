@@ -3,16 +3,19 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { AssignAccommodationManagerDto } from './dto/assign-accommodation-manager.dto';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
@@ -37,6 +40,28 @@ export class AccommodationsController {
     return this.accommodations.findAll(query, actor);
   }
 
+  @Get('report')
+  report(@CurrentUser() actor: RequestUser) {
+    return this.accommodations.report(actor);
+  }
+
+  @Get('export')
+  @Header(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @Header(
+    'Content-Disposition',
+    "attachment; filename=\"accommodations.xlsx\"; filename*=UTF-8''%D8%A7%D8%B3%DA%A9%D8%A7%D9%86%E2%80%8C%D9%87%D8%A7.xlsx",
+  )
+  async export(
+    @Query() query: FindAccommodationsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    const buffer = await this.accommodations.exportExcel(query, actor);
+    return new StreamableFile(buffer);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
     return this.accommodations.findOne(id, actor);
@@ -57,6 +82,26 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.update(id, dto, actor);
+  }
+
+  @Post(':id/managers')
+  @Roles('ADMIN')
+  assignManager(
+    @Param('id') id: string,
+    @Body() dto: AssignAccommodationManagerDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.assignManager(id, dto.userId, dto.year, actor);
+  }
+
+  @Delete(':id/managers/:assignmentId')
+  @Roles('ADMIN')
+  unassignManager(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.unassignManager(id, assignmentId, actor);
   }
 
   @Delete(':id')

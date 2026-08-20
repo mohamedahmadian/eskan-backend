@@ -1,7 +1,10 @@
 export type PejvakSendResult = {
   success: boolean;
   recId: string;
+  rawResponse: string;
 };
+
+const MAX_STORED_RESPONSE = 32_000;
 
 function escapeXml(value: string): string {
   return value
@@ -49,6 +52,29 @@ function parseFault(xml: string): string | undefined {
   return fault?.trim();
 }
 
+export function clipProviderResponse(value: string): string {
+  if (value.length <= MAX_STORED_RESPONSE) {
+    return value;
+  }
+  return `${value.slice(0, MAX_STORED_RESPONSE)}\n…`;
+}
+
+function formatRawResponse(status: number, body: string): string {
+  return clipProviderResponse(`HTTP ${status}\n${body}`);
+}
+
+function failedResults(
+  phones: string[],
+  recId: string,
+  rawResponse: string,
+): PejvakSendResult[] {
+  return phones.map((_, index) => ({
+    success: false,
+    recId: recId || `empty-${index}`,
+    rawResponse,
+  }));
+}
+
 export async function sendSimpleSms(params: {
   endpoint: string;
   username: string;
@@ -80,6 +106,7 @@ export async function sendSimpleSms(params: {
   const timer = setTimeout(() => controller.abort(), 20_000);
 
   let xml: string;
+  let status = 0;
   try {
     const response = await fetch(soapUrl, {
       method: 'POST',
@@ -90,10 +117,8 @@ export async function sendSimpleSms(params: {
       body: envelope,
       signal: controller.signal,
     });
+    status = response.status;
     xml = await response.text();
-    if (!response.ok) {
-      throw new Error(`پاسخ نامعتبر وب‌سرویس پیامک (${response.status})`);
-    }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('زمان اتصال به وب‌سرویس پیامک به پایان رسید');
@@ -103,18 +128,31 @@ export async function sendSimpleSms(params: {
     clearTimeout(timer);
   }
 
+  const rawResponse = formatRawResponse(status, xml);
+  if (status < 200 || status >= 300) {
+    return failedResults(
+      params.phones,
+      `پاسخ نامعتبر وب‌سرویس پیامک (${status})`,
+      rawResponse,
+    );
+  }
+
   const fault = parseFault(xml);
   if (fault) {
-    throw new Error(fault);
+    return failedResults(params.phones, fault, rawResponse);
   }
 
   const recIds = parseRecIds(xml);
   if (!recIds.length) {
-    throw new Error('پاسخ وب‌سرویس پیامک قابل خواندن نبود');
+    return failedResults(params.phones, 'پاسخ وب‌سرویس پیامک قابل خواندن نبود', rawResponse);
   }
 
-  return recIds.map((recId, index) => ({
-    success: isSuccessRecId(recId),
-    recId: recId || `empty-${index}`,
-  }));
+  return params.phones.map((_, index) => {
+    const recId = recIds[index] ?? recIds[0] ?? '';
+    return {
+      success: isSuccessRecId(recId),
+      recId: recId || `empty-${index}`,
+      rawResponse,
+    };
+  });
 }

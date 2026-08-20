@@ -206,6 +206,14 @@ async function main() {
       sortOrder: 2,
     },
     {
+      code: "sms.report",
+      moduleId: sms.id,
+      nameKey: "menus.smsReport",
+      path: "/sms/report",
+      icon: "clipboard-list",
+      sortOrder: 3,
+    },
+    {
       code: "base-info.countries",
       moduleId: baseInfo.id,
       nameKey: "menus.countries",
@@ -301,6 +309,14 @@ async function main() {
       icon: "building-2",
       sortOrder: 2,
     },
+    {
+      code: "accommodation.report",
+      moduleId: accommodation.id,
+      nameKey: "menus.accommodationReport",
+      path: "/accommodation-report",
+      icon: "chart-column",
+      sortOrder: 3,
+    },
   ];
 
   const menuRecords = [];
@@ -329,7 +345,11 @@ async function main() {
     });
   }
 
-  const managerMenuCodes = new Set(["dashboard.overview", "accommodation.list"]);
+  const managerMenuCodes = new Set([
+    "dashboard.overview",
+    "accommodation.list",
+    "accommodation.report",
+  ]);
   for (const menu of menuRecords.filter((item) => managerMenuCodes.has(item.code))) {
     await prisma.roleMenu.upsert({
       where: {

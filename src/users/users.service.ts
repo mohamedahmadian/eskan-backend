@@ -40,6 +40,7 @@ const publicInclude = {
   city: { select: { ...geoSelect, provinceId: true } },
   managedAccommodations: {
     where: { isPrimary: true },
+    orderBy: { year: 'desc' as const },
     take: 1,
     include: {
       accommodation: { select: { id: true, name: true } },
@@ -104,6 +105,7 @@ type PublicUserSource = {
   userRoles: { role: { id: string; code: string; nameKey: string } }[];
   managedAccommodations: {
     id: string;
+    year: number;
     isPrimary: boolean;
     createdAt: Date;
     accommodation: { id: string; name: string; type?: string; status?: string };
@@ -173,7 +175,7 @@ export class UsersService {
       include: {
         ...publicInclude,
         managedAccommodations: {
-          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ year: 'desc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
           include: {
             accommodation: {
               select: { id: true, name: true, type: true, status: true },
@@ -411,6 +413,53 @@ export class UsersService {
     return this.findOne(userId);
   }
 
+  async assignAccommodation(userId: string, accommodationId: string, year: number) {
+    await this.assertHasRole(userId, 'ACCOMMODATION_MANAGER', 'مدیر اسکان یافت نشد');
+    const accommodation = await this.prisma.accommodation.findUnique({
+      where: { id: accommodationId },
+      select: { id: true },
+    });
+    if (!accommodation) {
+      throw new BadRequestException('اسکان انتخاب‌شده معتبر نیست');
+    }
+
+    const existing = await this.prisma.accommodationManager.findUnique({
+      where: {
+        userId_accommodationId_year: { userId, accommodationId, year },
+      },
+    });
+    if (existing) {
+      throw new ConflictException('این اسکان برای این سال قبلاً به این مدیر تخصیص داده شده است');
+    }
+
+    const hasPrimaryThisYear = await this.prisma.accommodationManager.findFirst({
+      where: { userId, year, isPrimary: true },
+      select: { id: true },
+    });
+
+    await this.prisma.accommodationManager.create({
+      data: {
+        userId,
+        accommodationId,
+        year,
+        isPrimary: !hasPrimaryThisYear,
+      },
+    });
+    return this.findOne(userId);
+  }
+
+  async unassignAccommodation(userId: string, assignmentId: string) {
+    await this.assertHasRole(userId, 'ACCOMMODATION_MANAGER', 'مدیر اسکان یافت نشد');
+    const link = await this.prisma.accommodationManager.findFirst({
+      where: { id: assignmentId, userId },
+    });
+    if (!link) {
+      throw new NotFoundException('این تخصیص یافت نشد');
+    }
+    await this.prisma.accommodationManager.delete({ where: { id: assignmentId } });
+    return this.findOne(userId);
+  }
+
   async unassignCity(userId: string, cityId: string) {
     await this.assertHasRole(userId, 'HEADQUARTERS_REPRESENTATIVE', 'نماینده ستاد یافت نشد');
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
@@ -434,9 +483,14 @@ export class UsersService {
 
   private listWhere(query: FindUsersQueryDto): Prisma.UserWhereInput {
     const filters: Prisma.UserWhereInput[] = [];
-    if (query.roleCode) {
+    const roleCodes = query.roleCodes?.length
+      ? query.roleCodes
+      : query.roleCode
+        ? [query.roleCode]
+        : [];
+    if (roleCodes.length) {
       filters.push({
-        userRoles: { some: { role: { code: query.roleCode } } },
+        userRoles: { some: { role: { code: { in: roleCodes } } } },
       });
     }
     if (query.provinceId) {
@@ -622,6 +676,7 @@ export class UsersService {
       accommodations: withAccommodations
         ? user.managedAccommodations.map((item) => ({
             id: item.id,
+            year: item.year,
             isPrimary: item.isPrimary,
             createdAt: item.createdAt,
             accommodation: item.accommodation,

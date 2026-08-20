@@ -18,6 +18,7 @@ import {
   AccommodationStatus,
   AccommodationType,
   GenderType,
+  ManagementType,
 } from '../../generated/prisma/client';
 import {
   emptyToNull,
@@ -39,6 +40,10 @@ export class CreateAccommodationDto {
 
   @IsEnum(GenderType)
   genderType: GenderType;
+
+  @IsOptional()
+  @IsEnum(ManagementType)
+  managementType?: ManagementType;
 
   @IsOptional()
   @Type(() => Number)

@@ -52,17 +52,15 @@ export class CreateUserDto {
   @IsEnum(UserGender)
   gender?: UserGender | null;
 
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  nationalId?: string | null;
+  @MinLength(1)
+  nationalId: string;
 
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
-  phone?: string | null;
+  @MinLength(1)
+  phone: string;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
