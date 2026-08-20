@@ -13,7 +13,14 @@ import { FoodSuppliersModule } from './food-suppliers/food-suppliers.module';
 import { MedicalCentersModule } from './medical-centers/medical-centers.module';
 import { RedCrescentsModule } from './red-crescents/red-crescents.module';
 import { BenefactorsModule } from './benefactors/benefactors.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
+import { SupplierItemsModule } from './supplier-items/supplier-items.module';
+import { AccommodationLoansModule } from './accommodation-loans/accommodation-loans.module';
+import { ItemQuotasModule } from './item-quotas/item-quotas.module';
+import { ItemQuotaVouchersModule } from './item-quota-vouchers/item-quota-vouchers.module';
+import { IceVouchersModule } from './ice-vouchers/ice-vouchers.module';
 import { WalkingRoutesModule } from './walking-routes/walking-routes.module';
+import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
 
 @Module({
   imports: [
@@ -31,6 +38,13 @@ import { WalkingRoutesModule } from './walking-routes/walking-routes.module';
     MedicalCentersModule,
     RedCrescentsModule,
     BenefactorsModule,
+    SuppliersModule,
+    SupplierItemsModule,
+    AccommodationLoansModule,
+    ItemQuotasModule,
+    ItemQuotaVouchersModule,
+    IceVouchersModule,
+    PublicVouchersModule,
   ],
   controllers: [AppController],
 })

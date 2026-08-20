@@ -195,6 +195,7 @@ export class UsersService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const geo = await this.resolveGeo(dto);
     await this.assertImages(dto);
+    await this.assertUniqueIdentity(dto);
 
     try {
       const user = await this.prisma.user.create({
@@ -233,6 +234,7 @@ export class UsersService {
       cityId: dto.cityId === undefined ? current.cityId : dto.cityId,
     });
     await this.assertImages(dto);
+    await this.assertUniqueIdentity(dto, id);
 
     try {
       const user = await this.prisma.$transaction(async (tx) => {
@@ -437,13 +439,18 @@ export class UsersService {
       select: { id: true },
     });
 
-    await this.prisma.accommodationManager.create({
-      data: {
-        userId,
-        accommodationId,
-        year,
-        isPrimary: !hasPrimaryThisYear,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accommodationManager.deleteMany({
+        where: { accommodationId, year, userId: null },
+      });
+      await tx.accommodationManager.create({
+        data: {
+          userId,
+          accommodationId,
+          year,
+          isPrimary: !hasPrimaryThisYear,
+        },
+      });
     });
     return this.findOne(userId);
   }
@@ -789,20 +796,65 @@ export class UsersService {
     }
   }
 
+  private async assertUniqueIdentity(
+    dto: {
+      username?: string;
+      nationalId?: string | null;
+      phone?: string | null;
+      email?: string | null;
+    },
+    excludeId?: string,
+  ) {
+    const username = dto.username?.trim() || undefined;
+    const nationalId = dto.nationalId?.trim() || undefined;
+    const phone = dto.phone?.trim() || undefined;
+    const email = dto.email?.trim() || undefined;
+    const filters: Prisma.UserWhereInput[] = [];
+    if (username) filters.push({ username });
+    if (nationalId) filters.push({ nationalId });
+    if (phone) filters.push({ phone });
+    if (email) filters.push({ email });
+    if (!filters.length) {
+      return;
+    }
+
+    const matches = await this.prisma.user.findMany({
+      where: {
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+        OR: filters,
+      },
+      select: { username: true, nationalId: true, phone: true, email: true },
+    });
+
+    for (const row of matches) {
+      if (nationalId && row.nationalId === nationalId) {
+        throw new ConflictException('کد ملی تکراری است');
+      }
+      if (phone && row.phone === phone) {
+        throw new ConflictException('شماره تلفن تکراری است');
+      }
+      if (email && row.email === email) {
+        throw new ConflictException('ایمیل تکراری است');
+      }
+      if (username && row.username === username) {
+        throw new ConflictException('نام کاربری تکراری است');
+      }
+    }
+  }
+
   private rethrowUnique(error: unknown): never {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
-      const target = error.meta?.target;
-      const fields = Array.isArray(target) ? target.join(' ') : String(target ?? '');
-      if (fields.includes('nationalId')) {
+      const blob = `${JSON.stringify(error.meta ?? {})} ${error.message}`.toLowerCase();
+      if (blob.includes('nationalid') || blob.includes('national_id')) {
         throw new ConflictException('کد ملی تکراری است');
       }
-      if (fields.includes('phone')) {
+      if (blob.includes('phone')) {
         throw new ConflictException('شماره تلفن تکراری است');
       }
-      if (fields.includes('email')) {
+      if (blob.includes('email')) {
         throw new ConflictException('ایمیل تکراری است');
       }
       throw new ConflictException('نام کاربری تکراری است');

@@ -83,25 +83,51 @@ export class AccommodationsService {
     );
   }
 
-  async report(actor: Actor) {
-    const where = this.listWhere({}, actor);
-    const [total, genderRows, managementRows, comboRows] = await Promise.all([
-      this.prisma.accommodation.count({ where }),
+  async report(actor: Actor, year?: number) {
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({}, actor);
+    const withManagerWhere = this.andWhere(scope, {
+      managers: { some: this.assignedManagerYear(selectedYear) },
+    });
+    const withoutManagerWhere = this.andWhere(scope, {
+      managers: { none: this.assignedManagerYear(selectedYear) },
+    });
+    const activeInYearWhere = this.andWhere(scope, {
+      managers: { some: { year: selectedYear } },
+    });
+    const inactiveInYearWhere = this.andWhere(scope, {
+      managers: { none: { year: selectedYear } },
+    });
+    const [
+      total,
+      genderRows,
+      managementRows,
+      comboRows,
+      withManager,
+      withoutManager,
+      activeInYear,
+      inactiveInYear,
+    ] = await Promise.all([
+      this.prisma.accommodation.count({ where: scope }),
       this.prisma.accommodation.groupBy({
         by: ['genderType'],
-        where,
+        where: scope,
         _count: { _all: true },
       }),
       this.prisma.accommodation.groupBy({
         by: ['managementType'],
-        where,
+        where: scope,
         _count: { _all: true },
       }),
       this.prisma.accommodation.groupBy({
         by: ['genderType', 'managementType'],
-        where,
+        where: scope,
         _count: { _all: true },
       }),
+      this.prisma.accommodation.count({ where: withManagerWhere }),
+      this.prisma.accommodation.count({ where: withoutManagerWhere }),
+      this.prisma.accommodation.count({ where: activeInYearWhere }),
+      this.prisma.accommodation.count({ where: inactiveInYearWhere }),
     ]);
 
     const genderCount = new Map(
@@ -118,7 +144,16 @@ export class AccommodationsService {
     );
 
     return {
+      year: selectedYear,
       total,
+      byManagerStatus: {
+        withManager,
+        withoutManager,
+      },
+      byYearActivity: {
+        active: activeInYear,
+        inactive: inactiveInYear,
+      },
       byGenderType: genderTypeOrder.map((genderType) => ({
         genderType,
         count: genderCount.get(genderType) ?? 0,
@@ -248,6 +283,73 @@ export class AccommodationsService {
     return { ok: true };
   }
 
+  async activateYear(
+    id: string,
+    actor: Actor,
+    year?: number,
+    copyPreviousManager = false,
+  ) {
+    const selectedYear = year ?? currentJalaliYear();
+    await this.findRecord(id, actor);
+
+    const existing = await this.prisma.accommodationManager.findFirst({
+      where: { accommodationId: id, year: selectedYear },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('وضعیت این اسکان برای این سال قبلاً مشخص شده است');
+    }
+
+    if (copyPreviousManager) {
+      const previousYear = selectedYear - 1;
+      const previousManagers = await this.prisma.accommodationManager.findMany({
+        where: {
+          accommodationId: id,
+          year: previousYear,
+          userId: { not: null },
+        },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      });
+      const previous = previousManagers[0];
+      if (!previous?.userId) {
+        throw new BadRequestException('مدیر سال قبل برای این اسکان یافت نشد');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: previous.userId },
+        include: { userRoles: { include: { role: { select: { code: true } } } } },
+      });
+      if (!user || !user.userRoles.some((item) => item.role.code === 'ACCOMMODATION_MANAGER')) {
+        throw new BadRequestException('مدیر سال قبل دیگر معتبر نیست');
+      }
+
+      const hasPrimaryThisYear = await this.prisma.accommodationManager.findFirst({
+        where: { userId: previous.userId, year: selectedYear, isPrimary: true },
+        select: { id: true },
+      });
+
+      await this.prisma.accommodationManager.create({
+        data: {
+          accommodationId: id,
+          userId: previous.userId,
+          year: selectedYear,
+          isPrimary: !hasPrimaryThisYear && previous.isPrimary,
+        },
+      });
+      return this.findOne(id, actor);
+    }
+
+    await this.prisma.accommodationManager.create({
+      data: {
+        accommodationId: id,
+        userId: null,
+        year: selectedYear,
+        isPrimary: false,
+      },
+    });
+    return this.findOne(id, actor);
+  }
+
   async assignManager(id: string, userId: string, year: number, actor: Actor) {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
@@ -276,13 +378,16 @@ export class AccommodationsService {
       select: { id: true },
     });
 
-    await this.prisma.accommodationManager.create({
-      data: {
-        userId,
-        accommodationId: id,
-        year,
-        isPrimary: !hasPrimaryThisYear,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await this.removeUnassignedYear(tx, id, year);
+      await tx.accommodationManager.create({
+        data: {
+          userId,
+          accommodationId: id,
+          year,
+          isPrimary: !hasPrimaryThisYear,
+        },
+      });
     });
     return this.findOne(id, actor);
   }
@@ -313,6 +418,16 @@ export class AccommodationsService {
     return item;
   }
 
+  private andWhere(
+    base: Prisma.AccommodationWhereInput,
+    extra: Prisma.AccommodationWhereInput,
+  ): Prisma.AccommodationWhereInput {
+    if (!Object.keys(base).length) {
+      return extra;
+    }
+    return { AND: [base, extra] };
+  }
+
   private listWhere(
     query: FindAccommodationsQueryDto,
     actor: Actor,
@@ -333,12 +448,15 @@ export class AccommodationsService {
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
     }
+    if (query.year) {
+      filters.push({ managers: { some: { year: query.year } } });
+    }
     if (query.hasManagerThisYear !== undefined) {
       const year = currentJalaliYear();
       filters.push(
         query.hasManagerThisYear
-          ? { managers: { some: { year } } }
-          : { managers: { none: { year } } },
+          ? { managers: { some: this.assignedManagerYear(year) } }
+          : { managers: { none: this.assignedManagerYear(year) } },
       );
     }
     if (query.q) {
@@ -369,7 +487,21 @@ export class AccommodationsService {
     return filters.length === 1 ? filters[0] : { AND: filters };
   }
 
-  private canAccess(item: { managers: { userId: string }[] }, actor: Actor) {
+  private assignedManagerYear(year: number): Prisma.AccommodationManagerWhereInput {
+    return { year, userId: { not: null } };
+  }
+
+  private async removeUnassignedYear(
+    tx: Prisma.TransactionClient,
+    accommodationId: string,
+    year: number,
+  ) {
+    await tx.accommodationManager.deleteMany({
+      where: { accommodationId, year, userId: null },
+    });
+  }
+
+  private canAccess(item: { managers: { userId: string | null }[] }, actor: Actor) {
     return isAdmin(actor) || item.managers.some((row) => row.userId === actor.id);
   }
 
@@ -542,7 +674,7 @@ export class AccommodationsService {
         ? {
             accommodationId: input.accommodationId,
             year,
-            userId: { notIn: uniqueIds },
+            OR: [{ userId: { notIn: uniqueIds } }, { userId: null }],
           }
         : { accommodationId: input.accommodationId, year },
     });
@@ -694,7 +826,8 @@ export class AccommodationsService {
         managers: item.managers
           .map((manager) => {
             const primary = manager.isPrimary ? ' (اصلی)' : '';
-            return `${manager.user.fullName}${primary} — ${manager.year}`;
+            const name = manager.user?.fullName ?? 'بدون مدیر';
+            return `${name}${primary} — ${manager.year}`;
           })
           .join('، '),
         description: item.description ?? '',

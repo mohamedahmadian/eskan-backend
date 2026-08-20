@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Put, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Put,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -32,6 +42,7 @@ export class SmsController {
   }
 
   @Post('send')
+  @HttpCode(HttpStatus.ACCEPTED)
   send(@Body() dto: SendSmsDto, @CurrentUser() user: RequestUser) {
     return this.sms.send({
       phone: dto.phone,

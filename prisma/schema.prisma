@@ -26,6 +26,17 @@ enum Religion {
   OTHER
 }
 
+enum SupplierType {
+  GOVERNMENT_ORGANIZATION
+  CHARITY
+  COMPANY
+  STORE
+  MANUFACTURER
+  WAREHOUSE
+  SUPPLIER
+  OTHER
+}
+
 model Role {
   id        String     @id @default(uuid())
   code      String     @unique
@@ -87,6 +98,10 @@ model User {
   managedAccommodations AccommodationManager[]
   representedProvinces  Province[] @relation("ProvinceHeadquartersRep")
   representedCities     City[]     @relation("CityHeadquartersRep")
+  accommodationLoans    AccommodationLoan[]
+  itemQuotaVouchers     ItemQuotaVoucher[]
+  iceVouchers           IceVoucher[]
+  approvedIceVouchers   IceVoucher[] @relation("IceVoucherApprover")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -339,6 +354,7 @@ model Accommodation {
   bathroomCount         Int?
   toiletCount           Int?
   managers              AccommodationManager[]
+  iceVouchers           IceVoucher[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
@@ -353,8 +369,8 @@ model AccommodationManager {
   id               String        @id @default(uuid())
   accommodationId  String
   accommodation    Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
-  userId           String
-  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String?
+  user             User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   year             Int
   isPrimary        Boolean       @default(false)
   createdAt        DateTime      @default(now())
@@ -362,6 +378,7 @@ model AccommodationManager {
   @@unique([userId, accommodationId, year])
   @@index([userId])
   @@index([year])
+  @@index([accommodationId, year])
   @@map("accommodation_managers")
 }
 
@@ -494,4 +511,160 @@ model WalkingRouteStage {
   @@unique([walkingRouteId, stageNumber])
   @@index([cityId])
   @@map("walking_route_stages")
+}
+
+model Supplier {
+  id            String             @id @default(uuid())
+  name          String
+  type          SupplierType
+  address       String?
+  phone         String?
+  contactPerson String?
+  description   String?
+  items         SupplierItem[]
+  itemQuotas    ItemQuota[]
+  vouchers      ItemQuotaVoucher[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([name])
+  @@index([type])
+  @@map("suppliers")
+}
+
+model SupplierItem {
+  id           String               @id @default(uuid())
+  supplierId   String
+  supplier     Supplier             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  year         Int
+  name         String
+  unit         String
+  quantity     Int
+  deliveryDate DateTime             @db.Date
+  returnDate   DateTime?            @db.Date
+  description  String?
+  loans        AccommodationLoan[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([supplierId, year])
+  @@index([year])
+  @@index([name])
+  @@map("supplier_items")
+}
+
+model AccommodationLoan {
+  id                     String       @id @default(uuid())
+  supplierItemId         String
+  supplierItem           SupplierItem @relation(fields: [supplierItemId], references: [id], onDelete: Restrict)
+  accommodationManagerId String
+  accommodationManager   User         @relation(fields: [accommodationManagerId], references: [id], onDelete: Restrict)
+  quantity               Int
+  deliveryDate           DateTime     @db.Date
+  plannedReturnDate      DateTime?    @db.Date
+  actualReturnDate       DateTime?    @db.Date
+  returnedQuantity       Int?
+  description            String?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@index([supplierItemId])
+  @@index([accommodationManagerId])
+  @@index([deliveryDate])
+  @@map("accommodation_loans")
+}
+
+model ItemQuota {
+  id          String             @id @default(uuid())
+  year        Int
+  name        String
+  unit        String
+  quantity    Int
+  supplierId  String?
+  supplier    Supplier?          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  description String?
+  vouchers    ItemQuotaVoucher[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([year])
+  @@index([name])
+  @@index([supplierId])
+  @@map("item_quotas")
+}
+
+model ItemQuotaVoucher {
+  id                     String    @id @default(uuid())
+  code                   String    @unique
+  quotaId                String
+  quota                  ItemQuota @relation(fields: [quotaId], references: [id], onDelete: Restrict)
+  accommodationManagerId String
+  accommodationManager   User      @relation(fields: [accommodationManagerId], references: [id], onDelete: Restrict)
+  quantity               Int
+  supplierId             String?
+  supplier               Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  supplierName           String
+  pickupLocation         String?
+  description            String?
+  issuedAt               DateTime  @default(now())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([quotaId])
+  @@index([accommodationManagerId])
+  @@index([issuedAt])
+  @@map("item_quota_vouchers")
+}
+
+enum IceVoucherStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum IceVoucherPaymentStatus {
+  UNPAID
+  PAID
+}
+
+model IceVoucherSettings {
+  id                 String    @id @default("default")
+  moldsPer50Pilgrims Int       @default(1)
+  costPerMold        Int       @default(0)
+  activityStartDate  DateTime? @db.Date
+  activityEndDate    DateTime? @db.Date
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("ice_voucher_settings")
+}
+
+model IceVoucher {
+  id                     String           @id @default(uuid())
+  code                   String           @unique
+  year                   Int
+  accommodationId        String
+  accommodation          Accommodation    @relation(fields: [accommodationId], references: [id], onDelete: Restrict)
+  accommodationManagerId String
+  accommodationManager   User             @relation(fields: [accommodationManagerId], references: [id], onDelete: Restrict)
+  requestedAt            DateTime         @db.Date
+  moldCount              Int
+  costPerMold            Int
+  totalCost              Int
+  description            String?
+  status                 IceVoucherStatus @default(PENDING)
+  paymentStatus          IceVoucherPaymentStatus @default(UNPAID)
+  paidAt                 DateTime?
+  approvedAt             DateTime?
+  approvedById           String?
+  approvedBy             User?            @relation("IceVoucherApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  @@index([year])
+  @@index([accommodationId])
+  @@index([accommodationManagerId])
+  @@index([status, requestedAt])
+  @@index([paymentStatus])
+  @@map("ice_vouchers")
 }

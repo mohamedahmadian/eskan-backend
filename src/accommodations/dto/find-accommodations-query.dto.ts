@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
 import { emptyToUndefined, toOptionalBoolean } from '../../common/dto-transform';
 import { GenderType, ManagementType } from '../../generated/prisma/client';
@@ -24,6 +24,17 @@ export class FindAccommodationsQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
   cityId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === '' || value === undefined || value === null) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  })
+  @IsInt()
+  @Min(1300)
+  @Max(1600)
+  year?: number;
 
   @IsOptional()
   @Transform(({ value }) => toOptionalBoolean(value))

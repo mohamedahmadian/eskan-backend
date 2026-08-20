@@ -91,12 +91,16 @@ async function main() {
 
   const sms = await prisma.navModule.upsert({
     where: { code: "sms" },
-    update: {},
+    update: {
+      nameKey: "modules.sms",
+      icon: "message-square",
+      sortOrder: 5,
+    },
     create: {
       code: "sms",
       nameKey: "modules.sms",
       icon: "message-square",
-      sortOrder: 4,
+      sortOrder: 5,
     },
   });
 
@@ -105,13 +109,13 @@ async function main() {
     update: {
       nameKey: "modules.baseInfo",
       icon: "database",
-      sortOrder: 5,
+      sortOrder: 6,
     },
     create: {
       code: "base-info",
       nameKey: "modules.baseInfo",
       icon: "database",
-      sortOrder: 5,
+      sortOrder: 6,
     },
   });
 
@@ -120,13 +124,13 @@ async function main() {
     update: {
       nameKey: "modules.accommodation",
       icon: "building-2",
-      sortOrder: 6,
+      sortOrder: 4,
     },
     create: {
       code: "accommodation",
       nameKey: "modules.accommodation",
       icon: "building-2",
-      sortOrder: 6,
+      sortOrder: 4,
     },
   });
 
@@ -142,6 +146,21 @@ async function main() {
       nameKey: "modules.headquarters",
       icon: "landmark",
       sortOrder: 7,
+    },
+  });
+
+  const logistics = await prisma.navModule.upsert({
+    where: { code: "logistics" },
+    update: {
+      nameKey: "modules.logistics",
+      icon: "package",
+      sortOrder: 8,
+    },
+    create: {
+      code: "logistics",
+      nameKey: "modules.logistics",
+      icon: "package",
+      sortOrder: 8,
     },
   });
 
@@ -317,6 +336,110 @@ async function main() {
       icon: "chart-column",
       sortOrder: 3,
     },
+    {
+      code: "logistics.suppliers",
+      moduleId: logistics.id,
+      nameKey: "menus.suppliers",
+      path: "/logistics/suppliers",
+      icon: "store",
+      sortOrder: 1,
+    },
+    {
+      code: "logistics.loans",
+      moduleId: logistics.id,
+      nameKey: "menus.loanManagement",
+      path: "/logistics/loans",
+      icon: "package-open",
+      sortOrder: 2,
+    },
+    {
+      code: "logistics.loan-report",
+      moduleId: logistics.id,
+      nameKey: "menus.loanReport",
+      path: "/logistics/loan-report",
+      icon: "chart-column",
+      sortOrder: 3,
+    },
+    {
+      code: "logistics.item-quotas",
+      moduleId: logistics.id,
+      nameKey: "menus.itemQuotas",
+      path: "/logistics/item-quotas",
+      icon: "boxes",
+      sortOrder: 4,
+    },
+    {
+      code: "logistics.issue-voucher",
+      moduleId: logistics.id,
+      nameKey: "menus.issueVoucher",
+      path: "/logistics/issue-voucher",
+      icon: "ticket",
+      sortOrder: 5,
+    },
+    {
+      code: "logistics.vouchers",
+      moduleId: logistics.id,
+      nameKey: "menus.voucherManagement",
+      path: "/logistics/vouchers",
+      icon: "clipboard-list",
+      sortOrder: 6,
+    },
+    {
+      code: "logistics.voucher-report",
+      moduleId: logistics.id,
+      nameKey: "menus.voucherReport",
+      path: "/logistics/voucher-report",
+      icon: "chart-column",
+      sortOrder: 7,
+    },
+    {
+      code: "logistics.my-vouchers",
+      moduleId: logistics.id,
+      nameKey: "menus.myVouchers",
+      path: "/logistics/my-vouchers",
+      icon: "scroll-text",
+      sortOrder: 8,
+    },
+    {
+      code: "logistics.my-loans",
+      moduleId: logistics.id,
+      nameKey: "menus.myLoans",
+      path: "/logistics/my-loans",
+      icon: "package-check",
+      sortOrder: 9,
+    },
+    {
+      code: "logistics.settings",
+      moduleId: logistics.id,
+      nameKey: "menus.logisticsSettings",
+      path: "/logistics/settings",
+      icon: "settings",
+      sortOrder: 10,
+    },
+    {
+      code: "logistics.ice-vouchers",
+      moduleId: logistics.id,
+      nameKey: "menus.iceVouchers",
+      path: "/logistics/ice-vouchers",
+      icon: "snowflake",
+      sortOrder: 11,
+    },
+    {
+      code: "logistics.my-ice-vouchers",
+      moduleId: logistics.id,
+      nameKey: "menus.myIceVouchers",
+      path: "/logistics/my-ice-vouchers",
+      icon: "snowflake",
+      sortOrder: 12,
+    },
+    {
+      code: "logistics.ice-voucher-report",
+      moduleId: logistics.id,
+      nameKey: "menus.iceVoucherReport",
+      path: "/logistics/ice-voucher-report",
+      icon: "chart-column",
+      sortOrder: 13,
+    },
   ];
 
   const menuRecords = [];
@@ -349,6 +472,9 @@ async function main() {
     "dashboard.overview",
     "accommodation.list",
     "accommodation.report",
+    "logistics.my-vouchers",
+    "logistics.my-loans",
+    "logistics.my-ice-vouchers",
   ]);
   for (const menu of menuRecords.filter((item) => managerMenuCodes.has(item.code))) {
     await prisma.roleMenu.upsert({
@@ -386,6 +512,16 @@ async function main() {
       senderNumber: "10009155191225",
       username: "pejvaksoft",
       password: "P@dd45465",
+    },
+  });
+
+  await prisma.iceVoucherSettings.upsert({
+    where: { id: "default" },
+    update: {},
+    create: {
+      id: "default",
+      moldsPer50Pilgrims: 1,
+      costPerMold: 0,
     },
   });
 

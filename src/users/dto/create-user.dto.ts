@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 import { Religion, UserGender, UserStatus } from '../../generated/prisma/client';
 import { emptyToNull } from '../../common/dto-transform';
+import { IsIranianNationalId, normalizeNationalId } from '../../common/national-id';
 
 export const APP_LOCALES = ['fa', 'ar', 'ur', 'hi', 'en'] as const;
 
@@ -52,9 +53,11 @@ export class CreateUserDto {
   @IsEnum(UserGender)
   gender?: UserGender | null;
 
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeNationalId(value) : value,
+  )
   @IsString()
-  @MinLength(1)
+  @IsIranianNationalId({ message: 'کد ملی معتبر نیست' })
   nationalId: string;
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))

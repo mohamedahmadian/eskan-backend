@@ -1,8 +1,4 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   containsInsensitive,
   paginatedResult,
@@ -33,8 +29,25 @@ export type SendSmsInput = {
   sentById?: string;
 };
 
+export type QueuedSmsResult = {
+  queued: true;
+  recipientCount: number;
+};
+
+type PreparedSmsJob = {
+  endpoint: string;
+  username: string;
+  password: string;
+  senderNumber: string;
+  phones: string[];
+  body: string;
+  sentById?: string;
+};
+
 @Injectable()
 export class SmsService {
+  private readonly logger = new Logger(SmsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getSettings() {
@@ -109,10 +122,18 @@ export class SmsService {
   }
 
   /**
-   * ارسال پیامک از هر ماژول: SmsService را inject کنید و send را صدا بزنید.
-   * هر شماره جداگانه به وب‌سرویس ارسال می‌شود.
+   * صف ارسال پیامک: اعتبارسنجی سریع است و پاسخ بلافاصله برمی‌گردد.
+   * تماس با وب‌سرویس و ذخیره نتیجه در پس‌زمینه انجام می‌شود.
    */
-  async send(input: SendSmsInput) {
+  async send(input: SendSmsInput): Promise<QueuedSmsResult> {
+    const job = await this.prepareSend(input);
+    setImmediate(() => {
+      void this.deliver(job);
+    });
+    return { queued: true, recipientCount: job.phones.length };
+  }
+
+  private async prepareSend(input: SendSmsInput): Promise<PreparedSmsJob> {
     const settings = await this.ensureSettings();
     if (!settings.username || !settings.password || !settings.senderNumber || !settings.endpoint) {
       throw new BadRequestException('تنظیمات پیامک کامل نیست');
@@ -128,40 +149,51 @@ export class SmsService {
       throw new BadRequestException('متن پیامک الزامی است');
     }
 
-    const results: { success: boolean; recId: string; rawResponse: string }[] = [];
-    for (const phone of phones) {
-      try {
-        const batch = await sendSimpleSms({
-          endpoint: settings.endpoint,
-          username: settings.username,
-          password: settings.password,
-          senderNumber: settings.senderNumber,
-          phones: [phone],
-          body,
-        });
-        results.push(
-          batch[0] ?? {
-            success: false,
-            recId: 'بدون پاسخ',
-            rawResponse: 'بدون پاسخ',
-          },
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'ارتباط با وب‌سرویس پیامک برقرار نشد';
-        results.push({ success: false, recId: message, rawResponse: message });
-      }
-    }
+    return {
+      endpoint: settings.endpoint,
+      username: settings.username,
+      password: settings.password,
+      senderNumber: settings.senderNumber,
+      phones,
+      body,
+      sentById: input.sentById,
+    };
+  }
 
-    const saved = await this.saveResults(phones, body, results, input.sentById);
-    const failed = saved.filter((item) => item.status === SmsStatus.FAILED);
-    if (failed.length === saved.length) {
-      throw new BadGatewayException(
-        failed[0]?.providerResponse || 'ارسال پیامک ناموفق بود',
+  private async deliver(job: PreparedSmsJob) {
+    const results: { success: boolean; recId: string; rawResponse: string }[] = [];
+    try {
+      for (const phone of job.phones) {
+        try {
+          const batch = await sendSimpleSms({
+            endpoint: job.endpoint,
+            username: job.username,
+            password: job.password,
+            senderNumber: job.senderNumber,
+            phones: [phone],
+            body: job.body,
+          });
+          results.push(
+            batch[0] ?? {
+              success: false,
+              recId: 'بدون پاسخ',
+              rawResponse: 'بدون پاسخ',
+            },
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'ارتباط با وب‌سرویس پیامک برقرار نشد';
+          results.push({ success: false, recId: message, rawResponse: message });
+        }
+      }
+
+      await this.saveResults(job.phones, job.body, results, job.sentById);
+    } catch (error) {
+      this.logger.error(
+        `ارسال پس‌زمینه پیامک برای ${job.phones.length} گیرنده ناموفق بود`,
+        error instanceof Error ? error.stack : String(error),
       );
     }
-
-    return saved.length === 1 ? saved[0] : saved;
   }
 
   private async recipientPhonesMatching(q: string): Promise<string[]> {

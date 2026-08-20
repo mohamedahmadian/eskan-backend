@@ -15,8 +15,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ActivateAccommodationYearDto } from './dto/activate-accommodation-year.dto';
 import { AssignAccommodationManagerDto } from './dto/assign-accommodation-manager.dto';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
+import { FindAccommodationReportQueryDto } from './dto/find-accommodation-report-query.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
 import { AccommodationsService } from './accommodations.service';
@@ -41,8 +43,11 @@ export class AccommodationsController {
   }
 
   @Get('report')
-  report(@CurrentUser() actor: RequestUser) {
-    return this.accommodations.report(actor);
+  report(
+    @Query() query: FindAccommodationReportQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.report(actor, query.year);
   }
 
   @Get('export')
@@ -82,6 +87,15 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.update(id, dto, actor);
+  }
+
+  @Post(':id/activate-year')
+  activateYear(
+    @Param('id') id: string,
+    @Body() dto: ActivateAccommodationYearDto = {},
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.activateYear(id, actor, dto.year, dto.copyPreviousManager);
   }
 
   @Post(':id/managers')
