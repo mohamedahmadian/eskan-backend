@@ -19,6 +19,9 @@ type AuthUserRecord = {
   fullName: string;
   locale: string;
   status: UserStatus;
+  countryId: string | null;
+  provinceId: string | null;
+  cityId: string | null;
   userRoles: {
     role: { id: string; code: string; nameKey: string };
   }[];
@@ -180,6 +183,9 @@ export class AuthService {
       username: user.username,
       fullName: user.fullName,
       locale: user.locale,
+      countryId: user.countryId,
+      provinceId: user.provinceId,
+      cityId: user.cityId,
       roles: user.userRoles.map((item) => ({
         code: item.role.code,
         nameKey: item.role.nameKey,

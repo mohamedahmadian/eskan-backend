@@ -17,6 +17,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
+import { CheckIdentityDto } from './dto/check-identity.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -66,6 +67,16 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return super.findAll(query);
   }
 
+  @Post('identity-check')
+  checkIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.checkIdentityTaken(dto);
+  }
+
+  @Post('identity-lookup')
+  lookupIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.findByIdentity(dto);
+  }
+
   @Get(':id')
   override findOne(@Param('id') id: string) {
     return super.findOne(id);
@@ -103,6 +114,11 @@ export class CaravanManagersController extends RoleScopedUsersController {
     return super.findAll(query);
   }
 
+  @Post('identity-check')
+  checkIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.checkIdentityTaken(dto);
+  }
+
   @Get(':id')
   override findOne(@Param('id') id: string) {
     return super.findOne(id);
@@ -138,6 +154,11 @@ export class AccommodationManagersController extends RoleScopedUsersController {
   @Get()
   override findAll(@Query() query: FindUsersQueryDto) {
     return super.findAll(query);
+  }
+
+  @Post('identity-check')
+  checkIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.checkIdentityTaken(dto);
   }
 
   @Get(':id')
@@ -188,6 +209,11 @@ export class HeadquartersRepresentativesController extends RoleScopedUsersContro
   @Get()
   override findAll(@Query() query: FindUsersQueryDto) {
     return super.findAll(query);
+  }
+
+  @Post('identity-check')
+  checkIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.checkIdentityTaken(dto);
   }
 
   @Get(':id')

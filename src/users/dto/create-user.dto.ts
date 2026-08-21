@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEmail,
   IsEnum,
   IsIn,
@@ -64,6 +65,12 @@ export class CreateUserDto {
   @IsString()
   @MinLength(1)
   phone: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsDateString()
+  birthDate?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

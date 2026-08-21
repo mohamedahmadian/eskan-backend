@@ -71,6 +71,7 @@ model User {
   nationalId          String?       @unique
   phone               String?       @unique
   email               String?       @unique
+  birthDate           DateTime?     @db.Date
   address             String?
   notes               String?
   religion            Religion?
@@ -96,6 +97,8 @@ model User {
   userRoles           UserRole[]
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
+  managedCaravans       Caravan[] @relation("CaravanManager")
+  caravanContacts       CaravanContact[]
   representedProvinces  Province[] @relation("ProvinceHeadquartersRep")
   representedCities     City[]     @relation("CityHeadquartersRep")
   accommodationLoans    AccommodationLoan[]
@@ -156,20 +159,65 @@ model StoredImage {
   photoUsers        User[]   @relation("UserPhoto")
   nationalCardUsers User[]   @relation("UserNationalCard")
   passportUsers     User[]   @relation("UserPassport")
+  caravanLicenses   Caravan[] @relation("CaravanLicenseImage")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
 }
 
-model Caravan {
-  id             String    @id @default(uuid())
-  name           String
-  originCity     String
-  plannedArrival DateTime? @db.Date
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+enum CaravanContactRole {
+  DEPUTY
+  CLERIC
+  CULTURAL
+  SECURITY
+  RECEPTION
+}
 
+model Caravan {
+  id             String       @id @default(uuid())
+  name           String
+  description    String?
+  officeAddress  String?
+  officePhone    String?
+  foundedYear    Int?
+  licenseNumber  String?
+  cityId         String
+  city           City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  licenseImageId String?
+  licenseImage   StoredImage? @relation("CaravanLicenseImage", fields: [licenseImageId], references: [id], onDelete: SetNull)
+  managerUserId  String?
+  manager        User?        @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  contacts       CaravanContact[]
+  totalCount     Int          @default(0)
+  maleCount      Int          @default(0)
+  femaleCount    Int          @default(0)
+  eitaa          String?
+  bale           String?
+  telegram       String?
+  instagram      String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([cityId])
+  @@index([managerUserId])
+  @@index([isActive])
   @@map("caravans")
+}
+
+model CaravanContact {
+  id        String             @id @default(uuid())
+  caravanId String
+  caravan   Caravan            @relation(fields: [caravanId], references: [id], onDelete: Cascade)
+  role      CaravanContactRole
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([caravanId, role])
+  @@index([userId])
+  @@map("caravan_contacts")
 }
 
 enum SmsStatus {
@@ -275,6 +323,7 @@ model City {
   medicalCenters             MedicalCenter[]
   redCrescents               RedCrescent[]
   benefactors                Benefactor[]
+  caravans                   Caravan[]
   users                      User[]                    @relation("UserHomeCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)

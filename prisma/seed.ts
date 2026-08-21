@@ -41,7 +41,7 @@ async function main() {
     create: { code: "CARAVAN_MANAGER", nameKey: "roles.caravanManager" },
   });
 
-  await prisma.role.upsert({
+  const pilgrimRole = await prisma.role.upsert({
     where: { code: "PILGRIM" },
     update: { nameKey: "roles.pilgrim" },
     create: { code: "PILGRIM", nameKey: "roles.pilgrim" },
@@ -201,12 +201,20 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: "caravans.mine",
+      moduleId: caravans.id,
+      nameKey: "menus.myCaravans",
+      path: "/my-caravans",
+      icon: "tent",
+      sortOrder: 2,
+    },
+    {
       code: "caravans.managers",
       moduleId: caravans.id,
       nameKey: "menus.caravanManagers",
       path: "/caravan-managers",
       icon: "user-round-cog",
-      sortOrder: 2,
+      sortOrder: 3,
     },
     {
       code: "sms.settings",
@@ -489,7 +497,16 @@ async function main() {
     });
   }
 
-  const caravanMenuCodes = new Set(["dashboard.overview", "caravans.list"]);
+  const caravanMenuCodes = new Set(["dashboard.overview", "caravans.mine"]);
+  const caravanListMenu = menuRecords.find((item) => item.code === "caravans.list");
+  if (caravanListMenu) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: caravanManagerRole.id,
+        menuId: caravanListMenu.id,
+      },
+    });
+  }
   for (const menu of menuRecords.filter((item) => caravanMenuCodes.has(item.code))) {
     await prisma.roleMenu.upsert({
       where: {
@@ -500,6 +517,20 @@ async function main() {
       },
       update: {},
       create: { roleId: caravanManagerRole.id, menuId: menu.id },
+    });
+  }
+
+  const pilgrimMenuCodes = new Set(["dashboard.overview", "caravans.mine"]);
+  for (const menu of menuRecords.filter((item) => pilgrimMenuCodes.has(item.code))) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: pilgrimRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: pilgrimRole.id, menuId: menu.id },
     });
   }
 

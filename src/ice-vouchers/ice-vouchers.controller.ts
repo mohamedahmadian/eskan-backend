@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -18,6 +19,7 @@ import { FindIceVoucherReportQueryDto } from './dto/find-ice-voucher-report-quer
 import { FindIceVouchersQueryDto } from './dto/find-ice-vouchers-query.dto';
 import { IceVoucherQuotaQueryDto } from './dto/ice-voucher-quota-query.dto';
 import { PayIceVouchersDto } from './dto/pay-ice-vouchers.dto';
+import { UpdateIceVoucherDto } from './dto/update-ice-voucher.dto';
 import { UpdateIceVoucherSettingsDto } from './dto/update-ice-voucher-settings.dto';
 import { IceVouchersService } from './ice-vouchers.service';
 
@@ -121,6 +123,15 @@ export class IceVouchersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.iceVouchers.findOne(id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateIceVoucherDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.iceVouchers.update(id, dto, actor);
   }
 
   @Post(':id/approve')

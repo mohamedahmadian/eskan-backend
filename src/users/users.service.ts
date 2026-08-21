@@ -19,6 +19,21 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { cleanPlates, joinFullName } from './user-profile.util';
 
+function parseDateOnly(value?: string | null) {
+  if (value == null || value === '') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  return new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`);
+}
+
+function toDateOnly(value?: Date | string | null) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  return value.toISOString().slice(0, 10);
+}
+
 const roleSelect = {
   id: true,
   code: true,
@@ -81,6 +96,7 @@ type PublicUserSource = {
   nationalId: string | null;
   phone: string | null;
   email: string | null;
+  birthDate: Date | null;
   address: string | null;
   notes: string | null;
   religion: Religion | null;
@@ -616,6 +632,7 @@ export class UsersService {
     set('gender', dto.gender);
     set('nationalId', dto.nationalId);
     set('phone', dto.phone);
+    set('birthDate', dto.birthDate === undefined ? undefined : parseDateOnly(dto.birthDate));
     set('email', dto.email);
     set('address', dto.address);
     set('notes', dto.notes);
@@ -651,6 +668,7 @@ export class UsersService {
       gender: user.gender,
       nationalId: user.nationalId,
       phone: user.phone,
+      birthDate: toDateOnly(user.birthDate),
       email: user.email,
       address: user.address,
       notes: user.notes,
@@ -794,6 +812,136 @@ export class UsersService {
         'نمی‌توان آخرین مدیر سامانه را حذف یا تغییر نقش داد',
       );
     }
+  }
+
+  async checkIdentityTaken(dto: {
+    nationalId?: string;
+    phone?: string;
+    excludeId?: string;
+  }) {
+    const nationalId = dto.nationalId?.trim() || undefined;
+    const phone = dto.phone?.trim() || undefined;
+    if (!nationalId && !phone) {
+      throw new BadRequestException('کد ملی یا شماره تلفن لازم است');
+    }
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
+        OR: [
+          ...(nationalId ? [{ nationalId }] : []),
+          ...(phone ? [{ phone }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+
+    return { taken: Boolean(existing) };
+  }
+
+  async findByIdentity(dto: {
+    nationalId?: string;
+    phone?: string;
+    excludeId?: string;
+  }) {
+    const nationalId = dto.nationalId?.trim() || undefined;
+    const phone = dto.phone?.trim() || undefined;
+    if (!nationalId && !phone) {
+      throw new BadRequestException('کد ملی یا شماره تلفن لازم است');
+    }
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
+        OR: [
+          ...(nationalId ? [{ nationalId }] : []),
+          ...(phone ? [{ phone }] : []),
+        ],
+      },
+      include: publicInclude,
+    });
+
+    if (!existing) {
+      return { found: false as const };
+    }
+
+    return {
+      found: true as const,
+      user: this.toPublicUser(existing),
+    };
+  }
+
+  async findOrCreatePilgrim(dto: {
+    firstName: string;
+    lastName: string;
+    nationalId: string;
+    phone: string;
+    birthDate?: string | null;
+  }) {
+    const nationalId = dto.nationalId.trim();
+    const phone = dto.phone.trim();
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    const birthDate = parseDateOnly(dto.birthDate);
+
+    const byNationalId = await this.prisma.user.findUnique({
+      where: { nationalId },
+      include: publicInclude,
+    });
+    if (byNationalId) {
+      await this.ensureRole(byNationalId.id, 'PILGRIM');
+      if (birthDate && !byNationalId.birthDate) {
+        await this.prisma.user.update({
+          where: { id: byNationalId.id },
+          data: { birthDate },
+        });
+      }
+      const user = await this.findOne(byNationalId.id);
+      return { user, reused: true };
+    }
+
+    const byPhone = await this.prisma.user.findUnique({
+      where: { phone },
+      include: publicInclude,
+    });
+    if (byPhone) {
+      await this.ensureRole(byPhone.id, 'PILGRIM');
+      if (birthDate && !byPhone.birthDate) {
+        await this.prisma.user.update({
+          where: { id: byPhone.id },
+          data: { birthDate },
+        });
+      }
+      const user = await this.findOne(byPhone.id);
+      return { user, reused: true };
+    }
+
+    let username = nationalId;
+    const usernameTaken = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (usernameTaken) {
+      username = `${nationalId}_${Date.now().toString(36)}`;
+    }
+
+    const password = `P${nationalId.slice(-6)}${Date.now().toString(36)}aA1`;
+    const user = await this.createWithRole(
+      {
+        username,
+        password,
+        firstName,
+        lastName,
+        nationalId,
+        phone,
+        birthDate: dto.birthDate ?? null,
+        roleIds: [],
+        status: UserStatus.ACTIVE,
+      },
+      'PILGRIM',
+    );
+
+    return { user, reused: false };
   }
 
   private async assertUniqueIdentity(

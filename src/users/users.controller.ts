@@ -13,6 +13,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CheckIdentityDto } from './dto/check-identity.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -29,6 +30,11 @@ export class UsersController {
   @Get()
   findAll(@Query() query: FindUsersQueryDto) {
     return this.users.findAll(query);
+  }
+
+  @Post('identity-check')
+  checkIdentity(@Body() dto: CheckIdentityDto) {
+    return this.users.checkIdentityTaken(dto);
   }
 
   @Get(':id')

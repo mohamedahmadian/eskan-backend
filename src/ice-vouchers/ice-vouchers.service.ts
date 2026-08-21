@@ -23,6 +23,7 @@ import { SmsService } from '../sms/sms.service';
 import { CreateIceVoucherDto } from './dto/create-ice-voucher.dto';
 import { FindIceVoucherReportQueryDto } from './dto/find-ice-voucher-report-query.dto';
 import { FindIceVouchersQueryDto } from './dto/find-ice-vouchers-query.dto';
+import { UpdateIceVoucherDto } from './dto/update-ice-voucher.dto';
 import { UpdateIceVoucherSettingsDto } from './dto/update-ice-voucher-settings.dto';
 
 const SETTINGS_ID = 'default';
@@ -274,6 +275,48 @@ export class IceVouchersService {
       description: dto.description?.trim() || null,
     });
     return this.serialize(created);
+  }
+
+  async update(id: string, dto: UpdateIceVoucherDto, actor: Actor) {
+    const current = await this.requireRecord(id);
+    const accommodationId = dto.accommodationId ?? current.accommodationId;
+    const moldCount = dto.moldCount ?? current.moldCount;
+    const description =
+      dto.description === undefined
+        ? current.description
+        : dto.description?.trim() || null;
+
+    await this.assertCanUseAccommodation(accommodationId, actor);
+    const accommodation = await this.requireAccommodation(accommodationId);
+    const settings = await this.ensureSettings();
+    const maxMoldCount = this.maxMoldCount(
+      this.capacityOf(accommodation),
+      settings.moldsPer50Pilgrims,
+    );
+    if (moldCount > maxMoldCount) {
+      throw new BadRequestException(
+        `حداکثر تعداد قالب یخ ${maxMoldCount} است`,
+      );
+    }
+
+    const requestedAt = dto.requestedAt
+      ? parseIsoDate(dto.requestedAt)
+      : current.requestedAt;
+    this.assertRequestedAtInRange(requestedAt, settings);
+
+    const updated = await this.prisma.iceVoucher.update({
+      where: { id },
+      data: {
+        accommodationId,
+        requestedAt,
+        year: currentJalaliYear(requestedAt),
+        moldCount,
+        totalCost: moldCount * current.costPerMold,
+        description,
+      },
+      include: voucherInclude,
+    });
+    return this.serialize(updated);
   }
 
   async payMine(ids: string[], actor: Actor) {
