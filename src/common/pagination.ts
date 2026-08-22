@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { toLatinDigits } from './national-id';
 
 export const DEFAULT_PAGE_SIZE = 10;
 
@@ -65,4 +66,13 @@ export function paginatedResult<T>(
 
 export function containsInsensitive(q: string) {
   return { contains: q, mode: 'insensitive' as const };
+}
+
+export function startsWithInsensitive(q: string) {
+  return { startsWith: q, mode: 'insensitive' as const };
+}
+
+/** Digits only (Persian/Arabic-Indic → Latin), for nationalId / phone fast path. */
+export function normalizeSearchDigits(q: string) {
+  return toLatinDigits(q).replace(/\D/g, '');
 }

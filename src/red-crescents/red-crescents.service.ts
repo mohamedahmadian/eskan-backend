@@ -8,6 +8,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRedCrescentDto } from './dto/create-red-crescent.dto';
@@ -32,10 +33,11 @@ export class RedCrescentsService {
   async findAll(query: FindRedCrescentsQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.redCrescent.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take,
         include: redCrescentInclude,
@@ -43,6 +45,22 @@ export class RedCrescentsService {
       this.prisma.redCrescent.count({ where }),
     ]);
     return paginatedResult(items.map((item) => this.serialize(item)), total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindRedCrescentsQueryDto,
+  ): Prisma.RedCrescentOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.RedCrescentOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        phone: (dir) => ({ phone: dir }),
+        province: (dir) => ({ province: { nameFa: dir } }),
+        city: (dir) => ({ city: { nameFa: dir } }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

@@ -1,24 +1,25 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { emptyToUndefined, toOptionalBoolean } from '../../common/dto-transform';
 import { PaginationQueryDto } from '../../common/pagination';
+import { sortDirections } from '../../common/sort-query';
 
-function emptyToUndefined(value: unknown) {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : undefined;
-}
+export const geoSortFields = [
+  'nameFa',
+  'iso2',
+  'phoneCode',
+  'isActive',
+  'provinceCount',
+  'code',
+  'hasRailway',
+  'hasAirport',
+  'country',
+  'cityCount',
+  'isProvinceCapital',
+  'province',
+] as const;
 
-function toBoolean(value: unknown) {
-  if (value === true || value === 'true' || value === '1') {
-    return true;
-  }
-  if (value === false || value === 'false' || value === '0') {
-    return false;
-  }
-  return undefined;
-}
+export type GeoSortField = (typeof geoSortFields)[number];
 
 export class FindGeoQueryDto extends PaginationQueryDto {
   @IsOptional()
@@ -32,7 +33,17 @@ export class FindGeoQueryDto extends PaginationQueryDto {
   provinceId?: string;
 
   @IsOptional()
-  @Transform(({ value }) => toBoolean(value))
+  @Transform(({ value }) => toOptionalBoolean(value))
   @IsBoolean()
   activeOnly?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...geoSortFields])
+  sortBy?: GeoSortField;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...sortDirections])
+  sortDir?: (typeof sortDirections)[number];
 }

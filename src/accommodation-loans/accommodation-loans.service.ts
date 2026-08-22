@@ -10,6 +10,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SupplierItemsService } from '../supplier-items/supplier-items.service';
@@ -42,10 +43,11 @@ export class AccommodationLoansService {
   async findAll(query: FindAccommodationLoansQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.accommodationLoan.findMany({
         where,
-        orderBy: { deliveryDate: 'desc' },
+        orderBy,
         skip,
         take,
         include: loanInclude,
@@ -62,6 +64,26 @@ export class AccommodationLoansService {
 
   async findMine(query: FindAccommodationLoansQueryDto, actorId: string) {
     return this.findAll({ ...query, accommodationManagerId: actorId });
+  }
+
+  private listOrderBy(
+    query: FindAccommodationLoansQueryDto,
+  ): Prisma.AccommodationLoanOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.AccommodationLoanOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        item: (dir) => ({ supplierItem: { name: dir } }),
+        manager: (dir) => ({ accommodationManager: { fullName: dir } }),
+        supplier: (dir) => ({
+          supplierItem: { supplier: { name: dir } },
+        }),
+        quantity: (dir) => ({ quantity: dir }),
+        returnedQuantity: (dir) => ({ returnedQuantity: dir }),
+        deliveryDate: (dir) => ({ deliveryDate: dir }),
+      },
+      [{ deliveryDate: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

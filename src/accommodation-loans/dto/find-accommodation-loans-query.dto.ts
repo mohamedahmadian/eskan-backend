@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { emptyToUndefined } from '../../common/dto-transform';
 import { PaginationQueryDto } from '../../common/pagination';
+import { sortDirections } from '../../common/sort-query';
 
 function toOptionalYear(value: unknown) {
   if (value === '' || value === undefined || value === null) {
@@ -10,6 +11,18 @@ function toOptionalYear(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
+
+export const accommodationLoanSortFields = [
+  'item',
+  'manager',
+  'supplier',
+  'quantity',
+  'returnedQuantity',
+  'deliveryDate',
+] as const;
+
+export type AccommodationLoanSortField =
+  (typeof accommodationLoanSortFields)[number];
 
 export class FindAccommodationLoansQueryDto extends PaginationQueryDto {
   @IsOptional()
@@ -38,4 +51,14 @@ export class FindAccommodationLoansQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsIn(['full', 'partial', 'none'])
   returnStatus?: 'full' | 'partial' | 'none';
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...accommodationLoanSortFields])
+  sortBy?: AccommodationLoanSortField;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...sortDirections])
+  sortDir?: (typeof sortDirections)[number];
 }

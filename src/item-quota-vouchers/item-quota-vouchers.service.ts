@@ -10,6 +10,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import {
   ITEM_QUOTA_VOUCHER_KIND,
   nextSequentialVoucherCode,
@@ -237,10 +238,11 @@ export class ItemQuotaVouchersService {
   async findAll(query: FindItemQuotaVouchersQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.itemQuotaVoucher.findMany({
         where,
-        orderBy: { issuedAt: 'desc' },
+        orderBy,
         skip,
         take,
         include: voucherInclude,
@@ -252,6 +254,24 @@ export class ItemQuotaVouchersService {
 
   async findMine(query: FindItemQuotaVouchersQueryDto, actorId: string) {
     return this.findAll({ ...query, accommodationManagerId: actorId });
+  }
+
+  private listOrderBy(
+    query: FindItemQuotaVouchersQueryDto,
+  ): Prisma.ItemQuotaVoucherOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.ItemQuotaVoucherOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        code: (dir) => ({ code: dir }),
+        item: (dir) => ({ quota: { name: dir } }),
+        manager: (dir) => ({ accommodationManager: { fullName: dir } }),
+        quantity: (dir) => ({ quantity: dir }),
+        supplier: (dir) => ({ supplierName: dir }),
+        issuedAt: (dir) => ({ issuedAt: dir }),
+      },
+      [{ issuedAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

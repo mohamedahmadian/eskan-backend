@@ -5,6 +5,7 @@ import {
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -17,7 +18,7 @@ export class SuppliersService {
 
   async findAll(query: FindSuppliersQueryDto) {
     const where = this.listWhere(query);
-    const orderBy: Prisma.SupplierOrderByWithRelationInput = { createdAt: 'desc' };
+    const orderBy = this.listOrderBy(query);
     if (!wantsPagination(query)) {
       return this.prisma.supplier.findMany({ where, orderBy });
     }
@@ -32,6 +33,22 @@ export class SuppliersService {
       this.prisma.supplier.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindSuppliersQueryDto,
+  ): Prisma.SupplierOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.SupplierOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        type: (dir) => ({ type: dir }),
+        contactPerson: (dir) => ({ contactPerson: dir }),
+        phone: (dir) => ({ phone: dir }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

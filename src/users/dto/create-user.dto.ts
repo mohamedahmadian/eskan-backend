@@ -15,6 +15,7 @@ import {
 import { Religion, UserGender, UserStatus } from '../../generated/prisma/client';
 import { emptyToNull } from '../../common/dto-transform';
 import { IsIranianNationalId, normalizeNationalId } from '../../common/national-id';
+import { normalizePhone } from '../../common/phone';
 
 export const APP_LOCALES = ['fa', 'ar', 'ur', 'hi', 'en'] as const;
 
@@ -61,7 +62,9 @@ export class CreateUserDto {
   @IsIranianNationalId({ message: 'کد ملی معتبر نیست' })
   nationalId: string;
 
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizePhone(value) : value,
+  )
   @IsString()
   @MinLength(1)
   phone: string;

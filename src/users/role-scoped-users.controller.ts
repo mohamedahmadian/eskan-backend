@@ -1,25 +1,51 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
+  StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateUserDto } from './dto/create-user.dto';
+import { FindPilgrimReportQueryDto } from './dto/find-pilgrim-report-query.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
 import { CheckIdentityDto } from './dto/check-identity.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
+
+type ExcelUpload = {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+  originalname: string;
+};
+
+function assertExcelUpload(file?: ExcelUpload) {
+  if (!file?.buffer?.length) {
+    throw new BadRequestException('فایل اکسل انتخاب نشده است');
+  }
+  const name = file.originalname?.toLowerCase() ?? '';
+  if (!name.endsWith('.xlsx')) {
+    throw new BadRequestException('فقط فایل اکسل با پسوند xlsx مجاز است');
+  }
+  return file;
+}
 
 type RequestUser = { id: string };
 
@@ -67,6 +93,48 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return super.findAll(query);
   }
 
+  @Get('report/summary')
+  reportSummary(@Query() query: FindPilgrimReportQueryDto) {
+    return this.users.pilgrimReportSummary(query.year);
+  }
+
+  @Get('report/geo')
+  reportGeo(@Query() query: FindPilgrimReportQueryDto) {
+    return this.users.pilgrimReportGeo(query.year);
+  }
+
+  @Get('report/religion')
+  reportReligion(@Query() query: FindPilgrimReportQueryDto) {
+    return this.users.pilgrimReportReligion(query.year);
+  }
+
+  @Get('report/timeline')
+  reportTimeline(@Query() query: FindPilgrimReportQueryDto) {
+    return this.users.pilgrimReportTimeline(query.year);
+  }
+
+  @Get('report')
+  report(@Query() query: FindPilgrimReportQueryDto) {
+    return this.users.pilgrimReport(query.year);
+  }
+
+  @Get('export')
+  @Header(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  @Header(
+    'Content-Disposition',
+    "attachment; filename=\"pilgrims.xlsx\"; filename*=UTF-8''%D8%B2%D8%A7%D8%A6%D8%B1%D8%A7%D9%86.xlsx",
+  )
+  async export(@Query() query: FindUsersQueryDto) {
+    const buffer = await this.users.exportExcel({
+      ...query,
+      roleCode: this.roleCode,
+    });
+    return new StreamableFile(buffer);
+  }
+
   @Post('identity-check')
   checkIdentity(@Body() dto: CheckIdentityDto) {
     return this.users.checkIdentityTaken(dto);
@@ -75,6 +143,30 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
   @Post('identity-lookup')
   lookupIdentity(@Body() dto: CheckIdentityDto) {
     return this.users.findByIdentity(dto);
+  }
+
+  @Post('import/preview')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 64 * 1024 * 1024 },
+    }),
+  )
+  previewImport(@UploadedFile() file: ExcelUpload) {
+    const upload = assertExcelUpload(file);
+    return this.users.previewPilgrimImport(upload.buffer);
+  }
+
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 64 * 1024 * 1024 },
+    }),
+  )
+  importPilgrims(@UploadedFile() file: ExcelUpload) {
+    const upload = assertExcelUpload(file);
+    return this.users.importPilgrimsFromExcel(upload.buffer);
   }
 
   @Get(':id')

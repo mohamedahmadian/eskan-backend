@@ -8,6 +8,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFoodSupplierDto } from './dto/create-food-supplier.dto';
@@ -28,10 +29,11 @@ export class FoodSuppliersService {
   async findAll(query: FindFoodSuppliersQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.foodSupplier.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take,
         include: foodSupplierInclude,
@@ -39,6 +41,22 @@ export class FoodSuppliersService {
       this.prisma.foodSupplier.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindFoodSuppliersQueryDto,
+  ): Prisma.FoodSupplierOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.FoodSupplierOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        phone: (dir) => ({ phone: dir }),
+        province: (dir) => ({ province: { nameFa: dir } }),
+        city: (dir) => ({ city: { nameFa: dir } }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

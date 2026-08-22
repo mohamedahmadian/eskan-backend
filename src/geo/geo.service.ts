@@ -9,6 +9,7 @@ import {
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCityDto } from './dto/create-city.dto';
@@ -151,10 +152,11 @@ export class GeoService {
           ]
         : undefined,
     };
+    const orderBy = this.countryOrderBy(query);
     if (!wantsPagination(query)) {
       return this.prisma.country.findMany({
         where,
-        orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+        orderBy,
         select: countrySelect,
       });
     }
@@ -162,7 +164,7 @@ export class GeoService {
     const [items, total] = await Promise.all([
       this.prisma.country.findMany({
         where,
-        orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+        orderBy,
         skip,
         take,
         select: countrySelect,
@@ -170,6 +172,23 @@ export class GeoService {
       this.prisma.country.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  private countryOrderBy(
+    query: FindGeoQueryDto,
+  ): Prisma.CountryOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.CountryOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        nameFa: (dir) => ({ nameFa: dir }),
+        iso2: (dir) => ({ iso2: dir }),
+        phoneCode: (dir) => ({ phoneCode: dir }),
+        isActive: (dir) => ({ isActive: dir }),
+        provinceCount: (dir) => ({ provinces: { _count: dir } }),
+      },
+      [{ sortOrder: 'asc' }, { nameFa: 'asc' }, { id: 'asc' }],
+    );
   }
 
   async findCountry(id: string) {
@@ -232,11 +251,12 @@ export class GeoService {
           ]
         : undefined,
     };
+    const orderBy = this.provinceOrderBy(query);
     if (!wantsPagination(query)) {
       return withCoordsList(
         await this.prisma.province.findMany({
           where,
-          orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+          orderBy,
           select: provinceSelect,
         }),
       );
@@ -245,7 +265,7 @@ export class GeoService {
     const [items, total] = await Promise.all([
       this.prisma.province.findMany({
         where,
-        orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+        orderBy,
         skip,
         take,
         select: provinceSelect,
@@ -253,6 +273,25 @@ export class GeoService {
       this.prisma.province.count({ where }),
     ]);
     return paginatedResult(withCoordsList(items), total, page, pageSize);
+  }
+
+  private provinceOrderBy(
+    query: FindGeoQueryDto,
+  ): Prisma.ProvinceOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.ProvinceOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        nameFa: (dir) => ({ nameFa: dir }),
+        code: (dir) => ({ code: dir }),
+        hasRailway: (dir) => ({ hasRailway: dir }),
+        hasAirport: (dir) => ({ hasAirport: dir }),
+        isActive: (dir) => ({ isActive: dir }),
+        country: (dir) => ({ country: { nameFa: dir } }),
+        cityCount: (dir) => ({ cities: { _count: dir } }),
+      },
+      [{ sortOrder: 'asc' }, { nameFa: 'asc' }, { id: 'asc' }],
+    );
   }
 
   async findProvince(id: string) {
@@ -324,11 +363,12 @@ export class GeoService {
           ]
         : undefined,
     };
+    const orderBy = this.cityOrderBy(query);
     if (!wantsPagination(query)) {
       return withCoordsList(
         await this.prisma.city.findMany({
           where,
-          orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+          orderBy,
           select: citySelect,
         }),
       );
@@ -337,7 +377,7 @@ export class GeoService {
     const [items, total] = await Promise.all([
       this.prisma.city.findMany({
         where,
-        orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }],
+        orderBy,
         skip,
         take,
         select: citySelect,
@@ -345,6 +385,26 @@ export class GeoService {
       this.prisma.city.count({ where }),
     ]);
     return paginatedResult(withCoordsList(items), total, page, pageSize);
+  }
+
+  private cityOrderBy(
+    query: FindGeoQueryDto,
+  ): Prisma.CityOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.CityOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        nameFa: (dir) => ({ nameFa: dir }),
+        code: (dir) => ({ code: dir }),
+        isProvinceCapital: (dir) => ({ isProvinceCapital: dir }),
+        hasRailway: (dir) => ({ hasRailway: dir }),
+        hasAirport: (dir) => ({ hasAirport: dir }),
+        isActive: (dir) => ({ isActive: dir }),
+        province: (dir) => ({ province: { nameFa: dir } }),
+        country: (dir) => ({ province: { country: { nameFa: dir } } }),
+      },
+      [{ sortOrder: 'asc' }, { nameFa: 'asc' }, { id: 'asc' }],
+    );
   }
 
   async findCity(id: string) {

@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsOptional, IsString, IsUUID } from 'class-validator';
 import { emptyToUndefined } from '../../common/dto-transform';
 import { normalizeNationalId } from '../../common/national-id';
+import { normalizePhone } from '../../common/phone';
 
 export class CheckIdentityDto {
   @IsOptional()
@@ -13,7 +14,10 @@ export class CheckIdentityDto {
   nationalId?: string;
 
   @IsOptional()
-  @Transform(({ value }) => emptyToUndefined(value))
+  @Transform(({ value }) => {
+    const trimmed = emptyToUndefined(value);
+    return trimmed ? normalizePhone(trimmed) : undefined;
+  })
   @IsString()
   phone?: string;
 

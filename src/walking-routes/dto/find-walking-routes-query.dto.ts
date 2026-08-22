@@ -1,14 +1,17 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { emptyToUndefined } from '../../common/dto-transform';
 import { PaginationQueryDto } from '../../common/pagination';
+import { sortDirections } from '../../common/sort-query';
 
-function emptyToUndefined(value: unknown) {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : undefined;
-}
+export const walkingRouteSortFields = [
+  'name',
+  'distanceToMashhadKm',
+  'entryBorder',
+  'stageCount',
+] as const;
+
+export type WalkingRouteSortField = (typeof walkingRouteSortFields)[number];
 
 export class FindWalkingRoutesQueryDto extends PaginationQueryDto {
   @IsOptional()
@@ -25,4 +28,14 @@ export class FindWalkingRoutesQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
   cityId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...walkingRouteSortFields])
+  sortBy?: WalkingRouteSortField;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...sortDirections])
+  sortDir?: (typeof sortDirections)[number];
 }

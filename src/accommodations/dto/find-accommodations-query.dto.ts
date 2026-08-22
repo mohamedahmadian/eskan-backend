@@ -1,10 +1,34 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
+import { sortDirections } from '../../common/sort-query';
 import { emptyToUndefined, toOptionalBoolean } from '../../common/dto-transform';
-import { GenderType, ManagementType } from '../../generated/prisma/client';
+import { AccommodationType, GenderType, ManagementType } from '../../generated/prisma/client';
+
+export const accommodationSortFields = [
+  'name',
+  'type',
+  'managementType',
+  'genderType',
+] as const;
+
+export type AccommodationSortField = (typeof accommodationSortFields)[number];
 
 export class FindAccommodationsQueryDto extends PaginationQueryDto {
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsEnum(AccommodationType)
+  type?: AccommodationType;
+
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
   @IsEnum(GenderType)
@@ -40,4 +64,14 @@ export class FindAccommodationsQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => toOptionalBoolean(value))
   @IsBoolean()
   hasManagerThisYear?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...accommodationSortFields])
+  sortBy?: AccommodationSortField;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...sortDirections])
+  sortDir?: (typeof sortDirections)[number];
 }

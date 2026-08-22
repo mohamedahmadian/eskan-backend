@@ -193,6 +193,14 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: "pilgrims.report",
+      moduleId: pilgrims.id,
+      nameKey: "menus.pilgrimsReport",
+      path: "/pilgrim-report",
+      icon: "chart-column",
+      sortOrder: 2,
+    },
+    {
       code: "caravans.list",
       moduleId: caravans.id,
       nameKey: "menus.caravansList",
@@ -337,12 +345,20 @@ async function main() {
       sortOrder: 2,
     },
     {
+      code: "accommodation.year-management",
+      moduleId: accommodation.id,
+      nameKey: "menus.accommodationYearManagement",
+      path: "/accommodation-year-management",
+      icon: "calendar-range",
+      sortOrder: 3,
+    },
+    {
       code: "accommodation.report",
       moduleId: accommodation.id,
       nameKey: "menus.accommodationReport",
       path: "/accommodation-report",
       icon: "chart-column",
-      sortOrder: 3,
+      sortOrder: 4,
     },
     {
       code: "logistics.suppliers",

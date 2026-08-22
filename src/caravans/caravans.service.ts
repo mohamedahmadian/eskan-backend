@@ -9,12 +9,13 @@ import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
-  type PaginationQueryDto,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
+import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
 import { UpdateCaravanDto } from './dto/update-caravan.dto';
 
 const caravanInclude = {
@@ -82,14 +83,15 @@ export class CaravansService {
     private readonly users: UsersService,
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
+  async findAll(query: FindCaravansQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.caravan.findMany({
         where,
         include: caravanInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take,
       }),
@@ -98,24 +100,41 @@ export class CaravansService {
     return paginatedResult(items, total, page, pageSize);
   }
 
-  async findMine(query: PaginationQueryDto, managerUserId: string) {
+  async findMine(query: FindCaravansQueryDto, managerUserId: string) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const searchWhere = this.listWhere(query);
     const where: Prisma.CaravanWhereInput = {
       managerUserId,
       ...(searchWhere ? searchWhere : {}),
     };
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.caravan.findMany({
         where,
         include: caravanInclude,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take,
       }),
       this.prisma.caravan.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindCaravansQueryDto,
+  ): Prisma.CaravanOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.CaravanOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        isActive: (dir) => ({ isActive: dir }),
+        city: (dir) => ({ city: { nameFa: dir } }),
+        manager: (dir) => ({ manager: { fullName: dir } }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {
@@ -129,7 +148,7 @@ export class CaravansService {
     return caravan;
   }
 
-  private listWhere(query: PaginationQueryDto): Prisma.CaravanWhereInput | undefined {
+  private listWhere(query: FindCaravansQueryDto): Prisma.CaravanWhereInput | undefined {
     if (!query.q) return undefined;
     return {
       OR: [

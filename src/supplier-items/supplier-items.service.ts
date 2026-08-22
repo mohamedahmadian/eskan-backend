@@ -10,6 +10,7 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { parseIsoDate, parseOptionalIsoDate } from '../common/iso-date';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierItemDto } from './dto/create-supplier-item.dto';
@@ -30,10 +31,7 @@ export class SupplierItemsService {
 
   async findAll(query: FindSupplierItemsQueryDto) {
     const where = this.listWhere(query);
-    const orderBy: Prisma.SupplierItemOrderByWithRelationInput[] = [
-      { year: 'desc' },
-      { createdAt: 'desc' },
-    ];
+    const orderBy = this.listOrderBy(query);
     if (!wantsPagination(query)) {
       const items = await this.prisma.supplierItem.findMany({
         where,
@@ -57,6 +55,22 @@ export class SupplierItemsService {
       this.prisma.supplierItem.count({ where }),
     ]);
     return paginatedResult(await this.withRemaining(items), total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindSupplierItemsQueryDto,
+  ): Prisma.SupplierItemOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.SupplierItemOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        unit: (dir) => ({ unit: dir }),
+        quantity: (dir) => ({ quantity: dir }),
+        deliveryDate: (dir) => ({ deliveryDate: dir }),
+      },
+      [{ year: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

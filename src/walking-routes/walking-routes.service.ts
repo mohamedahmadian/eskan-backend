@@ -8,6 +8,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWalkingRouteDto, type WalkingRouteStageDto } from './dto/create-walking-route.dto';
@@ -54,10 +55,11 @@ export class WalkingRoutesService {
   async findAll(query: FindWalkingRoutesQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.walkingRoute.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take,
         include: walkingRouteInclude,
@@ -69,6 +71,22 @@ export class WalkingRoutesService {
       total,
       page,
       pageSize,
+    );
+  }
+
+  private listOrderBy(
+    query: FindWalkingRoutesQueryDto,
+  ): Prisma.WalkingRouteOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.WalkingRouteOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        distanceToMashhadKm: (dir) => ({ distanceToMashhadKm: dir }),
+        entryBorder: (dir) => ({ entryBorderCity: { nameFa: dir } }),
+        stageCount: (dir) => ({ stages: { _count: dir } }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
     );
   }
 

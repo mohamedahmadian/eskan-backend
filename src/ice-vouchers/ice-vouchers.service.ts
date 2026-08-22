@@ -17,6 +17,7 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { IceVoucherPaymentStatus, IceVoucherStatus, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
@@ -145,10 +146,11 @@ export class IceVouchersService {
   async findAll(query: FindIceVouchersQueryDto) {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
+    const orderBy = this.listOrderBy(query);
     const [items, total] = await Promise.all([
       this.prisma.iceVoucher.findMany({
         where,
-        orderBy: [{ requestedAt: 'desc' }, { createdAt: 'desc' }],
+        orderBy,
         skip,
         take,
         include: voucherInclude,
@@ -165,6 +167,26 @@ export class IceVouchersService {
 
   async findMine(query: FindIceVouchersQueryDto, actorId: string) {
     return this.findAll({ ...query, accommodationManagerId: actorId });
+  }
+
+  private listOrderBy(
+    query: FindIceVouchersQueryDto,
+  ): Prisma.IceVoucherOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.IceVoucherOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        code: (dir) => ({ code: dir }),
+        accommodation: (dir) => ({ accommodation: { name: dir } }),
+        manager: (dir) => ({ accommodationManager: { fullName: dir } }),
+        moldCount: (dir) => ({ moldCount: dir }),
+        totalCost: (dir) => ({ totalCost: dir }),
+        requestedAt: (dir) => ({ requestedAt: dir }),
+        status: (dir) => ({ status: dir }),
+        paymentStatus: (dir) => ({ paymentStatus: dir }),
+      },
+      [{ requestedAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async stats(query: FindIceVoucherReportQueryDto, actorId?: string) {

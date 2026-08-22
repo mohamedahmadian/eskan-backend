@@ -9,6 +9,7 @@ import {
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateItemQuotaDto } from './dto/create-item-quota.dto';
@@ -29,10 +30,7 @@ export class ItemQuotasService {
 
   async findAll(query: FindItemQuotasQueryDto) {
     const where = this.listWhere(query);
-    const orderBy: Prisma.ItemQuotaOrderByWithRelationInput[] = [
-      { year: 'desc' },
-      { createdAt: 'desc' },
-    ];
+    const orderBy = this.listOrderBy(query);
     if (!wantsPagination(query)) {
       const items = await this.prisma.itemQuota.findMany({
         where,
@@ -53,6 +51,22 @@ export class ItemQuotasService {
       this.prisma.itemQuota.count({ where }),
     ]);
     return paginatedResult(await this.withRemaining(items), total, page, pageSize);
+  }
+
+  private listOrderBy(
+    query: FindItemQuotasQueryDto,
+  ): Prisma.ItemQuotaOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.ItemQuotaOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        year: (dir) => ({ year: dir }),
+        quantity: (dir) => ({ quantity: dir }),
+        supplier: (dir) => ({ supplier: { name: dir } }),
+      },
+      [{ year: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   async findOne(id: string) {

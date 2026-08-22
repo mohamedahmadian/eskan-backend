@@ -6,16 +6,31 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { isAdmin } from '../auth/roles.util';
+import { buildStyledExcelExport } from '../common/excel-export';
+import { currentJalaliYear, jalaliMonthRange, jalaliYearRange } from '../common/jalali-year';
+import { normalizePhone } from '../common/phone';
 import {
   containsInsensitive,
+  normalizeSearchDigits,
   paginatedResult,
   paginationArgs,
+  startsWithInsensitive,
   wantsPagination,
 } from '../common/pagination';
+import { resolveSortOrder } from '../common/sort-query';
 import { Prisma, Religion, UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import {
+  CITY_ID_NONE,
+  FindUsersQueryDto,
+} from './dto/find-users-query.dto';
+import {
+  parsePilgrimImportExcel,
+  type PilgrimImportIssueRow,
+  type PilgrimImportRow,
+  type ParsedPilgrimImport,
+} from './pilgrim-excel-import.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { cleanPlates, joinFullName } from './user-profile.util';
 
@@ -32,6 +47,15 @@ function toDateOnly(value?: Date | string | null) {
     return value.slice(0, 10);
   }
   return value.toISOString().slice(0, 10);
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (!items.length) return [];
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 const roleSelect = {
@@ -158,11 +182,285 @@ export class UsersService {
     });
   }
 
+  private pilgrimScope(year?: number): Prisma.UserWhereInput {
+    const where: Prisma.UserWhereInput = {
+      userRoles: { some: { role: { code: 'PILGRIM' } } },
+    };
+    if (year != null) {
+      const { gte, lt } = jalaliYearRange(year);
+      where.createdAt = { gte, lt };
+    }
+    return where;
+  }
+
+  async pilgrimReportSummary(year?: number) {
+    const where = this.pilgrimScope(year);
+    const [total, genderRows, statusRows] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.groupBy({
+        by: ['gender'],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.user.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    let male = 0;
+    let female = 0;
+    let unspecified = 0;
+    for (const row of genderRows) {
+      if (row.gender === UserGender.MALE) male = row._count._all;
+      else if (row.gender === UserGender.FEMALE) female = row._count._all;
+      else unspecified += row._count._all;
+    }
+
+    let active = 0;
+    let inactive = 0;
+    for (const row of statusRows) {
+      if (row.status === UserStatus.ACTIVE) active = row._count._all;
+      else inactive += row._count._all;
+    }
+
+    return {
+      year: year ?? null,
+      total,
+      byGender: { male, female, unspecified },
+      byStatus: { active, inactive },
+    };
+  }
+
+  async pilgrimReportGeo(year?: number) {
+    const where = this.pilgrimScope(year);
+    const unspecifiedId = '__unspecified__';
+    const [
+      countryRows,
+      provinceRows,
+      cityRows,
+      unspecifiedCountry,
+      unspecifiedProvince,
+      unspecifiedCity,
+    ] = await Promise.all([
+      this.prisma.user.groupBy({
+        by: ['countryId'],
+        where: { ...where, countryId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.groupBy({
+        by: ['provinceId'],
+        where: { ...where, provinceId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.groupBy({
+        by: ['cityId'],
+        where: { ...where, cityId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.count({ where: { ...where, countryId: null } }),
+      this.prisma.user.count({ where: { ...where, provinceId: null } }),
+      this.prisma.user.count({ where: { ...where, cityId: null } }),
+    ]);
+
+    const countryIds = countryRows.map((row) => row.countryId!).filter(Boolean);
+    const provinceIds = provinceRows.map((row) => row.provinceId!).filter(Boolean);
+    const cityIds = cityRows.map((row) => row.cityId!).filter(Boolean);
+
+    const [countries, provinces, cities] = await Promise.all([
+      countryIds.length
+        ? this.prisma.country.findMany({
+            where: { id: { in: countryIds } },
+            select: { id: true, nameFa: true },
+          })
+        : Promise.resolve([]),
+      provinceIds.length
+        ? this.prisma.province.findMany({
+            where: { id: { in: provinceIds } },
+            select: { id: true, nameFa: true },
+          })
+        : Promise.resolve([]),
+      cityIds.length
+        ? this.prisma.city.findMany({
+            where: { id: { in: cityIds } },
+            select: { id: true, nameFa: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const countryName = new Map(countries.map((item) => [item.id, item.nameFa]));
+    const provinceName = new Map(provinces.map((item) => [item.id, item.nameFa]));
+    const cityName = new Map(cities.map((item) => [item.id, item.nameFa]));
+
+    const sortByCountDesc = <T extends { count: number }>(items: T[]) =>
+      [...items].sort((a, b) => b.count - a.count);
+
+    const withUnspecified = (
+      rows: { id: string; name: string; count: number }[],
+      nullCount: number,
+      orphanCount: number,
+    ) => {
+      const unspecifiedCount = nullCount + orphanCount;
+      if (unspecifiedCount <= 0) return sortByCountDesc(rows);
+      return sortByCountDesc([
+        ...rows,
+        { id: unspecifiedId, name: unspecifiedId, count: unspecifiedCount },
+      ]);
+    };
+
+    let orphanCountry = 0;
+    const byCountry = countryRows.flatMap((row) => {
+      if (row.countryId && countryName.has(row.countryId)) {
+        return [
+          {
+            id: row.countryId,
+            name: countryName.get(row.countryId)!,
+            count: row._count._all,
+          },
+        ];
+      }
+      orphanCountry += row._count._all;
+      return [];
+    });
+
+    let orphanProvince = 0;
+    const byProvince = provinceRows.flatMap((row) => {
+      if (row.provinceId && provinceName.has(row.provinceId)) {
+        return [
+          {
+            id: row.provinceId,
+            name: provinceName.get(row.provinceId)!,
+            count: row._count._all,
+          },
+        ];
+      }
+      orphanProvince += row._count._all;
+      return [];
+    });
+
+    let orphanCity = 0;
+    const byCity = cityRows.flatMap((row) => {
+      if (row.cityId && cityName.has(row.cityId)) {
+        return [
+          {
+            id: row.cityId,
+            name: cityName.get(row.cityId)!,
+            count: row._count._all,
+          },
+        ];
+      }
+      orphanCity += row._count._all;
+      return [];
+    });
+
+    return {
+      year: year ?? null,
+      byCountry: withUnspecified(byCountry, unspecifiedCountry, orphanCountry),
+      byProvince: withUnspecified(byProvince, unspecifiedProvince, orphanProvince),
+      byCity: withUnspecified(byCity, unspecifiedCity, orphanCity),
+    };
+  }
+
+  async pilgrimReportReligion(year?: number) {
+    const where = this.pilgrimScope(year);
+    const religionRows = await this.prisma.user.groupBy({
+      by: ['religion'],
+      where: { ...where, religion: { not: null } },
+      _count: { _all: true },
+    });
+
+    return {
+      year: year ?? null,
+      byReligion: religionRows
+        .filter((row) => row.religion != null)
+        .map((row) => ({
+          religion: row.religion as Religion,
+          count: row._count._all,
+        }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }
+
+  async pilgrimReportTimeline(year?: number) {
+    const pilgrimRole: Prisma.UserWhereInput = {
+      userRoles: { some: { role: { code: 'PILGRIM' } } },
+    };
+
+    if (year != null) {
+      const byMonth = await Promise.all(
+        Array.from({ length: 12 }, async (_, index) => {
+          const month = index + 1;
+          const { gte, lt } = jalaliMonthRange(year, month);
+          const count = await this.prisma.user.count({
+            where: { ...pilgrimRole, createdAt: { gte, lt } },
+          });
+          return { month, count };
+        }),
+      );
+      return {
+        year,
+        byYear: [] as { year: number; count: number }[],
+        byMonth: byMonth.filter((row) => row.count > 0),
+      };
+    }
+
+    const bounds = await this.prisma.user.aggregate({
+      where: pilgrimRole,
+      _min: { createdAt: true },
+      _max: { createdAt: true },
+    });
+
+    if (!bounds._min.createdAt || !bounds._max.createdAt) {
+      return {
+        year: null,
+        byYear: [] as { year: number; count: number }[],
+        byMonth: [] as { month: number; count: number }[],
+      };
+    }
+
+    const fromYear = currentJalaliYear(bounds._min.createdAt);
+    const toYear = currentJalaliYear(bounds._max.createdAt);
+    const byYear = await Promise.all(
+      Array.from({ length: Math.max(0, toYear - fromYear + 1) }, async (_, index) => {
+        const jalaliYear = fromYear + index;
+        const { gte, lt } = jalaliYearRange(jalaliYear);
+        const count = await this.prisma.user.count({
+          where: { ...pilgrimRole, createdAt: { gte, lt } },
+        });
+        return { year: jalaliYear, count };
+      }),
+    );
+
+    return {
+      year: null,
+      byYear: byYear.filter((row) => row.count > 0),
+      byMonth: [] as { month: number; count: number }[],
+    };
+  }
+
+  async pilgrimReport(year?: number) {
+    const [summary, geo, religion, timeline] = await Promise.all([
+      this.pilgrimReportSummary(year),
+      this.pilgrimReportGeo(year),
+      this.pilgrimReportReligion(year),
+      this.pilgrimReportTimeline(year),
+    ]);
+
+    return {
+      ...summary,
+      ...geo,
+      ...religion,
+      byYear: timeline.byYear,
+      byMonth: timeline.byMonth,
+    };
+  }
+
   async findAll(query: FindUsersQueryDto) {
     const where = this.listWhere(query);
     const findMany = {
       where,
-      orderBy: { createdAt: 'desc' as const },
+      orderBy: this.listOrderBy(query),
       include: publicInclude,
     };
 
@@ -182,6 +480,37 @@ export class UsersService {
       total,
       page,
       pageSize,
+    );
+  }
+
+  async exportExcel(query: FindUsersQueryDto) {
+    const where = this.listWhere(query);
+    const items = await this.prisma.user.findMany({
+      where,
+      orderBy: this.listOrderBy(query),
+      include: publicInclude,
+    });
+    return this.buildUsersExcel(items.map((item) => this.toPublicUser(item)));
+  }
+
+  private listOrderBy(
+    query: FindUsersQueryDto,
+  ): Prisma.UserOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.UserOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        fullName: (dir) => ({ fullName: dir }),
+        username: (dir) => ({ username: dir }),
+        phone: (dir) => ({ phone: dir }),
+        status: (dir) => ({ status: dir }),
+        nationalId: (dir) => ({ nationalId: dir }),
+        city: (dir) => ({ city: { nameFa: dir } }),
+        accommodationCount: (dir) => ({
+          managedAccommodations: { _count: dir },
+        }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
     );
   }
 
@@ -504,6 +833,88 @@ export class UsersService {
     return role;
   }
 
+  /**
+   * Fast path for nationalId/phone (unique btree / prefix), otherwise
+   * trigram-friendly contains on name + identity fields. Headquarters
+   * lists keep geo relation search; other role lists skip social/role OR.
+   */
+  private searchWhere(
+    q: string,
+    headquartersOnly: boolean,
+  ): Prisma.UserWhereInput {
+    const digits = normalizeSearchDigits(q);
+    const mostlyDigits =
+      digits.length >= 7 && digits.length / Math.max(q.replace(/\s/g, '').length, 1) >= 0.8;
+
+    if (mostlyDigits) {
+      return {
+        OR: [
+          { nationalId: digits },
+          { phone: digits },
+          { nationalId: startsWithInsensitive(digits) },
+          { phone: startsWithInsensitive(digits) },
+          { username: startsWithInsensitive(digits) },
+        ],
+      };
+    }
+
+    const text = containsInsensitive(q);
+    const core: Prisma.UserWhereInput[] = [
+      { username: text },
+      { firstName: text },
+      { lastName: text },
+      { fullName: text },
+      { nationalId: text },
+      { phone: text },
+      { email: text },
+      { notes: text },
+    ];
+
+    if (!headquartersOnly) {
+      return { OR: core };
+    }
+
+    const geoName = {
+      OR: [{ nameFa: text }, { nameEn: text }],
+    };
+    return {
+      OR: [
+        ...core,
+        { address: text },
+        { telegram: text },
+        { bale: text },
+        { eitaa: text },
+        { whatsapp: text },
+        { otherSocial: text },
+        {
+          userRoles: {
+            some: {
+              role: {
+                OR: [{ nameKey: text }, { code: text }],
+              },
+            },
+          },
+        },
+        { representedProvinces: { some: geoName } },
+        {
+          representedCities: {
+            some: {
+              ...geoName,
+              province: { representativeId: { not: null } },
+            },
+          },
+        },
+        {
+          representedProvinces: {
+            some: {
+              cities: { some: { representativeId: null, ...geoName } },
+            },
+          },
+        },
+      ],
+    };
+  }
+
   private listWhere(query: FindUsersQueryDto): Prisma.UserWhereInput {
     const filters: Prisma.UserWhereInput[] = [];
     const roleCodes = query.roleCodes?.length
@@ -516,86 +927,63 @@ export class UsersService {
         userRoles: { some: { role: { code: { in: roleCodes } } } },
       });
     }
-    if (query.provinceId) {
-      filters.push({
-        OR: [
-          { representedProvinces: { some: { id: query.provinceId } } },
-          { representedCities: { some: { provinceId: query.provinceId } } },
-        ],
-      });
-    }
-    if (query.cityId) {
-      filters.push({
-        OR: [
-          {
-            representedCities: {
-              some: {
-                id: query.cityId,
-                province: { representativeId: { not: null } },
-              },
-            },
-          },
-          {
-            representedProvinces: {
-              some: {
-                cities: { some: { id: query.cityId, representativeId: null } },
-              },
-            },
-          },
-        ],
-      });
-    }
-    if (query.q) {
-      const nameMatch = containsInsensitive(query.q);
-      const geoName = {
-        OR: [{ nameFa: nameMatch }, { nameEn: nameMatch }],
-      };
-      filters.push({
-        OR: [
-          { username: containsInsensitive(query.q) },
-          { firstName: containsInsensitive(query.q) },
-          { lastName: containsInsensitive(query.q) },
-          { fullName: containsInsensitive(query.q) },
-          { nationalId: containsInsensitive(query.q) },
-          { phone: containsInsensitive(query.q) },
-          { email: containsInsensitive(query.q) },
-          { address: containsInsensitive(query.q) },
-          { notes: containsInsensitive(query.q) },
-          { telegram: containsInsensitive(query.q) },
-          { bale: containsInsensitive(query.q) },
-          { eitaa: containsInsensitive(query.q) },
-          { whatsapp: containsInsensitive(query.q) },
-          { otherSocial: containsInsensitive(query.q) },
-          {
-            userRoles: {
-              some: {
-                role: {
-                  OR: [
-                    { nameKey: containsInsensitive(query.q) },
-                    { code: containsInsensitive(query.q) },
-                  ],
+
+    const headquartersOnly =
+      roleCodes.length === 1 && roleCodes[0] === 'HEADQUARTERS_REPRESENTATIVE';
+
+    if (headquartersOnly) {
+      if (query.provinceId) {
+        filters.push({
+          OR: [
+            { representedProvinces: { some: { id: query.provinceId } } },
+            { representedCities: { some: { provinceId: query.provinceId } } },
+          ],
+        });
+      }
+      if (query.cityId && query.cityId !== CITY_ID_NONE) {
+        filters.push({
+          OR: [
+            {
+              representedCities: {
+                some: {
+                  id: query.cityId,
+                  province: { representativeId: { not: null } },
                 },
               },
             },
-          },
-          { representedProvinces: { some: geoName } },
-          {
-            representedCities: {
-              some: {
-                ...geoName,
-                province: { representativeId: { not: null } },
+            {
+              representedProvinces: {
+                some: {
+                  cities: { some: { id: query.cityId, representativeId: null } },
+                },
               },
             },
-          },
-          {
-            representedProvinces: {
-              some: {
-                cities: { some: { representativeId: null, ...geoName } },
-              },
-            },
-          },
-        ],
-      });
+          ],
+        });
+      }
+    } else {
+      if (query.countryId) {
+        filters.push({ countryId: query.countryId });
+      }
+      if (query.provinceId) {
+        filters.push({ provinceId: query.provinceId });
+      }
+      if (query.cityId === CITY_ID_NONE) {
+        filters.push({ cityId: null });
+      } else if (query.cityId) {
+        filters.push({ cityId: query.cityId });
+      }
+    }
+
+    if (query.gender) {
+      filters.push({ gender: query.gender });
+    }
+    if (query.notes) {
+      filters.push({ notes: containsInsensitive(query.notes) });
+    }
+
+    if (query.q) {
+      filters.push(this.searchWhere(query.q.trim(), headquartersOnly));
     }
     if (!filters.length) {
       return {};
@@ -751,11 +1139,23 @@ export class UsersService {
       }
       return { cityId: null, provinceId: null, countryId: country.id };
     }
+    const iranId = await this.resolveIranCountryId();
     return {
-      cityId: dto.cityId ?? null,
-      provinceId: dto.provinceId ?? null,
-      countryId: dto.countryId ?? null,
+      cityId: null,
+      provinceId: null,
+      countryId: iranId,
     };
+  }
+
+  private async resolveIranCountryId() {
+    const iran = await this.prisma.country.findUnique({
+      where: { iso2: 'IR' },
+      select: { id: true },
+    });
+    if (!iran) {
+      throw new BadRequestException('کشور ایران در سامانه یافت نشد');
+    }
+    return iran.id;
   }
 
   private async assertImages(dto: CreateUserDto | UpdateUserDto) {
@@ -825,18 +1225,32 @@ export class UsersService {
       throw new BadRequestException('کد ملی یا شماره تلفن لازم است');
     }
 
-    const existing = await this.prisma.user.findFirst({
-      where: {
-        ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
-        OR: [
-          ...(nationalId ? [{ nationalId }] : []),
-          ...(phone ? [{ phone }] : []),
-        ],
-      },
-      select: { id: true },
-    });
+    const [nationalIdHit, phoneHit] = await Promise.all([
+      nationalId
+        ? this.prisma.user.findFirst({
+            where: {
+              nationalId,
+              ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      phone
+        ? this.prisma.user.findFirst({
+            where: {
+              phone,
+              ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
-    return { taken: Boolean(existing) };
+    return {
+      taken: Boolean(nationalIdHit || phoneHit),
+      nationalIdTaken: Boolean(nationalIdHit),
+      phoneTaken: Boolean(phoneHit),
+    };
   }
 
   async findByIdentity(dto: {
@@ -871,6 +1285,438 @@ export class UsersService {
     };
   }
 
+  async previewPilgrimImport(buffer: Buffer) {
+    const parsed = await this.preparePilgrimImport(buffer);
+    return {
+      total: parsed.rows.length,
+      invalid: parsed.invalid,
+      invalidRows: parsed.invalidRows,
+      adjusted: parsed.adjusted,
+      adjustedRows: parsed.adjustedRows,
+    };
+  }
+
+  async importPilgrimsFromExcel(buffer: Buffer) {
+    const { rows, invalid, invalidRows, adjusted, adjustedRows } =
+      await this.preparePilgrimImport(buffer);
+
+    if (!rows.length) {
+      return {
+        total: 0,
+        created: 0,
+        updated: 0,
+        invalid,
+        invalidRows,
+        adjusted,
+        adjustedRows,
+      };
+    }
+
+    const role = await this.ensureExistingRole('PILGRIM');
+    const iranCountryId = await this.resolveIranCountryId();
+    const passwordHash = await bcrypt.hash('11111111', 8);
+
+    const cityIds = [
+      ...new Set(
+        rows
+          .map((row) => row.cityId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const cityGeo = await this.loadCityGeoMap(cityIds);
+
+    const phones = [...new Set(rows.map((row) => row.phone))];
+    const nationalIds = [
+      ...new Set(
+        rows
+          .map((row) => row.nationalId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const existingByPhone = new Map<string, { id: string; phone: string | null; nationalId: string | null }>();
+    const existingByNationalId = new Map<
+      string,
+      { id: string; phone: string | null; nationalId: string | null }
+    >();
+
+    for (const phoneChunk of chunkArray(phones, 2000)) {
+      const found = await this.prisma.user.findMany({
+        where: { phone: { in: phoneChunk } },
+        select: { id: true, phone: true, nationalId: true },
+      });
+      for (const user of found) {
+        if (user.phone) existingByPhone.set(user.phone, user);
+        if (user.nationalId) existingByNationalId.set(user.nationalId, user);
+      }
+    }
+    for (const nationalChunk of chunkArray(nationalIds, 2000)) {
+      const found = await this.prisma.user.findMany({
+        where: { nationalId: { in: nationalChunk } },
+        select: { id: true, phone: true, nationalId: true },
+      });
+      for (const user of found) {
+        if (user.phone) existingByPhone.set(user.phone, user);
+        if (user.nationalId) existingByNationalId.set(user.nationalId, user);
+      }
+    }
+
+    type UpdateItem = {
+      id: string;
+      row: PilgrimImportRow;
+    };
+
+    const toUpdate: UpdateItem[] = [];
+    const toCreate: PilgrimImportRow[] = [];
+    const conflictRows: PilgrimImportIssueRow[] = [];
+    const seenPhones = new Set<string>();
+    const seenNationalIds = new Set<string>();
+
+    for (const row of rows) {
+      if (seenPhones.has(row.phone)) continue;
+      if (row.nationalId && seenNationalIds.has(row.nationalId)) continue;
+      seenPhones.add(row.phone);
+      if (row.nationalId) seenNationalIds.add(row.nationalId);
+
+      const byNational =
+        row.nationalId && existingByNationalId.get(row.nationalId);
+      const byPhone = existingByPhone.get(row.phone);
+
+      if (byNational) {
+        const phoneOwner = existingByPhone.get(row.phone);
+        if (phoneOwner && phoneOwner.id !== byNational.id) {
+          conflictRows.push({
+            rowNumber: row.rowNumber,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            gender: row.gender,
+            phone: row.phone,
+            nationalId: row.nationalId ?? '',
+            birthDate: row.birthDate ?? '',
+            city: row.cityName ?? '',
+            reasons: ['phoneTaken'],
+          });
+          continue;
+        }
+        toUpdate.push({ id: byNational.id, row });
+        continue;
+      }
+      if (byPhone) {
+        if (
+          row.nationalId &&
+          byPhone.nationalId &&
+          row.nationalId !== byPhone.nationalId
+        ) {
+          conflictRows.push({
+            rowNumber: row.rowNumber,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            gender: row.gender,
+            phone: row.phone,
+            nationalId: row.nationalId,
+            birthDate: row.birthDate ?? '',
+            city: row.cityName ?? '',
+            reasons: ['phoneTaken'],
+          });
+          continue;
+        }
+        toUpdate.push({ id: byPhone.id, row });
+        continue;
+      }
+      toCreate.push(row);
+    }
+
+    const created = await this.batchCreatePilgrimsFromImport(
+      toCreate,
+      role.id,
+      passwordHash,
+      cityGeo,
+      iranCountryId,
+    );
+    const updated = await this.batchUpdatePilgrimsFromImport(
+      toUpdate,
+      role.id,
+      cityGeo,
+    );
+
+    const allInvalidRows = [...invalidRows, ...conflictRows].sort(
+      (a, b) => a.rowNumber - b.rowNumber,
+    );
+
+    return {
+      total: rows.length,
+      created,
+      updated,
+      invalid: allInvalidRows.length,
+      invalidRows: allInvalidRows,
+      adjusted,
+      adjustedRows,
+    };
+  }
+
+  private async loadCityGeoMap(cityIds: string[]) {
+    const map = new Map<string, { provinceId: string; countryId: string }>();
+    for (const chunk of chunkArray(cityIds, 2000)) {
+      if (!chunk.length) continue;
+      const cities = await this.prisma.city.findMany({
+        where: { id: { in: chunk } },
+        select: {
+          id: true,
+          provinceId: true,
+          province: { select: { countryId: true } },
+        },
+      });
+      for (const city of cities) {
+        map.set(city.id, {
+          provinceId: city.provinceId,
+          countryId: city.province.countryId,
+        });
+      }
+    }
+    return map;
+  }
+
+  private async batchCreatePilgrimsFromImport(
+    rows: PilgrimImportRow[],
+    roleId: string,
+    passwordHash: string,
+    cityGeo: Map<string, { provinceId: string; countryId: string }>,
+    iranCountryId: string,
+  ) {
+    if (!rows.length) return 0;
+
+    const desiredUsernames = rows.map((row) => row.nationalId || row.phone);
+    const takenUsernames = new Set<string>();
+    for (const chunk of chunkArray(desiredUsernames, 2000)) {
+      const found = await this.prisma.user.findMany({
+        where: { username: { in: chunk } },
+        select: { username: true },
+      });
+      for (const item of found) takenUsernames.add(item.username);
+    }
+
+    const batchStamp = Date.now().toString(36);
+    const createData: Prisma.UserCreateManyInput[] = [];
+    const phonesInOrder: string[] = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      const identity = row.nationalId || row.phone;
+      let username = identity;
+      if (takenUsernames.has(username)) {
+        username = `${identity}_${batchStamp}_${index.toString(36)}`;
+      }
+      takenUsernames.add(username);
+
+      const geo = row.cityId ? cityGeo.get(row.cityId) : undefined;
+      createData.push({
+        username,
+        passwordHash,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        fullName: joinFullName(row.firstName, row.lastName),
+        locale: 'fa',
+        status: UserStatus.ACTIVE,
+        gender: row.gender,
+        nationalId: row.nationalId,
+        phone: row.phone,
+        birthDate: parseDateOnly(row.birthDate),
+        cityId: row.cityId ?? null,
+        provinceId: geo?.provinceId ?? null,
+        countryId: geo?.countryId ?? iranCountryId,
+      });
+      phonesInOrder.push(row.phone);
+    }
+
+    let created = 0;
+    for (const chunk of chunkArray(createData, 1000)) {
+      const result = await this.prisma.user.createMany({ data: chunk });
+      created += result.count;
+    }
+
+    const createdIds: string[] = [];
+    for (const phoneChunk of chunkArray(phonesInOrder, 2000)) {
+      const users = await this.prisma.user.findMany({
+        where: { phone: { in: phoneChunk } },
+        select: { id: true },
+      });
+      for (const user of users) createdIds.push(user.id);
+    }
+
+    for (const idChunk of chunkArray(createdIds, 2000)) {
+      if (!idChunk.length) continue;
+      await this.prisma.userRole.createMany({
+        data: idChunk.map((userId) => ({ userId, roleId })),
+        skipDuplicates: true,
+      });
+    }
+
+    return created;
+  }
+
+  private async batchUpdatePilgrimsFromImport(
+    items: Array<{ id: string; row: PilgrimImportRow }>,
+    roleId: string,
+    cityGeo: Map<string, { provinceId: string; countryId: string }>,
+  ) {
+    if (!items.length) return 0;
+
+    for (const chunk of chunkArray(items, 200)) {
+      await this.prisma.$transaction(
+        chunk.map((item) => {
+          const geo = item.row.cityId
+            ? cityGeo.get(item.row.cityId)
+            : undefined;
+          return this.prisma.user.update({
+            where: { id: item.id },
+            data: {
+              firstName: item.row.firstName,
+              lastName: item.row.lastName,
+              fullName: joinFullName(item.row.firstName, item.row.lastName),
+              gender: item.row.gender,
+              phone: item.row.phone,
+              ...(item.row.nationalId
+                ? { nationalId: item.row.nationalId }
+                : {}),
+              ...(item.row.birthDate
+                ? { birthDate: parseDateOnly(item.row.birthDate) }
+                : {}),
+              ...(item.row.cityId
+                ? {
+                    cityId: item.row.cityId,
+                    provinceId: geo?.provinceId ?? null,
+                    countryId: geo?.countryId ?? null,
+                  }
+                : {}),
+            },
+          });
+        }),
+        { timeout: 180_000 },
+      );
+    }
+
+    for (const idChunk of chunkArray(
+      items.map((item) => item.id),
+      2000,
+    )) {
+      await this.prisma.userRole.createMany({
+        data: idChunk.map((userId) => ({ userId, roleId })),
+        skipDuplicates: true,
+      });
+    }
+
+    return items.length;
+  }
+
+  private normalizeCityKey(value: string) {
+    return value
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .toLowerCase();
+  }
+
+  private async preparePilgrimImport(buffer: Buffer): Promise<ParsedPilgrimImport> {
+    const parsed = await parsePilgrimImportExcel(buffer);
+    if (!parsed.rows.length && parsed.invalid === 0) {
+      throw new BadRequestException('فایل اکسل خالی است یا قالب آن صحیح نیست');
+    }
+    return this.resolvePilgrimImportCities(parsed);
+  }
+
+  private async resolvePilgrimImportCities(
+    parsed: ParsedPilgrimImport,
+  ): Promise<ParsedPilgrimImport> {
+    const names = [
+      ...new Set(
+        parsed.rows
+          .map((row) => row.cityName?.trim())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ];
+
+    const cityIdByKey = new Map<string, string>();
+    if (names.length) {
+      const cities = await this.prisma.city.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          nameFa: true,
+          nameEn: true,
+          isProvinceCapital: true,
+          sortOrder: true,
+        },
+        orderBy: [{ isProvinceCapital: 'desc' }, { sortOrder: 'asc' }],
+      });
+
+      for (const city of cities) {
+        const faKey = this.normalizeCityKey(city.nameFa);
+        const enKey = this.normalizeCityKey(city.nameEn);
+        if (faKey && !cityIdByKey.has(faKey)) {
+          cityIdByKey.set(faKey, city.id);
+        }
+        if (enKey && !cityIdByKey.has(enKey)) {
+          cityIdByKey.set(enKey, city.id);
+        }
+      }
+    }
+
+    const rows: PilgrimImportRow[] = [];
+    const adjustedByRow = new Map<number, PilgrimImportIssueRow>();
+    for (const item of parsed.adjustedRows) {
+      adjustedByRow.set(item.rowNumber, { ...item, reasons: [...item.reasons] });
+    }
+
+    for (const row of parsed.rows) {
+      if (!row.cityName) {
+        rows.push({ ...row, cityId: null });
+        continue;
+      }
+      const cityId = cityIdByKey.get(this.normalizeCityKey(row.cityName));
+      if (!cityId) {
+        const adjustments = [...row.adjustments, 'clearedCity'];
+        rows.push({
+          ...row,
+          cityName: null,
+          cityId: null,
+          adjustments,
+        });
+        const existing = adjustedByRow.get(row.rowNumber);
+        if (existing) {
+          existing.reasons = [...existing.reasons, 'clearedCity'];
+          if (!existing.city) existing.city = row.cityName;
+        } else {
+          adjustedByRow.set(row.rowNumber, {
+            rowNumber: row.rowNumber,
+            firstName: row.firstName,
+            lastName: row.lastName,
+            gender: row.gender,
+            phone: row.phone,
+            nationalId: row.nationalId ?? '',
+            birthDate: row.birthDate ?? '',
+            city: row.cityName,
+            reasons: ['clearedCity'],
+          });
+        }
+        continue;
+      }
+      rows.push({ ...row, cityId });
+    }
+
+    const adjustedRows = [...adjustedByRow.values()].sort(
+      (a, b) => a.rowNumber - b.rowNumber,
+    );
+
+    return {
+      rows,
+      invalid: parsed.invalidRows.length,
+      invalidRows: parsed.invalidRows,
+      adjusted: adjustedRows.length,
+      adjustedRows,
+    };
+  }
+
   async findOrCreatePilgrim(dto: {
     firstName: string;
     lastName: string;
@@ -879,7 +1725,7 @@ export class UsersService {
     birthDate?: string | null;
   }) {
     const nationalId = dto.nationalId.trim();
-    const phone = dto.phone.trim();
+    const phone = normalizePhone(dto.phone);
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     const birthDate = parseDateOnly(dto.birthDate);
@@ -955,7 +1801,7 @@ export class UsersService {
   ) {
     const username = dto.username?.trim() || undefined;
     const nationalId = dto.nationalId?.trim() || undefined;
-    const phone = dto.phone?.trim() || undefined;
+    const phone = dto.phone ? normalizePhone(dto.phone) || undefined : undefined;
     const email = dto.email?.trim() || undefined;
     const filters: Prisma.UserWhereInput[] = [];
     if (username) filters.push({ username });
@@ -988,6 +1834,46 @@ export class UsersService {
         throw new ConflictException('نام کاربری تکراری است');
       }
     }
+  }
+
+  private async buildUsersExcel(
+    items: ReturnType<UsersService['toPublicUser']>[],
+  ) {
+    const geoName = (item: { nameFa: string } | null | undefined) =>
+      item?.nameFa ?? '';
+    const genderLabel = (gender: UserGender | null) => {
+      if (gender === UserGender.MALE) return 'مرد';
+      if (gender === UserGender.FEMALE) return 'زن';
+      return '';
+    };
+
+    return buildStyledExcelExport({
+      sheetName: 'زائران',
+      columns: [
+        { header: 'نام و نام خانوادگی', key: 'fullName', width: 28 },
+        { header: 'نام کاربری', key: 'username', width: 18 },
+        { header: 'کد ملی', key: 'nationalId', width: 16 },
+        { header: 'تلفن', key: 'phone', width: 16 },
+        { header: 'جنسیت', key: 'gender', width: 10 },
+        { header: 'کشور', key: 'country', width: 14 },
+        { header: 'استان', key: 'province', width: 16 },
+        { header: 'شهر', key: 'city', width: 16 },
+        { header: 'آدرس', key: 'address', width: 32 },
+        { header: 'توضیحات', key: 'notes', width: 32 },
+      ],
+      rows: items.map((item) => ({
+        fullName: item.fullName,
+        username: item.username,
+        nationalId: item.nationalId ?? '',
+        phone: item.phone ?? '',
+        gender: genderLabel(item.gender),
+        country: geoName(item.country),
+        province: geoName(item.province),
+        city: geoName(item.city),
+        address: item.address ?? '',
+        notes: item.notes ?? '',
+      })),
+    });
   }
 
   private rethrowUnique(error: unknown): never {

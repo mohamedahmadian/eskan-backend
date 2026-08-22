@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { isAdmin } from '../auth/roles.util';
+import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
 import {
   containsInsensitive,
@@ -13,7 +14,6 @@ import {
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
-import * as ExcelJS from 'exceljs';
 import {
   Prisma,
   type AccommodationStatus,
@@ -24,7 +24,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
+import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
+import { TransferAccommodationsYearDto } from './dto/transfer-accommodations-year.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
+import { resolveSortOrder } from '../common/sort-query';
 
 const geoSelect = { id: true, nameFa: true, nameEn: true };
 
@@ -61,7 +64,7 @@ export class AccommodationsService {
     const where = this.listWhere(query, actor);
     const findMany = {
       where,
-      orderBy: { createdAt: 'desc' as const },
+      orderBy: this.listOrderBy(query),
       include: accommodationInclude,
     };
 
@@ -100,6 +103,7 @@ export class AccommodationsService {
     });
     const [
       total,
+      typeRows,
       genderRows,
       managementRows,
       comboRows,
@@ -109,6 +113,11 @@ export class AccommodationsService {
       inactiveInYear,
     ] = await Promise.all([
       this.prisma.accommodation.count({ where: scope }),
+      this.prisma.accommodation.groupBy({
+        by: ['type'],
+        where: scope,
+        _count: { _all: true },
+      }),
       this.prisma.accommodation.groupBy({
         by: ['genderType'],
         where: scope,
@@ -130,6 +139,7 @@ export class AccommodationsService {
       this.prisma.accommodation.count({ where: inactiveInYearWhere }),
     ]);
 
+    const typeCount = new Map(typeRows.map((row) => [row.type, row._count._all]));
     const genderCount = new Map(
       genderRows.map((row) => [row.genderType, row._count._all]),
     );
@@ -154,6 +164,10 @@ export class AccommodationsService {
         active: activeInYear,
         inactive: inactiveInYear,
       },
+      byType: accommodationTypeOrder.map((type) => ({
+        type,
+        count: typeCount.get(type) ?? 0,
+      })),
       byGenderType: genderTypeOrder.map((genderType) => ({
         genderType,
         count: genderCount.get(genderType) ?? 0,
@@ -176,7 +190,7 @@ export class AccommodationsService {
     const where = this.listWhere(query, actor);
     const items = await this.prisma.accommodation.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: this.listOrderBy(query),
       include: accommodationInclude,
     });
     return this.buildExcel(items.map((item) => this.serialize(item)));
@@ -407,6 +421,340 @@ export class AccommodationsService {
     return this.findOne(id, actor);
   }
 
+  async yearStats(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({}, actor);
+    const [total, active, inactive] = await Promise.all([
+      this.prisma.accommodation.count({ where: scope }),
+      this.prisma.accommodation.count({
+        where: this.andWhere(scope, { managers: { some: { year: selectedYear } } }),
+      }),
+      this.prisma.accommodation.count({
+        where: this.andWhere(scope, { managers: { none: { year: selectedYear } } }),
+      }),
+    ]);
+    return { year: selectedYear, total, active, inactive };
+  }
+
+  async findActiveInYear(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    return this.findYearList({ ...query, yearActivity: 'active' }, actor);
+  }
+
+  async findYearList(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const activity = query.yearActivity ?? 'all';
+    const base = this.listWhere({ q: query.q }, actor);
+    const yearFilter: Prisma.AccommodationWhereInput =
+      activity === 'active'
+        ? { managers: { some: { year: query.year } } }
+        : activity === 'inactive'
+          ? { managers: { none: { year: query.year } } }
+          : {};
+    const where = this.andWhere(base, yearFilter);
+    const findMany = {
+      where,
+      orderBy: this.listOrderBy({
+        sortBy: query.sortBy,
+        sortDir: query.sortDir,
+      }),
+      include: accommodationInclude,
+    };
+
+    const withFlag = (item: AccommodationRecord) => ({
+      ...this.serialize(item),
+      activeInYear: item.managers.some((row) => row.year === query.year),
+    });
+
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.accommodation.findMany(findMany);
+      return items.map(withFlag);
+    }
+
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const [items, total] = await Promise.all([
+      this.prisma.accommodation.findMany({ ...findMany, skip, take }),
+      this.prisma.accommodation.count({ where }),
+    ]);
+    return paginatedResult(items.map(withFlag), total, page, pageSize);
+  }
+
+  async findInactiveInYear(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const where = this.andWhere(this.listWhere({ q: query.q }, actor), {
+      managers: { none: { year: query.year } },
+    });
+    const items = await this.prisma.accommodation.findMany({
+      where,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: { id: true, name: true, type: true, city: { select: geoSelect } },
+    });
+    return items;
+  }
+
+  async addToYear(accommodationId: string, actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    return this.activateYear(accommodationId, actor, year, false);
+  }
+
+  async activateAllInactive(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({}, actor);
+    const inactive = await this.prisma.accommodation.findMany({
+      where: this.andWhere(scope, {
+        managers: { none: { year: selectedYear } },
+      }),
+      select: { id: true },
+    });
+    if (!inactive.length) {
+      return { year: selectedYear, activated: 0 };
+    }
+
+    await this.prisma.accommodationManager.createMany({
+      data: inactive.map((item) => ({
+        accommodationId: item.id,
+        userId: null,
+        year: selectedYear,
+        isPrimary: false,
+      })),
+    });
+
+    return { year: selectedYear, activated: inactive.length };
+  }
+
+  async deactivateAllActive(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({}, actor);
+    const active = await this.prisma.accommodation.findMany({
+      where: this.andWhere(scope, {
+        managers: { some: { year: selectedYear } },
+      }),
+      select: { id: true },
+    });
+    if (!active.length) {
+      return { year: selectedYear, removed: 0 };
+    }
+
+    const result = await this.prisma.accommodationManager.deleteMany({
+      where: {
+        year: selectedYear,
+        accommodationId: { in: active.map((item) => item.id) },
+      },
+    });
+
+    return { year: selectedYear, removed: result.count, accommodations: active.length };
+  }
+
+  async removeFromYear(accommodationId: string, actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    await this.findRecord(accommodationId, actor);
+    const result = await this.prisma.accommodationManager.deleteMany({
+      where: { accommodationId, year: selectedYear },
+    });
+    if (result.count === 0) {
+      throw new NotFoundException('این اسکان در سال انتخاب‌شده فعال نیست');
+    }
+    return { ok: true, year: selectedYear, removed: result.count };
+  }
+
+  async transferYears(dto: TransferAccommodationsYearDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const sourceYear = dto.sourceYear;
+    const targetYear = dto.targetYear ?? currentJalaliYear();
+    if (sourceYear === targetYear) {
+      throw new BadRequestException('سال مبدأ و مقصد نباید یکسان باشند');
+    }
+
+    const copyManagers = dto.copyManagers !== false;
+    const scope = this.listWhere({}, actor);
+    const activeInSource = this.andWhere(scope, {
+      managers: { some: { year: sourceYear } },
+    });
+
+    let candidates: { id: string }[];
+    if (dto.all) {
+      candidates = await this.prisma.accommodation.findMany({
+        where: activeInSource,
+        select: { id: true },
+      });
+    } else {
+      const ids = [...new Set(dto.accommodationIds ?? [])];
+      if (!ids.length) {
+        throw new BadRequestException('حداقل یک اسکان برای انتقال انتخاب کنید');
+      }
+      candidates = await this.prisma.accommodation.findMany({
+        where: this.andWhere(activeInSource, { id: { in: ids } }),
+        select: { id: true },
+      });
+      if (candidates.length !== ids.length) {
+        throw new BadRequestException(
+          'برخی اسکان‌های انتخاب‌شده در سال مبدأ فعال نیستند',
+        );
+      }
+    }
+
+    let transferred = 0;
+    let skipped = 0;
+    const errors: { accommodationId: string; message: string }[] = [];
+
+    for (const { id } of candidates) {
+      try {
+        const result = await this.transferOneToYear(
+          id,
+          sourceYear,
+          targetYear,
+          copyManagers,
+        );
+        if (result === 'skipped') skipped += 1;
+        else transferred += 1;
+      } catch (error) {
+        skipped += 1;
+        const message =
+          error instanceof BadRequestException ||
+          error instanceof ConflictException ||
+          error instanceof ForbiddenException ||
+          error instanceof NotFoundException
+            ? String(error.message)
+            : error instanceof Error
+              ? error.message
+              : 'خطا در انتقال اسکان';
+        errors.push({ accommodationId: id, message });
+      }
+    }
+
+    return {
+      sourceYear,
+      targetYear,
+      copyManagers,
+      requested: candidates.length,
+      transferred,
+      skipped,
+      errors,
+    };
+  }
+
+  private assertAdmin(actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+  }
+
+  private async transferOneToYear(
+    accommodationId: string,
+    sourceYear: number,
+    targetYear: number,
+    copyManagers: boolean,
+  ): Promise<'ok' | 'skipped'> {
+    const existing = await this.prisma.accommodationManager.findFirst({
+      where: { accommodationId, year: targetYear },
+      select: { id: true },
+    });
+    if (existing) {
+      return 'skipped';
+    }
+
+    if (!copyManagers) {
+      await this.prisma.accommodationManager.create({
+        data: {
+          accommodationId,
+          userId: null,
+          year: targetYear,
+          isPrimary: false,
+        },
+      });
+      return 'ok';
+    }
+
+    const sourceManagers = await this.prisma.accommodationManager.findMany({
+      where: {
+        accommodationId,
+        year: sourceYear,
+        userId: { not: null },
+      },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    if (!sourceManagers.length) {
+      await this.prisma.accommodationManager.create({
+        data: {
+          accommodationId,
+          userId: null,
+          year: targetYear,
+          isPrimary: false,
+        },
+      });
+      return 'ok';
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const manager of sourceManagers) {
+        if (!manager.userId) continue;
+        const user = await tx.user.findUnique({
+          where: { id: manager.userId },
+          include: {
+            userRoles: { include: { role: { select: { code: true } } } },
+          },
+        });
+        if (
+          !user ||
+          !user.userRoles.some((item) => item.role.code === 'ACCOMMODATION_MANAGER')
+        ) {
+          continue;
+        }
+
+        const already = await tx.accommodationManager.findUnique({
+          where: {
+            userId_accommodationId_year: {
+              userId: manager.userId,
+              accommodationId,
+              year: targetYear,
+            },
+          },
+        });
+        if (already) continue;
+
+        const hasPrimaryThisYear = await tx.accommodationManager.findFirst({
+          where: {
+            userId: manager.userId,
+            year: targetYear,
+            isPrimary: true,
+          },
+          select: { id: true },
+        });
+
+        await tx.accommodationManager.create({
+          data: {
+            accommodationId,
+            userId: manager.userId,
+            year: targetYear,
+            isPrimary: !hasPrimaryThisYear && manager.isPrimary,
+          },
+        });
+      }
+
+      const created = await tx.accommodationManager.findFirst({
+        where: { accommodationId, year: targetYear },
+        select: { id: true },
+      });
+      if (!created) {
+        await tx.accommodationManager.create({
+          data: {
+            accommodationId,
+            userId: null,
+            year: targetYear,
+            isPrimary: false,
+          },
+        });
+      }
+    });
+
+    return 'ok';
+  }
+
   private async findRecord(id: string, actor: Actor) {
     const item = await this.prisma.accommodation.findUnique({
       where: { id },
@@ -428,6 +776,22 @@ export class AccommodationsService {
     return { AND: [base, extra] };
   }
 
+  private listOrderBy(
+    query: FindAccommodationsQueryDto,
+  ): Prisma.AccommodationOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.AccommodationOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        type: (dir) => ({ type: dir }),
+        managementType: (dir) => ({ managementType: dir }),
+        genderType: (dir) => ({ genderType: dir }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
+  }
+
   private listWhere(
     query: FindAccommodationsQueryDto,
     actor: Actor,
@@ -435,6 +799,9 @@ export class AccommodationsService {
     const filters: Prisma.AccommodationWhereInput[] = [];
     if (!isAdmin(actor)) {
       filters.push({ managers: { some: { userId: actor.id } } });
+    }
+    if (query.type) {
+      filters.push({ type: query.type });
     }
     if (query.managementType) {
       filters.push({ managementType: query.managementType });
@@ -754,50 +1121,53 @@ export class AccommodationsService {
   }
 
   private async buildExcel(items: ReturnType<AccommodationsService['serialize']>[]) {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'اسکان';
-    const sheet = workbook.addWorksheet('اسکان‌ها', {
-      views: [{ rightToLeft: true }],
-    });
-
     const amenity = (value: boolean) => (value ? 'دارد' : 'ندارد');
     const geoName = (item: { nameFa: string } | null) => item?.nameFa ?? '';
 
-    sheet.columns = [
-      { header: 'نام محل اسکان', key: 'name', width: 28 },
-      { header: 'نوع اسکان', key: 'type', width: 14 },
-      { header: 'نوع مدیریت', key: 'managementType', width: 16 },
-      { header: 'نوع پذیرش', key: 'genderType', width: 14 },
-      { header: 'وضعیت', key: 'status', width: 16 },
-      { header: 'کشور', key: 'country', width: 14 },
-      { header: 'استان', key: 'province', width: 16 },
-      { header: 'شهر', key: 'city', width: 16 },
-      { header: 'تلفن', key: 'phone', width: 16 },
-      { header: 'آدرس', key: 'address', width: 36 },
-      { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
-      { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
-      { header: 'ظرفیت اختصاص‌داده‌شده مرد', key: 'assignedMaleCapacity', width: 22 },
-      { header: 'ظرفیت اختصاص‌داده‌شده زن', key: 'assignedFemaleCapacity', width: 22 },
-      { header: 'فاصله تا حرم (کیلومتر)', key: 'distanceToShrineKm', width: 20 },
-      { header: 'فاصله تا مشهد (کیلومتر)', key: 'distanceToMashhadKm', width: 20 },
-      { header: 'لباسشویی', key: 'hasLaundry', width: 12 },
-      { header: 'اینترنت', key: 'hasInternet', width: 12 },
-      { header: 'نمازخانه', key: 'hasPrayerRoom', width: 12 },
-      { header: 'آسانسور', key: 'hasElevator', width: 12 },
-      { header: 'سیستم گرمایش', key: 'heatingSystem', width: 18 },
-      { header: 'سیستم سرمایش', key: 'coolingSystem', width: 18 },
-      { header: 'ظرفیت پارکینگ', key: 'parkingCapacity', width: 16 },
-      { header: 'تعداد حمام', key: 'bathroomCount', width: 12 },
-      { header: 'تعداد سرویس بهداشتی', key: 'toiletCount', width: 18 },
-      { header: 'مدیران', key: 'managers', width: 28 },
-      { header: 'توضیحات', key: 'description', width: 32 },
-    ];
-
-    sheet.getRow(1).font = { bold: true };
-    sheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-
-    for (const item of items) {
-      sheet.addRow({
+    return buildStyledExcelExport({
+      sheetName: 'اسکان‌ها',
+      columns: [
+        { header: 'نام محل اسکان', key: 'name', width: 28 },
+        { header: 'نوع اسکان', key: 'type', width: 14 },
+        { header: 'نوع مدیریت', key: 'managementType', width: 16 },
+        { header: 'نوع پذیرش', key: 'genderType', width: 14 },
+        { header: 'وضعیت', key: 'status', width: 16 },
+        { header: 'کشور', key: 'country', width: 14 },
+        { header: 'استان', key: 'province', width: 16 },
+        { header: 'شهر', key: 'city', width: 16 },
+        { header: 'تلفن', key: 'phone', width: 16 },
+        { header: 'آدرس', key: 'address', width: 36 },
+        { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
+        { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
+        {
+          header: 'ظرفیت اختصاص‌داده‌شده مرد',
+          key: 'assignedMaleCapacity',
+          width: 22,
+        },
+        {
+          header: 'ظرفیت اختصاص‌داده‌شده زن',
+          key: 'assignedFemaleCapacity',
+          width: 22,
+        },
+        { header: 'فاصله تا حرم (کیلومتر)', key: 'distanceToShrineKm', width: 20 },
+        {
+          header: 'فاصله تا مشهد (کیلومتر)',
+          key: 'distanceToMashhadKm',
+          width: 20,
+        },
+        { header: 'لباسشویی', key: 'hasLaundry', width: 12 },
+        { header: 'اینترنت', key: 'hasInternet', width: 12 },
+        { header: 'نمازخانه', key: 'hasPrayerRoom', width: 12 },
+        { header: 'آسانسور', key: 'hasElevator', width: 12 },
+        { header: 'سیستم گرمایش', key: 'heatingSystem', width: 18 },
+        { header: 'سیستم سرمایش', key: 'coolingSystem', width: 18 },
+        { header: 'ظرفیت پارکینگ', key: 'parkingCapacity', width: 16 },
+        { header: 'تعداد حمام', key: 'bathroomCount', width: 12 },
+        { header: 'تعداد سرویس بهداشتی', key: 'toiletCount', width: 18 },
+        { header: 'مدیران', key: 'managers', width: 28 },
+        { header: 'توضیحات', key: 'description', width: 32 },
+      ],
+      rows: items.map((item) => ({
         name: item.name,
         type: accommodationTypeLabels[item.type],
         managementType: managementTypeLabels[item.managementType],
@@ -831,13 +1201,19 @@ export class AccommodationsService {
           })
           .join('، '),
         description: item.description ?? '',
-      });
-    }
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
+      })),
+    });
   }
 }
+
+const accommodationTypeOrder: AccommodationType[] = [
+  'SCHOOL',
+  'MOSQUE',
+  'HUSSEINIEH',
+  'HALL',
+  'HOUSE',
+  'OTHER',
+];
 
 const accommodationTypeLabels: Record<AccommodationType, string> = {
   SCHOOL: 'مدرسه',
