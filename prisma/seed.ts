@@ -80,7 +80,11 @@ async function main() {
 
   const caravans = await prisma.navModule.upsert({
     where: { code: "caravans" },
-    update: {},
+    update: {
+      nameKey: "modules.caravans",
+      icon: "footprints",
+      sortOrder: 3,
+    },
     create: {
       code: "caravans",
       nameKey: "modules.caravans",
@@ -89,18 +93,33 @@ async function main() {
     },
   });
 
+  const caravanManagement = await prisma.navModule.upsert({
+    where: { code: "caravan-management" },
+    update: {
+      nameKey: "modules.caravanManagement",
+      icon: "tent",
+      sortOrder: 4,
+    },
+    create: {
+      code: "caravan-management",
+      nameKey: "modules.caravanManagement",
+      icon: "tent",
+      sortOrder: 4,
+    },
+  });
+
   const sms = await prisma.navModule.upsert({
     where: { code: "sms" },
     update: {
       nameKey: "modules.sms",
       icon: "message-square",
-      sortOrder: 5,
+      sortOrder: 6,
     },
     create: {
       code: "sms",
       nameKey: "modules.sms",
       icon: "message-square",
-      sortOrder: 5,
+      sortOrder: 6,
     },
   });
 
@@ -109,13 +128,13 @@ async function main() {
     update: {
       nameKey: "modules.baseInfo",
       icon: "database",
-      sortOrder: 6,
+      sortOrder: 7,
     },
     create: {
       code: "base-info",
       nameKey: "modules.baseInfo",
       icon: "database",
-      sortOrder: 6,
+      sortOrder: 7,
     },
   });
 
@@ -124,13 +143,13 @@ async function main() {
     update: {
       nameKey: "modules.accommodation",
       icon: "building-2",
-      sortOrder: 4,
+      sortOrder: 5,
     },
     create: {
       code: "accommodation",
       nameKey: "modules.accommodation",
       icon: "building-2",
-      sortOrder: 4,
+      sortOrder: 5,
     },
   });
 
@@ -139,13 +158,13 @@ async function main() {
     update: {
       nameKey: "modules.headquarters",
       icon: "landmark",
-      sortOrder: 7,
+      sortOrder: 8,
     },
     create: {
       code: "headquarters",
       nameKey: "modules.headquarters",
       icon: "landmark",
-      sortOrder: 7,
+      sortOrder: 8,
     },
   });
 
@@ -154,13 +173,13 @@ async function main() {
     update: {
       nameKey: "modules.logistics",
       icon: "package",
-      sortOrder: 8,
+      sortOrder: 9,
     },
     create: {
       code: "logistics",
       nameKey: "modules.logistics",
       icon: "package",
-      sortOrder: 8,
+      sortOrder: 9,
     },
   });
 
@@ -202,11 +221,19 @@ async function main() {
     },
     {
       code: "caravans.list",
-      moduleId: caravans.id,
+      moduleId: caravanManagement.id,
       nameKey: "menus.caravansList",
       path: "/caravans",
       icon: "footprints",
       sortOrder: 1,
+    },
+    {
+      code: "caravans.managers",
+      moduleId: caravanManagement.id,
+      nameKey: "menus.caravanManagers",
+      path: "/caravan-managers",
+      icon: "user-round-cog",
+      sortOrder: 2,
     },
     {
       code: "caravans.mine",
@@ -214,15 +241,31 @@ async function main() {
       nameKey: "menus.myCaravans",
       path: "/my-caravans",
       icon: "tent",
+      sortOrder: 1,
+    },
+    {
+      code: "reservations.mine",
+      moduleId: caravans.id,
+      nameKey: "menus.myReservations",
+      path: "/my-reservations",
+      icon: "scroll-text",
       sortOrder: 2,
     },
     {
-      code: "caravans.managers",
+      code: "reservations.list",
       moduleId: caravans.id,
-      nameKey: "menus.caravanManagers",
-      path: "/caravan-managers",
-      icon: "user-round-cog",
+      nameKey: "menus.reservationsAdmin",
+      path: "/reservations",
+      icon: "clipboard-list",
       sortOrder: 3,
+    },
+    {
+      code: "reception.settings",
+      moduleId: caravans.id,
+      nameKey: "menus.receptionSettings",
+      path: "/reception-settings",
+      icon: "settings",
+      sortOrder: 4,
     },
     {
       code: "sms.settings",
@@ -513,7 +556,11 @@ async function main() {
     });
   }
 
-  const caravanMenuCodes = new Set(["dashboard.overview", "caravans.mine"]);
+  const caravanMenuCodes = new Set([
+    "dashboard.overview",
+    "caravans.mine",
+    "reservations.mine",
+  ]);
   const caravanListMenu = menuRecords.find((item) => item.code === "caravans.list");
   if (caravanListMenu) {
     await prisma.roleMenu.deleteMany({
@@ -536,7 +583,19 @@ async function main() {
     });
   }
 
-  const pilgrimMenuCodes = new Set(["dashboard.overview", "caravans.mine"]);
+  const pilgrimMenuCodes = new Set([
+    "dashboard.overview",
+    "reservations.mine",
+  ]);
+  const pilgrimMyCaravansMenu = menuRecords.find((item) => item.code === "caravans.mine");
+  if (pilgrimMyCaravansMenu) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: pilgrimRole.id,
+        menuId: pilgrimMyCaravansMenu.id,
+      },
+    });
+  }
   for (const menu of menuRecords.filter((item) => pilgrimMenuCodes.has(item.code))) {
     await prisma.roleMenu.upsert({
       where: {
@@ -573,6 +632,24 @@ async function main() {
   });
 
   await seedGeo();
+
+  const systemPasswordHash = await bcrypt.hash(
+    `system-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    10,
+  );
+  await prisma.user.upsert({
+    where: { username: "__system__" },
+    update: {},
+    create: {
+      username: "__system__",
+      passwordHash: systemPasswordHash,
+      firstName: "سیستم",
+      lastName: "سامانه",
+      fullName: "سیستم سامانه",
+      locale: "fa",
+      status: "ACTIVE",
+    },
+  });
 
   const passwordHash = await bcrypt.hash("ChangeMe123!", 10);
   const adminUser = await prisma.user.upsert({

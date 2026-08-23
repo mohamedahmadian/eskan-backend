@@ -20,7 +20,9 @@ import {
 import { resolveSortOrder } from '../common/sort-query';
 import { Prisma, Religion, UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SmsService } from '../sms/sms.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { SetPilgrimPasswordDto } from './dto/set-pilgrim-password.dto';
 import {
   CITY_ID_NONE,
   FindUsersQueryDto,
@@ -31,6 +33,7 @@ import {
   type PilgrimImportRow,
   type ParsedPilgrimImport,
 } from './pilgrim-excel-import.util';
+import { resolvePilgrimResetPassword } from './pilgrim-password.util';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { cleanPlates, joinFullName } from './user-profile.util';
 
@@ -167,7 +170,10 @@ type PublicUserSource = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sms: SmsService,
+  ) {}
 
   listRoles() {
     return this.prisma.role.findMany({
@@ -691,6 +697,68 @@ export class UsersService {
       throw new NotFoundException(notFoundMessage);
     }
     return user;
+  }
+
+  async setPilgrimPassword(id: string, dto: SetPilgrimPasswordDto, actorId: string) {
+    const user = await this.assertHasRole(id, 'PILGRIM', 'زائر یافت نشد');
+    if (dto.sendSms && !user.phone) {
+      throw new BadRequestException('شماره همراه زائر ثبت نشده است');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+
+    let smsQueued = false;
+    if (dto.sendSms && user.phone) {
+      try {
+        await this.sms.send({
+          phone: user.phone,
+          body: [
+            `زائر گرامی ${user.fullName}`,
+            'رمز عبور جدید سامانه اسکان:',
+            dto.password,
+            'ورود با کد ملی یا شماره همراه',
+          ].join('\n'),
+          sentById: actorId,
+        });
+        smsQueued = true;
+      } catch {
+        // رمز ذخیره شده؛ خطا در پیامک مانع تعریف رمز نمی‌شود
+      }
+    }
+
+    return { ok: true, smsQueued };
+  }
+
+  async recoverOwnPilgrimPassword(userId: string) {
+    const user = await this.assertHasRole(userId, 'PILGRIM', 'زائر یافت نشد');
+    if (!user.phone) {
+      throw new BadRequestException('شماره همراه برای ارسال پیامک ثبت نشده است');
+    }
+
+    await this.sms.assertConfigured();
+    const password = resolvePilgrimResetPassword(user.nationalId);
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    await this.sms.send({
+      phone: user.phone,
+      body: [
+        `زائر گرامی ${user.fullName}`,
+        'رمز عبور جدید سامانه اسکان:',
+        password,
+        'ورود با کد ملی یا شماره همراه',
+      ].join('\n'),
+      sentById: userId,
+    });
+
+    return { ok: true };
   }
 
   async assignProvince(userId: string, provinceId: string) {
@@ -1721,11 +1789,12 @@ export class UsersService {
     firstName: string;
     lastName: string;
     nationalId: string;
-    phone: string;
+    phone?: string | null;
     birthDate?: string | null;
+    gender?: UserGender | null;
   }) {
     const nationalId = dto.nationalId.trim();
-    const phone = normalizePhone(dto.phone);
+    const phone = dto.phone ? normalizePhone(dto.phone) : '';
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     const birthDate = parseDateOnly(dto.birthDate);
@@ -1736,32 +1805,41 @@ export class UsersService {
     });
     if (byNationalId) {
       await this.ensureRole(byNationalId.id, 'PILGRIM');
-      if (birthDate && !byNationalId.birthDate) {
+      const patch: Prisma.UserUpdateInput = {};
+      if (birthDate && !byNationalId.birthDate) patch.birthDate = birthDate;
+      if (dto.gender && !byNationalId.gender) patch.gender = dto.gender;
+      if (Object.keys(patch).length) {
         await this.prisma.user.update({
           where: { id: byNationalId.id },
-          data: { birthDate },
+          data: patch,
         });
       }
       const user = await this.findOne(byNationalId.id);
       return { user, reused: true };
     }
 
-    const byPhone = await this.prisma.user.findUnique({
-      where: { phone },
-      include: publicInclude,
-    });
-    if (byPhone) {
-      await this.ensureRole(byPhone.id, 'PILGRIM');
-      if (birthDate && !byPhone.birthDate) {
-        await this.prisma.user.update({
-          where: { id: byPhone.id },
-          data: { birthDate },
-        });
+    if (phone) {
+      const byPhone = await this.prisma.user.findUnique({
+        where: { phone },
+        include: publicInclude,
+      });
+      if (byPhone) {
+        await this.ensureRole(byPhone.id, 'PILGRIM');
+        const patch: Prisma.UserUpdateInput = {};
+        if (birthDate && !byPhone.birthDate) patch.birthDate = birthDate;
+        if (dto.gender && !byPhone.gender) patch.gender = dto.gender;
+        if (Object.keys(patch).length) {
+          await this.prisma.user.update({
+            where: { id: byPhone.id },
+            data: patch,
+          });
+        }
+        const user = await this.findOne(byPhone.id);
+        return { user, reused: true };
       }
-      const user = await this.findOne(byPhone.id);
-      return { user, reused: true };
     }
 
+    const role = await this.ensureExistingRole('PILGRIM');
     let username = nationalId;
     const usernameTaken = await this.prisma.user.findUnique({
       where: { username },
@@ -1771,23 +1849,25 @@ export class UsersService {
       username = `${nationalId}_${Date.now().toString(36)}`;
     }
 
-    const password = `P${nationalId.slice(-6)}${Date.now().toString(36)}aA1`;
-    const user = await this.createWithRole(
-      {
+    const passwordHash = await bcrypt.hash(nationalId, 10);
+    const created = await this.prisma.user.create({
+      data: {
         username,
-        password,
+        passwordHash,
         firstName,
         lastName,
+        fullName: joinFullName(firstName, lastName),
         nationalId,
-        phone,
-        birthDate: dto.birthDate ?? null,
-        roleIds: [],
+        phone: phone || null,
+        gender: dto.gender ?? null,
+        birthDate,
         status: UserStatus.ACTIVE,
+        userRoles: { create: [{ roleId: role.id }] },
       },
-      'PILGRIM',
-    );
+      include: publicInclude,
+    });
 
-    return { user, reused: false };
+    return { user: this.toPublicUser(created), reused: false };
   }
 
   private async assertUniqueIdentity(

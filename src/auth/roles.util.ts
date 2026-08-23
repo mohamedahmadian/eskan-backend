@@ -22,3 +22,15 @@ export function hasRole(user: RoleBearer | null | undefined, code: string) {
 export function isAdmin(user: RoleBearer | null | undefined) {
   return hasRole(user, 'ADMIN');
 }
+
+export function isPilgrim(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'PILGRIM');
+}
+
+export function isCaravanManager(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'CARAVAN_MANAGER');
+}
+
+export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
+  return isAdmin(user) || isCaravanManager(user);
+}

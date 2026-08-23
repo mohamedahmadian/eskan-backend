@@ -26,6 +26,7 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
 import { CheckIdentityDto } from './dto/check-identity.dto';
+import { SetPilgrimPasswordDto } from './dto/set-pilgrim-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -141,8 +142,15 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
   }
 
   @Post('identity-lookup')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   lookupIdentity(@Body() dto: CheckIdentityDto) {
     return this.users.findByIdentity(dto);
+  }
+
+  @Post('me/password/recover')
+  @Roles('PILGRIM')
+  recoverOwnPassword(@CurrentUser() actor: RequestUser) {
+    return this.users.recoverOwnPilgrimPassword(actor.id);
   }
 
   @Post('import/preview')
@@ -177,6 +185,15 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
   @Post()
   override create(@Body() dto: CreateUserDto) {
     return super.create(dto);
+  }
+
+  @Patch(':id/password')
+  setPassword(
+    @Param('id') id: string,
+    @Body() dto: SetPilgrimPasswordDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.setPilgrimPassword(id, dto, actor.id);
   }
 
   @Patch(':id')

@@ -133,6 +133,13 @@ export class SmsService {
     return { queued: true, recipientCount: job.phones.length };
   }
 
+  async assertConfigured() {
+    const settings = await this.ensureSettings();
+    if (!settings.username || !settings.password || !settings.senderNumber || !settings.endpoint) {
+      throw new BadRequestException('تنظیمات پیامک کامل نیست');
+    }
+  }
+
   private async prepareSend(input: SendSmsInput): Promise<PreparedSmsJob> {
     const settings = await this.ensureSettings();
     if (!settings.username || !settings.password || !settings.senderNumber || !settings.endpoint) {

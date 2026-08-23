@@ -21,6 +21,7 @@ import { ItemQuotaVouchersModule } from './item-quota-vouchers/item-quota-vouche
 import { IceVouchersModule } from './ice-vouchers/ice-vouchers.module';
 import { WalkingRoutesModule } from './walking-routes/walking-routes.module';
 import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
+import { ReservationsModule } from './reservations/reservations.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
     ItemQuotaVouchersModule,
     IceVouchersModule,
     PublicVouchersModule,
+    ReservationsModule,
   ],
   controllers: [AppController],
 })

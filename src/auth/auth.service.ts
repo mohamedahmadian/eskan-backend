@@ -1,9 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UserStatus } from '../generated/prisma/client';
+import { UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
+import { canAccessMyCaravans } from './roles.util';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -19,6 +20,7 @@ type AuthUserRecord = {
   fullName: string;
   locale: string;
   status: UserStatus;
+  gender: UserGender | null;
   countryId: string | null;
   provinceId: string | null;
   cityId: string | null;
@@ -149,6 +151,9 @@ export class AuthService {
     >();
 
     for (const item of roleMenus) {
+      if (item.menu.code === 'caravans.mine' && !canAccessMyCaravans(user)) {
+        continue;
+      }
       const mod = item.menu.module;
       if (!modulesMap.has(mod.code)) {
         modulesMap.set(mod.code, {
@@ -183,6 +188,7 @@ export class AuthService {
       username: user.username,
       fullName: user.fullName,
       locale: user.locale,
+      gender: user.gender,
       countryId: user.countryId,
       provinceId: user.provinceId,
       cityId: user.cityId,

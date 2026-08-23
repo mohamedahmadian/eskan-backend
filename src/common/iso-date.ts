@@ -2,6 +2,15 @@ export function parseIsoDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+export function todayIsoDateTehran() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tehran',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 export function isoDateTehranDayRange(value: string) {
   const start = new Date(`${value}T00:00:00.000+03:30`);
   return {

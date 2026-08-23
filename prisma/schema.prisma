@@ -100,6 +100,19 @@ model User {
   managedAccommodations AccommodationManager[]
   managedCaravans       Caravan[] @relation("CaravanManager")
   caravanContacts       CaravanContact[]
+  createdReservations   Reservation[] @relation("ReservationCreator")
+  managedReservations   Reservation[] @relation("ReservationCaravanManager")
+  reservationMembers    ReservationMember[]
+  reservationCaravanContacts ReservationCaravanContact[] @relation("ReservationCaravanContactPerson")
+  reservationMemberInsuranceVerifications ReservationMember[] @relation("ReservationMemberInsuranceVerifier")
+  rejectedReservations  Reservation[] @relation("ReservationRejecter")
+  cancelledReservations Reservation[] @relation("ReservationCanceller")
+  reservationBasicInfoCompletions Reservation[] @relation("ReservationBasicInfoCompleter")
+  reservationManagementReviews Reservation[] @relation("ReservationManagementReviewer")
+  reservationCompanionsCompletions Reservation[] @relation("ReservationCompanionsCompleter")
+  reservationCaravanContactsCompletions Reservation[] @relation("ReservationCaravanContactsCompleter")
+  reservationInsuranceCompletions Reservation[] @relation("ReservationInsuranceCompleter")
+  reservationFinalCompletions Reservation[] @relation("ReservationFinalCompleter")
   representedProvinces  Province[] @relation("ProvinceHeadquartersRep")
   representedCities     City[]     @relation("CityHeadquartersRep")
   accommodationLoans    AccommodationLoan[]
@@ -194,6 +207,7 @@ model Caravan {
   managerUserId  String?
   manager        User?        @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   contacts       CaravanContact[]
+  reservations   Reservation[]
   totalCount     Int          @default(0)
   maleCount      Int          @default(0)
   femaleCount    Int          @default(0)
@@ -224,6 +238,182 @@ model CaravanContact {
   @@unique([caravanId, role])
   @@index([userId])
   @@map("caravan_contacts")
+}
+
+enum ReservationType {
+  INDIVIDUAL
+  GROUP
+  CARAVAN
+}
+
+enum ReservationStatus {
+  DRAFT
+  PENDING_MANAGEMENT_REVIEW
+  COMPANIONS
+  CARAVAN_CONTACTS
+  INSURANCE
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum ReservationMemberInsuranceStatus {
+  PENDING
+  PAID
+  APPROVED
+  REJECTED
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  createdById String
+  createdBy   User              @relation("ReservationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  year        Int
+  type        ReservationType
+  status      ReservationStatus @default(DRAFT)
+
+  originCityId     String?
+  originCity       City?     @relation("ReservationOriginCity", fields: [originCityId], references: [id], onDelete: SetNull)
+  walkingRouteId   String?
+  walkingRoute     WalkingRoute? @relation(fields: [walkingRouteId], references: [id], onDelete: Restrict)
+
+  stayStartDate    DateTime? @db.Date
+  stayEndDate      DateTime? @db.Date
+  walkingStartDate DateTime? @db.Date
+
+  maleCount   Int @default(0)
+  femaleCount Int @default(0)
+  totalCount  Int @default(0)
+
+  caravanId        String?
+  caravan          Caravan? @relation(fields: [caravanId], references: [id], onDelete: SetNull)
+  caravanManagerId String?
+  caravanManager   User?    @relation("ReservationCaravanManager", fields: [caravanManagerId], references: [id], onDelete: Restrict)
+
+  managementNotes     String?
+  caravanManagerNotes String?
+
+  basicInfoLockedAt DateTime?
+
+  rejectedAt       DateTime?
+  rejectedById     String?
+  rejectedBy       User?              @relation("ReservationRejecter", fields: [rejectedById], references: [id], onDelete: Restrict)
+  rejectionReason  String?
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancelledBy      User?              @relation("ReservationCanceller", fields: [cancelledById], references: [id], onDelete: Restrict)
+  returnedToStatus ReservationStatus?
+
+  basicInfoCompletedAt   DateTime?
+  basicInfoCompletedById String?
+  basicInfoCompletedBy   User? @relation("ReservationBasicInfoCompleter", fields: [basicInfoCompletedById], references: [id], onDelete: Restrict)
+
+  managementReviewedAt   DateTime?
+  managementReviewedById String?
+  managementReviewedBy   User? @relation("ReservationManagementReviewer", fields: [managementReviewedById], references: [id], onDelete: Restrict)
+
+  companionsCompletedAt   DateTime?
+  companionsCompletedById String?
+  companionsCompletedBy   User? @relation("ReservationCompanionsCompleter", fields: [companionsCompletedById], references: [id], onDelete: Restrict)
+
+  caravanContactsCompletedAt   DateTime?
+  caravanContactsCompletedById String?
+  caravanContactsCompletedBy   User? @relation("ReservationCaravanContactsCompleter", fields: [caravanContactsCompletedById], references: [id], onDelete: Restrict)
+
+  insuranceCompletedAt   DateTime?
+  insuranceCompletedById String?
+  insuranceCompletedBy   User? @relation("ReservationInsuranceCompleter", fields: [insuranceCompletedById], references: [id], onDelete: Restrict)
+
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User? @relation("ReservationFinalCompleter", fields: [completedById], references: [id], onDelete: Restrict)
+
+  members         ReservationMember[]
+  caravanContacts ReservationCaravanContact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([year])
+  @@index([type])
+  @@index([status])
+  @@index([year, type, status])
+  @@index([caravanId])
+  @@index([caravanManagerId])
+  @@index([walkingRouteId])
+  @@index([originCityId])
+  @@map("reservations")
+}
+
+model ReservationMember {
+  id            String      @id @default(uuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  insuranceStatus       ReservationMemberInsuranceStatus @default(PENDING)
+  insurancePaidAt       DateTime?
+  insurancePaidAmount   Int?
+  insurancePaymentRef   String?
+  insuranceManualNote   String?
+  insuranceVerifiedAt   DateTime?
+  insuranceVerifiedById String?
+  insuranceVerifiedBy   User? @relation("ReservationMemberInsuranceVerifier", fields: [insuranceVerifiedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reservationId, userId])
+  @@index([reservationId])
+  @@index([userId])
+  @@map("reservation_members")
+}
+
+model ReservationCaravanContact {
+  id            String             @id @default(uuid())
+  reservationId String
+  reservation   Reservation        @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  role          CaravanContactRole
+  userId        String
+  user          User               @relation("ReservationCaravanContactPerson", fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reservationId, role])
+  @@index([reservationId])
+  @@index([userId])
+  @@map("reservation_caravan_contacts")
+}
+
+model ReceptionSettings {
+  year Int @id
+
+  individualEnabled        Boolean @default(false)
+  individualMaleCapacity   Int     @default(0)
+  individualFemaleCapacity Int     @default(0)
+  individualAutoApprove    Boolean @default(false)
+
+  groupEnabled        Boolean @default(false)
+  groupMaleCapacity   Int     @default(0)
+  groupFemaleCapacity Int     @default(0)
+  groupAutoApprove    Boolean @default(false)
+
+  caravanEnabled        Boolean @default(false)
+  caravanMaleCapacity   Int     @default(0)
+  caravanFemaleCapacity Int     @default(0)
+  caravanAutoApprove    Boolean @default(false)
+
+  insuranceOrganization  String @default("")
+  insurancePremiumAmount Int    @default(0)
+  insuranceCoverage      String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reception_settings")
 }
 
 enum SmsStatus {
@@ -330,6 +520,7 @@ model City {
   redCrescents               RedCrescent[]
   benefactors                Benefactor[]
   caravans                   Caravan[]
+  reservationOrigins         Reservation[]             @relation("ReservationOriginCity")
   users                      User[]                    @relation("UserHomeCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
@@ -530,6 +721,7 @@ model WalkingRoute {
   entryBorderCity     City                        @relation("WalkingRouteEntryBorder", fields: [entryBorderCityId], references: [id], onDelete: Restrict)
   originCountries     WalkingRouteOriginCountry[]
   stages              WalkingRouteStage[]
+  reservations        Reservation[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
