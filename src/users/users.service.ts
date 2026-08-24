@@ -393,23 +393,22 @@ export class UsersService {
       userRoles: { some: { role: { code: 'PILGRIM' } } },
     };
 
-    if (year != null) {
-      const byMonth = await Promise.all(
-        Array.from({ length: 12 }, async (_, index) => {
-          const month = index + 1;
-          const { gte, lt } = jalaliMonthRange(year, month);
-          const count = await this.prisma.user.count({
-            where: { ...pilgrimRole, createdAt: { gte, lt } },
-          });
-          return { month, count };
-        }),
-      );
-      return {
-        year,
-        byYear: [] as { year: number; count: number }[],
-        byMonth: byMonth.filter((row) => row.count > 0),
-      };
-    }
+    const emptyYear: { year: number; count: number; changePercent: number | null }[] = [];
+    const emptyMonth: { month: number; count: number }[] = [];
+
+    const byMonthPromise =
+      year == null
+        ? Promise.resolve(emptyMonth)
+        : Promise.all(
+            Array.from({ length: 12 }, async (_, index) => {
+              const month = index + 1;
+              const { gte, lt } = jalaliMonthRange(year, month);
+              const count = await this.prisma.user.count({
+                where: { ...pilgrimRole, createdAt: { gte, lt } },
+              });
+              return { month, count };
+            }),
+          ).then((rows) => rows.filter((row) => row.count > 0));
 
     const bounds = await this.prisma.user.aggregate({
       where: pilgrimRole,
@@ -419,15 +418,15 @@ export class UsersService {
 
     if (!bounds._min.createdAt || !bounds._max.createdAt) {
       return {
-        year: null,
-        byYear: [] as { year: number; count: number }[],
-        byMonth: [] as { month: number; count: number }[],
+        year: year ?? null,
+        byYear: emptyYear,
+        byMonth: await byMonthPromise,
       };
     }
 
     const fromYear = currentJalaliYear(bounds._min.createdAt);
     const toYear = currentJalaliYear(bounds._max.createdAt);
-    const byYear = await Promise.all(
+    const yearCounts = await Promise.all(
       Array.from({ length: Math.max(0, toYear - fromYear + 1) }, async (_, index) => {
         const jalaliYear = fromYear + index;
         const { gte, lt } = jalaliYearRange(jalaliYear);
@@ -438,10 +437,22 @@ export class UsersService {
       }),
     );
 
+    const byYear = yearCounts
+      .filter((row) => row.count > 0)
+      .map((row) => {
+        const previous = yearCounts.find((item) => item.year === row.year - 1);
+        const prevCount = previous?.count ?? 0;
+        const changePercent =
+          previous == null || prevCount === 0
+            ? null
+            : Math.round(((row.count - prevCount) / prevCount) * 100);
+        return { ...row, changePercent };
+      });
+
     return {
-      year: null,
-      byYear: byYear.filter((row) => row.count > 0),
-      byMonth: [] as { month: number; count: number }[],
+      year: year ?? null,
+      byYear,
+      byMonth: await byMonthPromise,
     };
   }
 
