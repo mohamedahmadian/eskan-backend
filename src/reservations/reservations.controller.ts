@@ -251,6 +251,14 @@ export class ReservationsController {
     return this.reservations.getPreviousMembers(id, actor);
   }
 
+  @Get(':id/previous-approved-counts')
+  previousApprovedCounts(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.getPreviousApprovedCounts(id, actor);
+  }
+
   @Post(':id/members/import/preview')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   @UseInterceptors(excelUploadInterceptor)

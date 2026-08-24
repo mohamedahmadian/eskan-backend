@@ -669,9 +669,12 @@ async function main() {
     });
   }
 
-  // مدیر منوهای «مال من» کاروان و گروه را ندارد (مخصوص زائر و نقش‌های مرتبط)
-  const adminForbiddenMineMenus = menuRecords.filter((item) =>
-    item.code === 'caravans.mine' || item.code === 'groups.mine',
+  // مدیر منوهای «مال من» پرونده/کاروان/گروه را ندارد (مخصوص زائر و نقش‌های مرتبط)
+  const adminForbiddenMineMenus = menuRecords.filter(
+    (item) =>
+      item.code === 'reservations.mine' ||
+      item.code === 'caravans.mine' ||
+      item.code === 'groups.mine',
   );
   if (adminForbiddenMineMenus.length) {
     await prisma.roleMenu.deleteMany({

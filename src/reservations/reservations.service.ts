@@ -1303,6 +1303,70 @@ export class ReservationsService {
     };
   }
 
+  /** Last management-approved headcount for the same applicant (admin travel dual counts). */
+  async getPreviousApprovedCounts(id: string, actor: Actor) {
+    const current = await this.requireReservation(id);
+    this.assertOwnerOrAdmin(current, actor);
+    if (current.type === ReservationType.INDIVIDUAL) {
+      return { previous: null };
+    }
+    const personId = current.caravanManagerId ?? current.createdById;
+    if (!personId) {
+      return { previous: null };
+    }
+    const previous = await this.prisma.reservation.findFirst({
+      where: {
+        id: { not: current.id },
+        type: current.type,
+        status: { not: ReservationStatus.CANCELLED },
+        managementReviewedAt: { not: null },
+        AND: [
+          {
+            OR: [{ caravanManagerId: personId }, { createdById: personId }],
+          },
+          {
+            OR: [{ maleCount: { gt: 0 } }, { femaleCount: { gt: 0 } }],
+          },
+        ],
+      },
+      orderBy: [
+        { year: 'desc' },
+        { managementReviewedAt: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      select: {
+        id: true,
+        year: true,
+        type: true,
+        status: true,
+        maleCount: true,
+        femaleCount: true,
+        totalCount: true,
+        requestedMaleCount: true,
+        requestedFemaleCount: true,
+        managementReviewedAt: true,
+      },
+    });
+    if (!previous) {
+      return { previous: null };
+    }
+    return {
+      previous: {
+        id: previous.id,
+        year: previous.year,
+        type: previous.type,
+        status: previous.status,
+        maleCount: previous.maleCount,
+        femaleCount: previous.femaleCount,
+        totalCount: previous.totalCount,
+        requestedMaleCount: previous.requestedMaleCount,
+        requestedFemaleCount: previous.requestedFemaleCount,
+        managementReviewedAt:
+          previous.managementReviewedAt?.toISOString() ?? null,
+      },
+    };
+  }
+
   async copyPreviousMembers(
     id: string,
     actor: Actor,
