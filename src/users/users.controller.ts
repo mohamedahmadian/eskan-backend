@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CheckIdentityDto } from './dto/check-identity.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { SetUserPasswordDto } from './dto/set-user-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -40,6 +41,20 @@ export class UsersController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.users.findOne(id);
+  }
+
+  @Post(':id/password/recover')
+  resetPassword(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.users.resetUserPasswordAndSms(id, actor.id);
+  }
+
+  @Patch(':id/password')
+  setPassword(
+    @Param('id') id: string,
+    @Body() dto: SetUserPasswordDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.setUserPasswordAndSms(id, dto, actor.id);
   }
 
   @Post()

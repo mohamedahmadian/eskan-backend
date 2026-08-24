@@ -42,6 +42,12 @@ const groupInclude = {
       },
     },
   },
+  walkingRoute: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   manager: {
     select: {
       id: true,
@@ -109,6 +115,7 @@ export class GroupsService {
       {
         name: (dir) => ({ name: dir }),
         city: (dir) => ({ city: { nameFa: dir } }),
+        walkingRoute: (dir) => ({ walkingRoute: { name: dir } }),
         manager: (dir) => ({ manager: { fullName: dir } }),
         maleCount: (dir) => ({ maleCount: dir }),
         femaleCount: (dir) => ({ femaleCount: dir }),
@@ -144,6 +151,7 @@ export class GroupsService {
         { city: { nameEn: containsInsensitive(query.q) } },
         { city: { province: { nameFa: containsInsensitive(query.q) } } },
         { city: { province: { country: { nameFa: containsInsensitive(query.q) } } } },
+        { walkingRoute: { name: containsInsensitive(query.q) } },
         { eitaa: containsInsensitive(query.q) },
         { bale: containsInsensitive(query.q) },
         { telegram: containsInsensitive(query.q) },
@@ -154,13 +162,20 @@ export class GroupsService {
 
   async create(dto: CreateGroupDto, actor: RoleBearer & { id: string }) {
     const cityId = await this.resolveCityId(dto.cityId, actor.id);
-    await this.users.ensureRole(actor.id, 'GROUP_MANAGER');
+    await this.assertWalkingRoute(dto.walkingRouteId);
+    const managerUserId =
+      isAdmin(actor) && dto.managerUserId ? dto.managerUserId : actor.id;
+    if (!isAdmin(actor) && dto.managerUserId && dto.managerUserId !== actor.id) {
+      throw new ForbiddenException('امکان تعیین مدیر گروه برای دیگری وجود ندارد');
+    }
+    await this.users.ensureRole(managerUserId, 'GROUP_MANAGER');
 
     return this.prisma.group.create({
       data: {
         name: dto.name.trim(),
         cityId,
-        managerUserId: actor.id,
+        walkingRouteId: dto.walkingRouteId ?? null,
+        managerUserId,
         maleCount: dto.maleCount ?? 0,
         femaleCount: dto.femaleCount ?? 0,
         totalCount: (dto.maleCount ?? 0) + (dto.femaleCount ?? 0),
@@ -182,6 +197,9 @@ export class GroupsService {
     if (dto.cityId) {
       await this.assertCity(dto.cityId);
     }
+    if (dto.walkingRouteId !== undefined) {
+      await this.assertWalkingRoute(dto.walkingRouteId);
+    }
 
     const maleCount =
       dto.maleCount !== undefined ? dto.maleCount : current.maleCount;
@@ -195,6 +213,8 @@ export class GroupsService {
       data: {
         name: dto.name?.trim(),
         cityId: dto.cityId,
+        walkingRouteId:
+          dto.walkingRouteId === undefined ? undefined : dto.walkingRouteId,
         maleCount: dto.maleCount,
         femaleCount: dto.femaleCount,
         totalCount: countsChanged ? maleCount + femaleCount : undefined,
@@ -236,6 +256,17 @@ export class GroupsService {
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
       throw new BadRequestException('شهر انتخاب‌شده معتبر نیست');
+    }
+  }
+
+  private async assertWalkingRoute(routeId?: string | null) {
+    if (!routeId) return;
+    const route = await this.prisma.walkingRoute.findUnique({
+      where: { id: routeId },
+      select: { id: true },
+    });
+    if (!route) {
+      throw new BadRequestException('مسیر پیاده‌روی معتبر نیست');
     }
   }
 }

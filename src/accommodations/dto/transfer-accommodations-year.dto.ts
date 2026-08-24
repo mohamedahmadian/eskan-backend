@@ -41,4 +41,9 @@ export class TransferAccommodationsYearDto {
   @Transform(({ value }) => toOptionalBoolean(value))
   @IsBoolean()
   copyManagers?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  copyYearContacts?: boolean;
 }

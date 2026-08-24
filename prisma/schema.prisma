@@ -89,6 +89,8 @@ model User {
   province            Province?     @relation("UserHomeProvince", fields: [provinceId], references: [id], onDelete: SetNull)
   cityId              String?
   city                City?         @relation("UserHomeCity", fields: [cityId], references: [id], onDelete: SetNull)
+  issuingOrganizationId String?
+  issuingOrganization   GovernmentOrganization? @relation(fields: [issuingOrganizationId], references: [id], onDelete: Restrict)
   photoId             String?
   photo               StoredImage?  @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
   nationalCardPhotoId String?
@@ -98,6 +100,8 @@ model User {
   userRoles           UserRole[]
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
+  accommodationContacts AccommodationContact[]
+  accommodationYearContacts AccommodationYearContact[]
   managedCaravans       Caravan[] @relation("CaravanManager")
   managedGroups         Group[]   @relation("GroupManager")
   caravanContacts       CaravanContact[]
@@ -121,6 +125,12 @@ model User {
   itemQuotaVouchers     ItemQuotaVoucher[]
   iceVouchers           IceVoucher[]
   approvedIceVouchers   IceVoucher[] @relation("IceVoucherApprover")
+  issuedLicenses        IssuedLicense[] @relation("LicenseIssuer")
+  managedLicenses       IssuedLicense[] @relation("LicenseManager")
+  approvedLicenses      IssuedLicense[] @relation("LicenseApprover")
+  revokedLicenses       IssuedLicense[] @relation("LicenseRevoker")
+  reservationPermitReviews Reservation[] @relation("ReservationPermitReviewer")
+  managedOrgUnits       OrgUnit[] @relation("OrgUnitManager")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -131,7 +141,26 @@ model User {
   @@index([countryId])
   @@index([provinceId])
   @@index([cityId])
+  @@index([issuingOrganizationId])
   @@map("users")
+}
+
+model GovernmentOrganization {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String?
+  address       String?
+  contactPerson String?
+  mobile        String?
+  description   String?
+  users         User[]
+  issuedLicenses IssuedLicense[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([createdAt])
+  @@map("government_organizations")
 }
 
 model NavModule {
@@ -181,6 +210,8 @@ model StoredImage {
   nationalCardUsers User[]   @relation("UserNationalCard")
   passportUsers     User[]   @relation("UserPassport")
   caravanLicenses   Caravan[] @relation("CaravanLicenseImage")
+  issuedLicenseFiles IssuedLicense[] @relation("IssuedLicenseFile")
+  reservationPermitImages Reservation[] @relation("ReservationPermitImage")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
@@ -204,12 +235,15 @@ model Caravan {
   licenseNumber  String?
   cityId         String
   city           City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  walkingRouteId String?
+  walkingRoute   WalkingRoute? @relation(fields: [walkingRouteId], references: [id], onDelete: Restrict)
   licenseImageId String?
   licenseImage   StoredImage? @relation("CaravanLicenseImage", fields: [licenseImageId], references: [id], onDelete: SetNull)
   managerUserId  String?
   manager        User?        @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   contacts       CaravanContact[]
   reservations   Reservation[]
+  issuedLicenses IssuedLicense[]
   totalCount     Int          @default(0)
   maleCount      Int          @default(0)
   femaleCount    Int          @default(0)
@@ -222,6 +256,7 @@ model Caravan {
   updatedAt      DateTime     @updatedAt
 
   @@index([cityId])
+  @@index([walkingRouteId])
   @@index([managerUserId])
   @@index([isActive])
   @@map("caravans")
@@ -242,25 +277,71 @@ model CaravanContact {
   @@map("caravan_contacts")
 }
 
+enum IssuedLicenseStatus {
+  ISSUED
+  APPROVED
+  REVOKED
+}
+
+model IssuedLicense {
+  id             String              @id @default(uuid())
+  managerUserId  String
+  manager        User                @relation("LicenseManager", fields: [managerUserId], references: [id], onDelete: Restrict)
+  caravanId      String
+  caravan        Caravan             @relation(fields: [caravanId], references: [id], onDelete: Restrict)
+  issuerUserId   String
+  issuer         User                @relation("LicenseIssuer", fields: [issuerUserId], references: [id], onDelete: Restrict)
+  organizationId String?
+  organization   GovernmentOrganization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  description    String?
+  issuedAt       DateTime            @db.Date
+  status         IssuedLicenseStatus @default(ISSUED)
+  revokedAt      DateTime?
+  revokedById    String?
+  revokedBy      User?               @relation("LicenseRevoker", fields: [revokedById], references: [id], onDelete: Restrict)
+  approvedAt     DateTime?
+  approvedById   String?
+  approvedBy     User?               @relation("LicenseApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  fileId         String?
+  file           StoredImage?        @relation("IssuedLicenseFile", fields: [fileId], references: [id], onDelete: SetNull)
+  reservations   Reservation[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([issuerUserId])
+  @@index([managerUserId])
+  @@index([caravanId])
+  @@index([organizationId])
+  @@index([approvedById])
+  @@index([revokedById])
+  @@index([status])
+  @@index([issuedAt])
+  @@index([createdAt])
+  @@map("issued_licenses")
+}
+
 model Group {
-  id            String   @id @default(uuid())
-  name          String
-  cityId        String
-  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  managerUserId String?
-  manager       User?    @relation("GroupManager", fields: [managerUserId], references: [id], onDelete: SetNull)
-  totalCount    Int      @default(0)
-  maleCount     Int      @default(0)
-  femaleCount   Int      @default(0)
-  eitaa         String?
-  bale          String?
-  telegram      String?
-  instagram     String?
-  reservations  Reservation[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String        @id @default(uuid())
+  name           String
+  cityId         String
+  city           City          @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  walkingRouteId String?
+  walkingRoute   WalkingRoute? @relation(fields: [walkingRouteId], references: [id], onDelete: Restrict)
+  managerUserId  String?
+  manager        User?         @relation("GroupManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  totalCount     Int           @default(0)
+  maleCount      Int           @default(0)
+  femaleCount    Int           @default(0)
+  eitaa          String?
+  bale           String?
+  telegram       String?
+  instagram      String?
+  reservations   Reservation[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([cityId])
+  @@index([walkingRouteId])
   @@index([managerUserId])
   @@map("groups")
 }
@@ -294,6 +375,18 @@ enum ReservationMemberInsurancePaidMethod {
   ONLINE_GATEWAY
 }
 
+enum ReservationPermitStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReservationPermitSource {
+  UPLOAD
+  ISSUED_LICENSE
+}
+
 model Reservation {
   id          String            @id @default(uuid())
   createdById String
@@ -301,6 +394,9 @@ model Reservation {
   year        Int
   type        ReservationType
   status      ReservationStatus @default(DRAFT)
+
+  /// Last step of the owner create wizard while status is DRAFT (type|party|count|dates|services|license).
+  createWizardStep String?
 
   originCityId     String?
   originCity       City?     @relation("ReservationOriginCity", fields: [originCityId], references: [id], onDelete: SetNull)
@@ -326,6 +422,18 @@ model Reservation {
   group            Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
   caravanManagerId String?
   caravanManager   User?    @relation("ReservationCaravanManager", fields: [caravanManagerId], references: [id], onDelete: Restrict)
+
+  hasPermit              Boolean                   @default(false)
+  permitStatus           ReservationPermitStatus   @default(NONE)
+  permitSource           ReservationPermitSource?
+  permitImageId          String?
+  permitImage            StoredImage?              @relation("ReservationPermitImage", fields: [permitImageId], references: [id], onDelete: SetNull)
+  issuedLicenseId        String?
+  issuedLicense          IssuedLicense?            @relation(fields: [issuedLicenseId], references: [id], onDelete: SetNull)
+  permitReviewedAt       DateTime?
+  permitReviewedById     String?
+  permitReviewedBy       User?                     @relation("ReservationPermitReviewer", fields: [permitReviewedById], references: [id], onDelete: Restrict)
+  permitRejectionReason  String?
 
   managementNotes     String?
   caravanManagerNotes String?
@@ -381,6 +489,9 @@ model Reservation {
   @@index([caravanManagerId])
   @@index([walkingRouteId])
   @@index([originCityId])
+  @@index([hasPermit])
+  @@index([permitStatus])
+  @@index([issuedLicenseId])
   @@map("reservations")
 }
 
@@ -391,17 +502,20 @@ model ReservationMember {
   userId        String
   user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  insuranceStatus       ReservationMemberInsuranceStatus @default(PENDING)
-  insurancePaidAt       DateTime?
-  insurancePaidAmount   Int?
-  insurancePaymentRef   String?
-  insurancePaidMethod   ReservationMemberInsurancePaidMethod?
-  insurancePaidById     String?
-  insurancePaidBy       User? @relation("ReservationMemberInsurancePayer", fields: [insurancePaidById], references: [id], onDelete: Restrict)
-  insuranceManualNote   String?
-  insuranceVerifiedAt   DateTime?
-  insuranceVerifiedById String?
-  insuranceVerifiedBy   User? @relation("ReservationMemberInsuranceVerifier", fields: [insuranceVerifiedById], references: [id], onDelete: Restrict)
+  insuranceStatus          ReservationMemberInsuranceStatus @default(PENDING)
+  insurancePaidAt          DateTime?
+  insurancePaidAmount      Int?
+  insuranceCoverageAmount  Int?
+  insurancePlanId          String?
+  insurancePlan            ReceptionInsurancePlan? @relation(fields: [insurancePlanId], references: [id], onDelete: SetNull)
+  insurancePaymentRef      String?
+  insurancePaidMethod      ReservationMemberInsurancePaidMethod?
+  insurancePaidById        String?
+  insurancePaidBy          User? @relation("ReservationMemberInsurancePayer", fields: [insurancePaidById], references: [id], onDelete: Restrict)
+  insuranceManualNote      String?
+  insuranceVerifiedAt      DateTime?
+  insuranceVerifiedById    String?
+  insuranceVerifiedBy      User? @relation("ReservationMemberInsuranceVerifier", fields: [insuranceVerifiedById], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -410,6 +524,7 @@ model ReservationMember {
   @@index([reservationId])
   @@index([userId])
   @@index([insurancePaidById])
+  @@index([insurancePlanId])
   @@map("reservation_members")
 }
 
@@ -437,20 +552,26 @@ model ReceptionSettings {
   individualMaleCapacity   Int     @default(0)
   individualFemaleCapacity Int     @default(0)
   individualAutoApprove    Boolean @default(false)
+  individualIntro          String  @default("")
+  individualRules          String  @default("")
 
   groupEnabled        Boolean @default(false)
   groupMaleCapacity   Int     @default(0)
   groupFemaleCapacity Int     @default(0)
   groupAutoApprove    Boolean @default(false)
+  groupIntro          String  @default("")
+  groupRules          String  @default("")
 
-  caravanEnabled        Boolean @default(false)
-  caravanMaleCapacity   Int     @default(0)
-  caravanFemaleCapacity Int     @default(0)
-  caravanAutoApprove    Boolean @default(false)
+  caravanEnabled              Boolean @default(false)
+  caravanMaleCapacity         Int     @default(0)
+  caravanFemaleCapacity       Int     @default(0)
+  caravanAutoApprove          Boolean @default(false)
+  caravanAutoApproveLicenses  Boolean @default(false)
+  caravanIntro                String  @default("")
+  caravanRules                String  @default("")
 
-  insuranceOrganization  String @default("")
-  insurancePremiumAmount Int    @default(0)
-  insuranceCoverage      String @default("")
+  insuranceOrganization String @default("")
+  insurancePlans        ReceptionInsurancePlan[]
 
   imamRezaMartyrdomDate DateTime? @db.Date
   prophetDemiseDate     DateTime? @db.Date
@@ -459,6 +580,22 @@ model ReceptionSettings {
   updatedAt DateTime @updatedAt
 
   @@map("reception_settings")
+}
+
+model ReceptionInsurancePlan {
+  id             String            @id @default(uuid())
+  year           Int
+  settings       ReceptionSettings @relation(fields: [year], references: [year], onDelete: Cascade)
+  coverageAmount Int
+  premiumAmount  Int
+  description    String            @default("")
+  sortOrder      Int               @default(0)
+  members        ReservationMember[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([year])
+  @@map("reception_insurance_plans")
 }
 
 enum SmsStatus {
@@ -608,6 +745,16 @@ enum ManagementType {
   NON_SELF_SUFFICIENT
 }
 
+enum AccommodationContactRole {
+  DEPUTY
+  RECEPTION
+  FACILITIES_SAFETY
+  SECURITY
+  HEALTH
+  CULTURAL
+  LOGISTICS_SUPPORT
+}
+
 model Accommodation {
   id                    String               @id @default(uuid())
   name                  String
@@ -646,6 +793,8 @@ model Accommodation {
   bathroomCount         Int?
   toiletCount           Int?
   managers              AccommodationManager[]
+  contacts              AccommodationContact[]
+  yearContacts          AccommodationYearContact[]
   iceVouchers           IceVoucher[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
@@ -655,6 +804,39 @@ model Accommodation {
   @@index([managementType, genderType])
   @@index([cityId])
   @@map("accommodations")
+}
+
+model AccommodationContact {
+  id              String                    @id @default(uuid())
+  accommodationId String
+  accommodation   Accommodation             @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  role            AccommodationContactRole
+  userId          String
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@unique([accommodationId, role])
+  @@index([userId])
+  @@map("accommodation_contacts")
+}
+
+model AccommodationYearContact {
+  id              String                    @id @default(uuid())
+  accommodationId String
+  accommodation   Accommodation             @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  role            AccommodationContactRole
+  userId          String
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  year            Int
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@unique([accommodationId, role, year])
+  @@index([userId])
+  @@index([accommodationId, year])
+  @@index([year])
+  @@map("accommodation_year_contacts")
 }
 
 model AccommodationManager {
@@ -768,6 +950,8 @@ model WalkingRoute {
   originCountries     WalkingRouteOriginCountry[]
   stages              WalkingRouteStage[]
   reservations        Reservation[]
+  caravans            Caravan[]
+  groups              Group[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
@@ -960,4 +1144,48 @@ model IceVoucher {
   @@index([status, requestedAt])
   @@index([paymentStatus])
   @@map("ice_vouchers")
+}
+
+model OrgUnit {
+  id               String   @id @default(uuid())
+  name             String
+  phone            String?
+  description      String?
+  eitaaChannel     String?
+  telegramChannel  String?
+  managerUserId    String?
+  manager          User?    @relation("OrgUnitManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  accommodationLiaisons OrgUnitAccommodationLiaison[]
+  caravanLiaisons       OrgUnitCaravanLiaison[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([name])
+  @@index([managerUserId])
+  @@index([createdAt])
+  @@map("org_units")
+}
+
+model OrgUnitAccommodationLiaison {
+  id        String                    @id @default(uuid())
+  unitId    String
+  unit      OrgUnit                   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  role      AccommodationContactRole
+  createdAt DateTime                  @default(now())
+
+  @@unique([unitId, role])
+  @@index([role])
+  @@map("org_unit_accommodation_liaisons")
+}
+
+model OrgUnitCaravanLiaison {
+  id        String             @id @default(uuid())
+  unitId    String
+  unit      OrgUnit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  role      CaravanContactRole
+  createdAt DateTime           @default(now())
+
+  @@unique([unitId, role])
+  @@index([role])
+  @@map("org_unit_caravan_liaisons")
 }

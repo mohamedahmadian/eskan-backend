@@ -21,6 +21,12 @@ export class CreateGroupDto {
   cityId?: string;
 
   @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  walkingRouteId?: string | null;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -61,4 +67,11 @@ export class CreateGroupDto {
   @ValidateIf((_, value) => value != null)
   @IsString()
   instagram?: string | null;
+
+  /** Admin-only: assign group manager (defaults to actor). */
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  managerUserId?: string | null;
 }

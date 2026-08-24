@@ -14,6 +14,9 @@ import { FoodSuppliersModule } from './food-suppliers/food-suppliers.module';
 import { MedicalCentersModule } from './medical-centers/medical-centers.module';
 import { RedCrescentsModule } from './red-crescents/red-crescents.module';
 import { BenefactorsModule } from './benefactors/benefactors.module';
+import { GovernmentOrganizationsModule } from './government-organizations/government-organizations.module';
+import { OrgUnitsModule } from './org-units/org-units.module';
+import { IssuedLicensesModule } from './issued-licenses/issued-licenses.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { SupplierItemsModule } from './supplier-items/supplier-items.module';
 import { AccommodationLoansModule } from './accommodation-loans/accommodation-loans.module';
@@ -41,6 +44,9 @@ import { ReservationsModule } from './reservations/reservations.module';
     MedicalCentersModule,
     RedCrescentsModule,
     BenefactorsModule,
+    GovernmentOrganizationsModule,
+    OrgUnitsModule,
+    IssuedLicensesModule,
     SuppliersModule,
     SupplierItemsModule,
     AccommodationLoansModule,

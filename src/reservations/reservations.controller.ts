@@ -30,11 +30,14 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
 import { ImportReservationMembersDto } from './dto/import-reservation-members.dto';
 import { RejectReservationDto } from './dto/reject-reservation.dto';
+import { RejectReservationPermitDto } from './dto/reject-reservation-permit.dto';
+import { ReservationPermitOptionsQueryDto } from './dto/reservation-permit-options-query.dto';
 import { ReturnReservationDto } from './dto/return-reservation.dto';
 import { SetReservationContactDto } from './dto/set-reservation-contact.dto';
 import { PayReservationInsuranceDto } from './dto/pay-reservation-insurance.dto';
 import { UpdateMemberInsuranceDto } from './dto/update-member-insurance.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { UpdateReservationPermitDto } from './dto/update-reservation-permit.dto';
 import { MEMBER_IMPORT_MAX_BYTES } from './reservation-member-excel';
 import { ReservationsService } from './reservations.service';
 
@@ -98,12 +101,27 @@ export class ReservationsController {
     return this.reservations.getDashboard(year, actor);
   }
 
+  @Get('permit-options')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  permitOptions(
+    @Query() query: ReservationPermitOptionsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.listPermitOptions(query, actor);
+  }
+
   @Get()
   findAll(
     @Query() query: FindReservationsQueryDto,
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.findAll(query, actor);
+  }
+
+  /** TEMP: admin helper to wipe all pilgrimage cases; remove when no longer needed. */
+  @Delete('purge-all')
+  purgeAll(@CurrentUser() actor: RequestUser) {
+    return this.reservations.purgeAll(actor);
   }
 
   @Get(':id/insurance')
@@ -185,6 +203,30 @@ export class ReservationsController {
     return this.reservations.returnTo(id, dto.status, actor);
   }
 
+  @Patch(':id/permit')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  updatePermit(
+    @Param('id') id: string,
+    @Body() dto: UpdateReservationPermitDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.updatePermit(id, dto, actor);
+  }
+
+  @Post(':id/permit/approve')
+  approvePermit(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.reservations.approvePermit(id, actor);
+  }
+
+  @Post(':id/permit/reject')
+  rejectPermit(
+    @Param('id') id: string,
+    @Body() dto: RejectReservationPermitDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.rejectPermit(id, dto, actor);
+  }
+
   @Get(':id/members/import-template')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   @Header(
@@ -193,7 +235,7 @@ export class ReservationsController {
   )
   @Header(
     'Content-Disposition',
-    "attachment; filename=\"companions-template.xlsx\"; filename*=UTF-8''%D9%86%D9%85%D9%88%D9%86%D9%87-%D9%87%D9%85%D8%B1%D8%A7%D9%87%D8%A7%D9%86.xlsx",
+    'attachment; filename="companions-template.xlsx"; filename*=UTF-8\'\'%D9%86%D9%85%D9%88%D9%86%D9%87-%D9%87%D9%85%D8%B1%D8%A7%D9%87%D8%A7%D9%86.xlsx',
   )
   async memberImportTemplate(
     @Param('id') id: string,
@@ -217,7 +259,11 @@ export class ReservationsController {
     @UploadedFile() file: ExcelUpload,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.previewMemberImport(id, assertExcelUpload(file).buffer, actor);
+    return this.reservations.previewMemberImport(
+      id,
+      assertExcelUpload(file).buffer,
+      actor,
+    );
   }
 
   @Post(':id/members/import/errors')
@@ -229,7 +275,7 @@ export class ReservationsController {
   )
   @Header(
     'Content-Disposition',
-    "attachment; filename=\"companion-import-errors.xlsx\"; filename*=UTF-8''%D8%AE%D8%B7%D8%A7%D9%87%D8%A7%DB%8C-%D9%87%D9%85%D8%B1%D8%A7%D9%87%D8%A7%D9%86.xlsx",
+    'attachment; filename="companion-import-errors.xlsx"; filename*=UTF-8\'\'%D8%AE%D8%B7%D8%A7%D9%87%D8%A7%DB%8C-%D9%87%D9%85%D8%B1%D8%A7%D9%87%D8%A7%D9%86.xlsx',
   )
   async memberImportErrors(
     @Param('id') id: string,
@@ -299,12 +345,19 @@ export class ReservationsController {
     @Body() dto: CopyPreviousMembersDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.copyPreviousMembers(id, actor, dto.sourceReservationId);
+    return this.reservations.copyPreviousMembers(
+      id,
+      actor,
+      dto.sourceReservationId,
+    );
   }
 
   @Post(':id/companions/complete')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
-  completeCompanions(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+  completeCompanions(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
     return this.reservations.completeCompanions(id, actor);
   }
 
@@ -320,13 +373,19 @@ export class ReservationsController {
 
   @Post(':id/contacts/from-caravan')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
-  copyContactsFromCaravan(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+  copyContactsFromCaravan(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
     return this.reservations.copyContactsFromCaravan(id, actor);
   }
 
   @Delete(':id/contacts')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
-  removeAllContacts(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+  removeAllContacts(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
     return this.reservations.removeAllContacts(id, actor);
   }
 
@@ -353,7 +412,12 @@ export class ReservationsController {
     @Body() dto: PayReservationInsuranceDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.payInsurance(id, dto.memberIds, actor);
+    return this.reservations.payInsurance(
+      id,
+      dto.memberIds,
+      dto.insurancePlanId,
+      actor,
+    );
   }
 
   @Patch(':id/members/:memberId/insurance')
@@ -374,7 +438,10 @@ export class ReservationsController {
 
   @Post(':id/insurance/complete')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
-  completeInsurance(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+  completeInsurance(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
     return this.reservations.completeInsurance(id, actor);
   }
 }

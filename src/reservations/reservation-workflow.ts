@@ -124,6 +124,11 @@ export function isOccupyingStatus(status: ReservationStatus) {
   return !NON_OCCUPYING_STATUSES.includes(status);
 }
 
+/** Approved headcount is unset until management reviews the file. */
+export function unapprovedCounts() {
+  return { maleCount: 0, femaleCount: 0, totalCount: 0 };
+}
+
 export function settingsEnabledKey(type: ReservationType) {
   if (type === ReservationType.INDIVIDUAL) return 'individualEnabled' as const;
   if (type === ReservationType.GROUP) return 'groupEnabled' as const;

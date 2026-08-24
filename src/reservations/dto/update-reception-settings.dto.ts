@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -8,8 +9,31 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
+
+export class ReceptionInsurancePlanDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(36)
+  id?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  coverageAmount: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  premiumAmount: number;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(2000)
+  description: string;
+}
 
 export class UpdateReceptionSettingsDto {
   @IsBoolean()
@@ -28,6 +52,16 @@ export class UpdateReceptionSettingsDto {
   @IsBoolean()
   individualAutoApprove: boolean;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  individualIntro: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  individualRules: string;
+
   @IsBoolean()
   groupEnabled: boolean;
 
@@ -43,6 +77,16 @@ export class UpdateReceptionSettingsDto {
 
   @IsBoolean()
   groupAutoApprove: boolean;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  groupIntro: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  groupRules: string;
 
   @IsBoolean()
   caravanEnabled: boolean;
@@ -60,20 +104,28 @@ export class UpdateReceptionSettingsDto {
   @IsBoolean()
   caravanAutoApprove: boolean;
 
+  @IsBoolean()
+  caravanAutoApproveLicenses: boolean;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  caravanIntro: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  caravanRules: string;
+
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(200)
   insuranceOrganization: string;
 
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  insurancePremiumAmount: number;
-
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsString()
-  @MaxLength(4000)
-  insuranceCoverage: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReceptionInsurancePlanDto)
+  insurancePlans: ReceptionInsurancePlanDto[];
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

@@ -7,6 +7,7 @@ import { sortDirections } from '../../common/sort-query';
 export const groupSortFields = [
   'name',
   'city',
+  'walkingRoute',
   'manager',
   'maleCount',
   'femaleCount',

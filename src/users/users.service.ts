@@ -80,6 +80,9 @@ const publicInclude = {
   country: { select: geoSelect },
   province: { select: { ...geoSelect, countryId: true } },
   city: { select: { ...geoSelect, provinceId: true } },
+  issuingOrganization: {
+    select: { id: true, name: true, phone: true },
+  },
   managedAccommodations: {
     where: { isPrimary: true },
     orderBy: { year: 'desc' as const },
@@ -137,6 +140,7 @@ type PublicUserSource = {
   countryId: string | null;
   provinceId: string | null;
   cityId: string | null;
+  issuingOrganizationId: string | null;
   photoId: string | null;
   nationalCardPhotoId: string | null;
   passportPhotoId: string | null;
@@ -145,6 +149,7 @@ type PublicUserSource = {
   country: { id: string; nameFa: string; nameEn: string } | null;
   province: { id: string; nameFa: string; nameEn: string; countryId: string } | null;
   city: { id: string; nameFa: string; nameEn: string; provinceId: string } | null;
+  issuingOrganization: { id: string; name: string; phone: string | null } | null;
   userRoles: { role: { id: string; code: string; nameKey: string } }[];
   managedAccommodations: {
     id: string;
@@ -558,6 +563,7 @@ export class UsersService {
     const geo = await this.resolveGeo(dto);
     await this.assertImages(dto);
     await this.assertUniqueIdentity(dto);
+    await this.assertLicenseIssuerOrganization(roleIds, dto.issuingOrganizationId);
 
     try {
       const user = await this.prisma.user.create({
@@ -597,6 +603,12 @@ export class UsersService {
     });
     await this.assertImages(dto);
     await this.assertUniqueIdentity(dto, id);
+    const nextRoleIds = dto.roleIds ?? current.roles.map((role) => role.id);
+    const nextOrganizationId =
+      dto.issuingOrganizationId === undefined
+        ? current.issuingOrganizationId
+        : dto.issuingOrganizationId;
+    await this.assertLicenseIssuerOrganization(nextRoleIds, nextOrganizationId);
 
     try {
       const user = await this.prisma.$transaction(async (tx) => {
@@ -622,6 +634,17 @@ export class UsersService {
     } catch (error) {
       this.rethrowUnique(error);
     }
+  }
+
+  /** Self-service profile edit: roles, status, and password cannot change here. */
+  async updateOwnAccount(id: string, dto: UpdateUserDto) {
+    const {
+      roleIds: _roleIds,
+      status: _status,
+      password: _password,
+      ...safe
+    } = dto;
+    return this.update(id, safe);
   }
 
   async remove(id: string, actorId: string) {
@@ -695,6 +718,12 @@ export class UsersService {
           data: { representativeId: null },
         });
       }
+      if (roleCode === 'UNIT_MANAGER') {
+        await tx.orgUnit.updateMany({
+          where: { managerUserId: userId },
+          data: { managerUserId: null },
+        });
+      }
       await tx.userRole.deleteMany({
         where: { userId, role: { code: roleCode } },
       });
@@ -744,32 +773,77 @@ export class UsersService {
     return { ok: true, smsQueued };
   }
 
-  async recoverOwnPilgrimPassword(userId: string) {
-    const user = await this.assertHasRole(userId, 'PILGRIM', 'زائر یافت نشد');
+  /** تعیین رمز توسط ادمین و پیامک همان رمز برای هر کاربر */
+  async setUserPasswordAndSms(
+    id: string,
+    dto: { password: string },
+    actorId: string,
+  ) {
+    const user = await this.findOne(id);
     if (!user.phone) {
       throw new BadRequestException('شماره همراه برای ارسال پیامک ثبت نشده است');
     }
 
     await this.sms.assertConfigured();
-    const password = resolvePilgrimResetPassword(user.nationalId);
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
     await this.prisma.user.update({
-      where: { id: userId },
+      where: { id },
       data: { passwordHash },
     });
 
+    const isPilgrim = user.roles.some((role) => role.code === 'PILGRIM');
     await this.sms.send({
       phone: user.phone,
       body: [
-        `زائر گرامی ${user.fullName}`,
+        isPilgrim ? `زائر گرامی ${user.fullName}` : `${user.fullName} گرامی`,
+        'رمز عبور جدید سامانه اسکان:',
+        dto.password,
+        'ورود با کد ملی یا شماره همراه',
+      ].join('\n'),
+      sentById: actorId,
+    });
+
+    return { ok: true };
+  }
+
+  async recoverOwnPilgrimPassword(userId: string) {
+    return this.resetUserPasswordAndSms(userId, userId);
+  }
+
+  /** تعریف رمز الگوی تکراری (مثل ۲۲۵۵۶۶۴۴) و پیامک — توسط ادمین یا خود کاربر */
+  async resetUserPasswordAndSms(id: string, actorId: string) {
+    const user = await this.findOne(id);
+    if (!user.phone) {
+      throw new BadRequestException('شماره همراه برای ارسال پیامک ثبت نشده است');
+    }
+
+    await this.sms.assertConfigured();
+    const password = resolvePilgrimResetPassword();
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+
+    const isPilgrim = user.roles.some((role) => role.code === 'PILGRIM');
+    await this.sms.send({
+      phone: user.phone,
+      body: [
+        isPilgrim ? `زائر گرامی ${user.fullName}` : `${user.fullName} گرامی`,
         'رمز عبور جدید سامانه اسکان:',
         password,
         'ورود با کد ملی یا شماره همراه',
       ].join('\n'),
-      sentById: userId,
+      sentById: actorId,
     });
 
     return { ok: true };
+  }
+
+  /** برای مسیر زائران: فقط اگر نقش PILGRIM داشته باشد */
+  async resetPilgrimPasswordAndSms(id: string, actorId: string) {
+    await this.assertHasRole(id, 'PILGRIM', 'زائر یافت نشد');
+    return this.resetUserPasswordAndSms(id, actorId);
   }
 
   async assignProvince(userId: string, provinceId: string) {
@@ -947,6 +1021,7 @@ export class UsersService {
       { phone: text },
       { email: text },
       { notes: text },
+      { issuingOrganization: { name: text } },
     ];
 
     if (!headquartersOnly) {
@@ -1115,6 +1190,7 @@ export class UsersService {
     set('whatsapp', dto.whatsapp);
     set('otherSocial', dto.otherSocial);
     set('vehiclePlates', cleanPlates(dto.vehiclePlates));
+    set('issuingOrganizationId', dto.issuingOrganizationId);
     set('photoId', dto.photoId);
     set('nationalCardPhotoId', dto.nationalCardPhotoId);
     set('passportPhotoId', dto.passportPhotoId);
@@ -1150,9 +1226,11 @@ export class UsersService {
       countryId: user.countryId,
       provinceId: user.provinceId,
       cityId: user.cityId,
+      issuingOrganizationId: user.issuingOrganizationId,
       country: user.country,
       province: user.province,
       city: user.city,
+      issuingOrganization: user.issuingOrganization,
       photoId: user.photoId,
       nationalCardPhotoId: user.nationalCardPhotoId,
       passportPhotoId: user.passportPhotoId,
@@ -1265,6 +1343,30 @@ export class UsersService {
     return uniqueIds;
   }
 
+  private async assertLicenseIssuerOrganization(
+    roleIds: string[],
+    organizationId?: string | null,
+  ) {
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: roleIds } },
+      select: { code: true },
+    });
+    const isIssuer = roles.some((role) => role.code === 'LICENSE_ISSUER');
+    if (isIssuer && !organizationId) {
+      throw new BadRequestException('سازمان صادرکننده مجوز را انتخاب کنید');
+    }
+    if (!organizationId) {
+      return;
+    }
+    const organization = await this.prisma.governmentOrganization.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new BadRequestException('سازمان انتخاب‌شده معتبر نیست');
+    }
+  }
+
   private async assertNotLastAdmin(
     current: { roles: { id: string; code: string }[] },
     nextRoleIds?: string[],
@@ -1296,39 +1398,43 @@ export class UsersService {
   async checkIdentityTaken(dto: {
     nationalId?: string;
     phone?: string;
+    username?: string;
     excludeId?: string;
   }) {
     const nationalId = dto.nationalId?.trim() || undefined;
     const phone = dto.phone?.trim() || undefined;
-    if (!nationalId && !phone) {
-      throw new BadRequestException('کد ملی یا شماره تلفن لازم است');
+    const username = dto.username?.trim() || undefined;
+    if (!nationalId && !phone && !username) {
+      throw new BadRequestException('کد ملی، شماره تلفن یا نام کاربری لازم است');
     }
 
-    const [nationalIdHit, phoneHit] = await Promise.all([
+    const exclude = dto.excludeId ? { NOT: { id: dto.excludeId } } : {};
+    const [nationalIdHit, phoneHit, usernameHit] = await Promise.all([
       nationalId
         ? this.prisma.user.findFirst({
-            where: {
-              nationalId,
-              ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
-            },
+            where: { nationalId, ...exclude },
             select: { id: true },
           })
         : Promise.resolve(null),
       phone
         ? this.prisma.user.findFirst({
-            where: {
-              phone,
-              ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
-            },
+            where: { phone, ...exclude },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      username
+        ? this.prisma.user.findFirst({
+            where: { username, ...exclude },
             select: { id: true },
           })
         : Promise.resolve(null),
     ]);
 
     return {
-      taken: Boolean(nationalIdHit || phoneHit),
+      taken: Boolean(nationalIdHit || phoneHit || usernameHit),
       nationalIdTaken: Boolean(nationalIdHit),
       phoneTaken: Boolean(phoneHit),
+      usernameTaken: Boolean(usernameHit),
     };
   }
 

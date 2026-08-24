@@ -8,6 +8,7 @@ export const caravanSortFields = [
   'name',
   'isActive',
   'city',
+  'walkingRoute',
   'manager',
 ] as const;
 

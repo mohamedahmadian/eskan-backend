@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsLatitude,
   IsLongitude,
@@ -13,6 +14,7 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import {
   AccommodationStatus,
@@ -25,6 +27,8 @@ import {
   toBoolean,
   toOptionalNumber,
 } from '../../common/dto-transform';
+import { AccommodationContactInputDto } from './accommodation-contact-input.dto';
+import { yearContactModes } from './set-accommodation-year-contacts.dto';
 
 export class CreateAccommodationDto {
   @IsString()
@@ -223,4 +227,14 @@ export class CreateAccommodationDto {
   @Transform(({ value }) => toBoolean(value, false))
   @IsBoolean()
   isPrimary?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AccommodationContactInputDto)
+  contacts?: AccommodationContactInputDto[];
+
+  @IsOptional()
+  @IsIn(yearContactModes)
+  yearContactMode?: (typeof yearContactModes)[number];
 }

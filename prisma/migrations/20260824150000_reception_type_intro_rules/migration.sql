@@ -1,0 +1,7 @@
+ALTER TABLE "reception_settings"
+ADD COLUMN "individualIntro" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "individualRules" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "groupIntro" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "groupRules" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "caravanIntro" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "caravanRules" TEXT NOT NULL DEFAULT '';

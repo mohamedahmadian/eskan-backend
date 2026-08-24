@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { emptyToUndefined } from '../../common/dto-transform';
 import { normalizeNationalId } from '../../common/national-id';
 import { normalizePhone } from '../../common/phone';
@@ -20,6 +20,12 @@ export class CheckIdentityDto {
   })
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsString()
+  @MinLength(3)
+  username?: string;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))

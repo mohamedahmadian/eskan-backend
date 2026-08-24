@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { toLatinDigits } from '../common/national-id';
 import { UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
@@ -10,6 +11,7 @@ import { LoginDto } from './dto/login.dto';
 
 const userWithRoles = {
   userRoles: { include: { role: true } },
+  issuingOrganization: { select: { id: true, name: true, phone: true } },
 } as const;
 
 type AuthUserRecord = {
@@ -24,6 +26,7 @@ type AuthUserRecord = {
   countryId: string | null;
   provinceId: string | null;
   cityId: string | null;
+  issuingOrganization: { id: string; name: string; phone: string | null } | null;
   userRoles: {
     role: { id: string; code: string; nameKey: string };
   }[];
@@ -37,7 +40,8 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const identifier = dto.username.trim();
+    const identifier = toLatinDigits(dto.username.trim());
+    const password = toLatinDigits(dto.password);
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
@@ -53,7 +57,7 @@ export class AuthService {
       throw new UnauthorizedException('نام کاربری یا رمز عبور نادرست است');
     }
 
-    const matches = await bcrypt.compare(dto.password, user.passwordHash);
+    const matches = await bcrypt.compare(password, user.passwordHash);
     if (!matches) {
       throw new UnauthorizedException('نام کاربری یا رمز عبور نادرست است');
     }
@@ -195,6 +199,7 @@ export class AuthService {
       countryId: user.countryId,
       provinceId: user.provinceId,
       cityId: user.cityId,
+      issuingOrganization: user.issuingOrganization,
       roles: user.userRoles.map((item) => ({
         code: item.role.code,
         nameKey: item.role.nameKey,

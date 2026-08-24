@@ -35,6 +35,12 @@ export class CreateCaravanDto {
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  walkingRouteId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
   @IsString()
   licenseNumber?: string | null;
 

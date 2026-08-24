@@ -1,4 +1,4 @@
-/** رمز ساده ۸رقمی با جفت‌های تکراری، مثل ۸۸۲۲۵۵۶۶ */
+/** رمز ساده ۸رقمی با جفت‌های تکراری، مثل ۲۲۵۵۶۶۴۴ */
 export function generateRepeatingDigitPassword(): string {
   const pairs: number[] = [];
   while (pairs.length < 4) {
@@ -12,10 +12,7 @@ export function generateRepeatingDigitPassword(): string {
   return pairs.map((digit) => `${digit}${digit}`).join('');
 }
 
-export function resolvePilgrimResetPassword(nationalId?: string | null): string {
-  const id = nationalId?.trim() ?? '';
-  if (id.length >= 8) {
-    return id;
-  }
+/** رمز بازیابی زائر همیشه الگوی جفت‌تکراری است (نه کد ملی). */
+export function resolvePilgrimResetPassword(): string {
   return generateRepeatingDigitPassword();
 }

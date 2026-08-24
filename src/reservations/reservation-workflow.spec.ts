@@ -2,7 +2,7 @@ import {
   ReservationStatus,
   ReservationType,
 } from '../generated/prisma/client';
-import { validRewindStatuses } from './reservation-workflow';
+import { validRewindStatuses, unapprovedCounts } from './reservation-workflow';
 
 describe('validRewindStatuses', () => {
   it('keeps all return targets for a rejected caravan', () => {
@@ -33,5 +33,15 @@ describe('validRewindStatuses', () => {
   it('has no rewind target from draft or cancelled', () => {
     expect(validRewindStatuses(ReservationType.GROUP, ReservationStatus.DRAFT)).toEqual([]);
     expect(validRewindStatuses(ReservationType.GROUP, ReservationStatus.CANCELLED)).toEqual([]);
+  });
+});
+
+describe('unapprovedCounts', () => {
+  it('keeps approved headcount at zero until management review', () => {
+    expect(unapprovedCounts()).toEqual({
+      maleCount: 0,
+      femaleCount: 0,
+      totalCount: 0,
+    });
   });
 });

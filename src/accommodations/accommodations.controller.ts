@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   StreamableFile,
   UseGuards,
@@ -23,6 +24,7 @@ import { CreateAccommodationDto } from './dto/create-accommodation.dto';
 import { FindAccommodationReportQueryDto } from './dto/find-accommodation-report-query.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
+import { SetAccommodationYearContactsDto } from './dto/set-accommodation-year-contacts.dto';
 import { TransferAccommodationsYearDto } from './dto/transfer-accommodations-year.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
 import { AccommodationsService } from './accommodations.service';
@@ -31,6 +33,15 @@ type RequestUser = {
   id: string;
   userRoles: { role: { code: string } }[];
 };
+
+const mineRoles = [
+  'ADMIN',
+  'ACCOMMODATION_MANAGER',
+  'CARAVAN_MANAGER',
+  'GROUP_MANAGER',
+  'PILGRIM',
+  'HEADQUARTERS_REPRESENTATIVE',
+] as const;
 
 @Controller('accommodations')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -44,6 +55,15 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.findAll(query, actor);
+  }
+
+  @Get('mine')
+  @Roles(...mineRoles)
+  findMine(
+    @Query() query: FindAccommodationsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.findMine(query, actor);
   }
 
   @Get('report')
@@ -159,6 +179,7 @@ export class AccommodationsController {
   }
 
   @Post()
+  @Roles(...mineRoles)
   create(
     @Body() dto: CreateAccommodationDto,
     @CurrentUser() actor: RequestUser,
@@ -173,6 +194,15 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.update(id, dto, actor);
+  }
+
+  @Put(':id/year-contacts')
+  setYearContacts(
+    @Param('id') id: string,
+    @Body() dto: SetAccommodationYearContactsDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.setYearContacts(id, dto, actor);
   }
 
   @Post(':id/activate-year')

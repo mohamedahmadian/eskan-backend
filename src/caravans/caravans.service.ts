@@ -42,6 +42,12 @@ const caravanInclude = {
       },
     },
   },
+  walkingRoute: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   manager: {
     select: {
       id: true,
@@ -131,6 +137,7 @@ export class CaravansService {
         name: (dir) => ({ name: dir }),
         isActive: (dir) => ({ isActive: dir }),
         city: (dir) => ({ city: { nameFa: dir } }),
+        walkingRoute: (dir) => ({ walkingRoute: { name: dir } }),
         manager: (dir) => ({ manager: { fullName: dir } }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -159,6 +166,7 @@ export class CaravansService {
         { licenseNumber: containsInsensitive(query.q) },
         { city: { nameFa: containsInsensitive(query.q) } },
         { city: { nameEn: containsInsensitive(query.q) } },
+        { walkingRoute: { name: containsInsensitive(query.q) } },
         { manager: { fullName: containsInsensitive(query.q) } },
         { manager: { nationalId: containsInsensitive(query.q) } },
         { manager: { phone: containsInsensitive(query.q) } },
@@ -173,6 +181,7 @@ export class CaravansService {
   async create(dto: CreateCaravanDto, actor: RoleBearer & { id: string }) {
     const cityId = await this.resolveCityId(dto.cityId, actor.id);
     await this.assertLicenseImage(dto.licenseImageId);
+    await this.assertWalkingRoute(dto.walkingRouteId);
 
     const managerUserId = isAdmin(actor)
       ? dto.managerUserId
@@ -187,6 +196,7 @@ export class CaravansService {
         officePhone: dto.officePhone?.trim() || null,
         foundedYear: dto.foundedYear ?? null,
         cityId,
+        walkingRouteId: dto.walkingRouteId ?? null,
         licenseNumber: dto.licenseNumber?.trim() || null,
         licenseImageId: dto.licenseImageId ?? null,
         managerUserId: resolved.managerUserId,
@@ -218,6 +228,9 @@ export class CaravansService {
     const current = await this.findOne(id);
     if (dto.cityId) {
       await this.assertCity(dto.cityId);
+    }
+    if (dto.walkingRouteId !== undefined) {
+      await this.assertWalkingRoute(dto.walkingRouteId);
     }
     if (dto.licenseImageId !== undefined) {
       await this.assertLicenseImage(dto.licenseImageId);
@@ -260,6 +273,8 @@ export class CaravansService {
         foundedYear:
           dto.foundedYear === undefined ? undefined : dto.foundedYear,
         cityId: dto.cityId,
+        walkingRouteId:
+          dto.walkingRouteId === undefined ? undefined : dto.walkingRouteId,
         licenseNumber:
           dto.licenseNumber === undefined
             ? undefined
@@ -336,6 +351,17 @@ export class CaravansService {
     const city = await this.prisma.city.findUnique({ where: { id: cityId } });
     if (!city) {
       throw new BadRequestException('شهر انتخاب‌شده معتبر نیست');
+    }
+  }
+
+  private async assertWalkingRoute(routeId?: string | null) {
+    if (!routeId) return;
+    const route = await this.prisma.walkingRoute.findUnique({
+      where: { id: routeId },
+      select: { id: true },
+    });
+    if (!route) {
+      throw new BadRequestException('مسیر پیاده‌روی معتبر نیست');
     }
   }
 

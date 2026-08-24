@@ -53,12 +53,30 @@ async function main() {
     create: { code: 'PILGRIM', nameKey: 'roles.pilgrim' },
   });
 
-  await prisma.role.upsert({
+  const headquartersRepresentativeRole = await prisma.role.upsert({
     where: { code: 'HEADQUARTERS_REPRESENTATIVE' },
     update: { nameKey: 'roles.headquartersRepresentative' },
     create: {
       code: 'HEADQUARTERS_REPRESENTATIVE',
       nameKey: 'roles.headquartersRepresentative',
+    },
+  });
+
+  const licenseIssuerRole = await prisma.role.upsert({
+    where: { code: 'LICENSE_ISSUER' },
+    update: { nameKey: 'roles.licenseIssuer' },
+    create: {
+      code: 'LICENSE_ISSUER',
+      nameKey: 'roles.licenseIssuer',
+    },
+  });
+
+  const unitManagerRole = await prisma.role.upsert({
+    where: { code: 'UNIT_MANAGER' },
+    update: { nameKey: 'roles.unitManager' },
+    create: {
+      code: 'UNIT_MANAGER',
+      nameKey: 'roles.unitManager',
     },
   });
 
@@ -215,6 +233,21 @@ async function main() {
     },
   });
 
+  const licenses = await prisma.navModule.upsert({
+    where: { code: 'licenses' },
+    update: {
+      nameKey: 'modules.licenses',
+      icon: 'stamp',
+      sortOrder: 11,
+    },
+    create: {
+      code: 'licenses',
+      nameKey: 'modules.licenses',
+      icon: 'stamp',
+      sortOrder: 11,
+    },
+  });
+
   const menus = [
     {
       code: 'dashboard.overview',
@@ -265,12 +298,20 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'reservations.mine',
+      moduleId: caravans.id,
+      nameKey: 'menus.myReservations',
+      path: '/my-reservations',
+      icon: 'scroll-text',
+      sortOrder: 1,
+    },
+    {
       code: 'caravans.mine',
       moduleId: caravans.id,
       nameKey: 'menus.myCaravans',
       path: '/my-caravans',
       icon: 'tent',
-      sortOrder: 1,
+      sortOrder: 2,
     },
     {
       code: 'groups.mine',
@@ -278,14 +319,6 @@ async function main() {
       nameKey: 'menus.myGroups',
       path: '/my-groups',
       icon: 'users-round',
-      sortOrder: 2,
-    },
-    {
-      code: 'reservations.mine',
-      moduleId: caravans.id,
-      nameKey: 'menus.myReservations',
-      path: '/my-reservations',
-      icon: 'scroll-text',
       sortOrder: 3,
     },
     {
@@ -401,12 +434,60 @@ async function main() {
       sortOrder: 8,
     },
     {
+      code: 'base-info.government-organizations',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.governmentOrganizations',
+      path: '/base-info/government-organizations',
+      icon: 'building',
+      sortOrder: 9,
+    },
+    {
+      code: 'licenses.issue',
+      moduleId: licenses.id,
+      nameKey: 'menus.issueLicense',
+      path: '/licenses/new',
+      icon: 'stamp',
+      sortOrder: 1,
+    },
+    {
+      code: 'licenses.issued',
+      moduleId: licenses.id,
+      nameKey: 'menus.issuedLicenses',
+      path: '/licenses/issued',
+      icon: 'file-check',
+      sortOrder: 2,
+    },
+    {
       code: 'headquarters.representatives',
       moduleId: headquarters.id,
       nameKey: 'menus.headquartersRepresentatives',
       path: '/headquarters/representatives',
       icon: 'user-round',
       sortOrder: 1,
+    },
+    {
+      code: 'headquarters.units',
+      moduleId: headquarters.id,
+      nameKey: 'menus.orgUnits',
+      path: '/headquarters/units',
+      icon: 'building',
+      sortOrder: 2,
+    },
+    {
+      code: 'headquarters.accommodation-liaisons',
+      moduleId: headquarters.id,
+      nameKey: 'menus.unitAccommodationLiaisons',
+      path: '/headquarters/accommodation-liaisons',
+      icon: 'building-2',
+      sortOrder: 3,
+    },
+    {
+      code: 'headquarters.caravan-liaisons',
+      moduleId: headquarters.id,
+      nameKey: 'menus.unitCaravanLiaisons',
+      path: '/headquarters/caravan-liaisons',
+      icon: 'tent',
+      sortOrder: 4,
     },
     {
       code: 'users.list',
@@ -417,12 +498,20 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'accommodation.mine',
+      moduleId: accommodation.id,
+      nameKey: 'menus.myAccommodations',
+      path: '/my-accommodations',
+      icon: 'building',
+      sortOrder: 1,
+    },
+    {
       code: 'accommodation.managers',
       moduleId: accommodation.id,
       nameKey: 'menus.accommodationManagers',
       path: '/accommodation-managers',
       icon: 'user-round-check',
-      sortOrder: 1,
+      sortOrder: 2,
     },
     {
       code: 'accommodation.list',
@@ -430,7 +519,7 @@ async function main() {
       nameKey: 'menus.accommodations',
       path: '/accommodations',
       icon: 'building-2',
-      sortOrder: 2,
+      sortOrder: 3,
     },
     {
       code: 'accommodation.year-management',
@@ -438,7 +527,7 @@ async function main() {
       nameKey: 'menus.accommodationYearManagement',
       path: '/accommodation-year-management',
       icon: 'calendar-range',
-      sortOrder: 3,
+      sortOrder: 4,
     },
     {
       code: 'accommodation.report',
@@ -446,7 +535,7 @@ async function main() {
       nameKey: 'menus.accommodationReport',
       path: '/accommodation-report',
       icon: 'chart-column',
-      sortOrder: 4,
+      sortOrder: 5,
     },
     {
       code: 'logistics.suppliers',
@@ -580,14 +669,38 @@ async function main() {
     });
   }
 
+  // مدیر منوهای «مال من» کاروان و گروه را ندارد (مخصوص زائر و نقش‌های مرتبط)
+  const adminForbiddenMineMenus = menuRecords.filter((item) =>
+    item.code === 'caravans.mine' || item.code === 'groups.mine',
+  );
+  if (adminForbiddenMineMenus.length) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: adminRole.id,
+        menuId: { in: adminForbiddenMineMenus.map((item) => item.id) },
+      },
+    });
+  }
+
   const managerMenuCodes = new Set([
     'dashboard.overview',
-    'accommodation.list',
+    'accommodation.mine',
     'accommodation.report',
     'logistics.my-vouchers',
     'logistics.my-loans',
     'logistics.my-ice-vouchers',
   ]);
+  const accommodationListMenu = menuRecords.find(
+    (item) => item.code === 'accommodation.list',
+  );
+  if (accommodationListMenu) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: accommodationManagerRole.id,
+        menuId: accommodationListMenu.id,
+      },
+    });
+  }
   for (const menu of menuRecords.filter((item) =>
     managerMenuCodes.has(item.code),
   )) {
@@ -603,11 +716,34 @@ async function main() {
     });
   }
 
+  const myAccommodationsMenuCodes = new Set(['accommodation.mine']);
+  const rolesForMyAccommodations = [
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    licenseIssuerRole,
+    headquartersRepresentativeRole,
+  ];
+  for (const role of rolesForMyAccommodations) {
+    for (const menu of menuRecords.filter((item) =>
+      myAccommodationsMenuCodes.has(item.code),
+    )) {
+      await prisma.roleMenu.upsert({
+        where: {
+          roleId_menuId: { roleId: role.id, menuId: menu.id },
+        },
+        update: {},
+        create: { roleId: role.id, menuId: menu.id },
+      });
+    }
+  }
+
   const caravanMenuCodes = new Set([
     'dashboard.overview',
     'caravans.mine',
     'groups.mine',
     'reservations.mine',
+    'accommodation.mine',
   ]);
   const caravanListMenu = menuRecords.find(
     (item) => item.code === 'caravans.list',
@@ -639,6 +775,7 @@ async function main() {
     'dashboard.overview',
     'groups.mine',
     'reservations.mine',
+    'accommodation.mine',
   ]);
   for (const menu of menuRecords.filter((item) =>
     groupMenuCodes.has(item.code),
@@ -658,19 +795,10 @@ async function main() {
   const pilgrimMenuCodes = new Set([
     'dashboard.overview',
     'reservations.mine',
+    'caravans.mine',
     'groups.mine',
+    'accommodation.mine',
   ]);
-  const pilgrimMyCaravansMenu = menuRecords.find(
-    (item) => item.code === 'caravans.mine',
-  );
-  if (pilgrimMyCaravansMenu) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: pilgrimRole.id,
-        menuId: pilgrimMyCaravansMenu.id,
-      },
-    });
-  }
   for (const menu of menuRecords.filter((item) =>
     pilgrimMenuCodes.has(item.code),
   )) {
@@ -683,6 +811,59 @@ async function main() {
       },
       update: {},
       create: { roleId: pilgrimRole.id, menuId: menu.id },
+    });
+  }
+
+  const licenseIssuerMenuCodes = new Set([
+    'dashboard.overview',
+    'licenses.issue',
+    'licenses.issued',
+  ]);
+  for (const menu of menuRecords.filter((item) =>
+    licenseIssuerMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: licenseIssuerRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: licenseIssuerRole.id, menuId: menu.id },
+    });
+  }
+
+  // صادرکننده مجوز فقط منوی مجوزها را دارد؛ اسکان را بردار
+  const licenseIssuerForbiddenMenus = menuRecords.filter(
+    (item) => !licenseIssuerMenuCodes.has(item.code),
+  );
+  if (licenseIssuerForbiddenMenus.length) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: licenseIssuerRole.id,
+        menuId: { in: licenseIssuerForbiddenMenus.map((item) => item.id) },
+      },
+    });
+  }
+
+  const unitManagerMenuCodes = new Set([
+    'dashboard.overview',
+    'headquarters.accommodation-liaisons',
+    'headquarters.caravan-liaisons',
+  ]);
+  for (const menu of menuRecords.filter((item) =>
+    unitManagerMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: unitManagerRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: unitManagerRole.id, menuId: menu.id },
     });
   }
 

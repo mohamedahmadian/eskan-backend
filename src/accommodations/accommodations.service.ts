@@ -16,20 +16,38 @@ import {
 } from '../common/pagination';
 import {
   Prisma,
+  type AccommodationContactRole,
   type AccommodationStatus,
   type AccommodationType,
   type GenderType,
   type ManagementType,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
+import {
+  SetAccommodationYearContactsDto,
+  type YearContactMode,
+} from './dto/set-accommodation-year-contacts.dto';
 import { TransferAccommodationsYearDto } from './dto/transfer-accommodations-year.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
 import { resolveSortOrder } from '../common/sort-query';
+import type { AccommodationContactInputDto } from './dto/accommodation-contact-input.dto';
 
 const geoSelect = { id: true, nameFa: true, nameEn: true };
+
+const contactUserSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  fullName: true,
+  nationalId: true,
+  phone: true,
+  birthDate: true,
+  status: true,
+} as const;
 
 const accommodationInclude = {
   country: { select: geoSelect },
@@ -45,6 +63,25 @@ const accommodationInclude = {
       user: { select: { id: true, username: true, fullName: true } },
     },
   },
+  contacts: {
+    orderBy: { role: 'asc' as const },
+    select: {
+      id: true,
+      role: true,
+      userId: true,
+      user: { select: contactUserSelect },
+    },
+  },
+  yearContacts: {
+    orderBy: [{ year: 'desc' as const }, { role: 'asc' as const }],
+    select: {
+      id: true,
+      role: true,
+      userId: true,
+      year: true,
+      user: { select: contactUserSelect },
+    },
+  },
 } satisfies Prisma.AccommodationInclude;
 
 type Actor = {
@@ -58,7 +95,39 @@ type AccommodationRecord = Prisma.AccommodationGetPayload<{
 
 @Injectable()
 export class AccommodationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly users: UsersService,
+  ) {}
+
+  async findMine(query: FindAccommodationsQueryDto, actor: Actor) {
+    const mineWhere = this.listWhere(query, {
+      id: actor.id,
+      userRoles: [],
+    });
+    const findMany = {
+      where: mineWhere,
+      orderBy: this.listOrderBy(query),
+      include: accommodationInclude,
+    };
+
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.accommodation.findMany(findMany);
+      return items.map((item) => this.serialize(item));
+    }
+
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const [items, total] = await Promise.all([
+      this.prisma.accommodation.findMany({ ...findMany, skip, take }),
+      this.prisma.accommodation.count({ where: mineWhere }),
+    ]);
+    return paginatedResult(
+      items.map((item) => this.serialize(item)),
+      total,
+      page,
+      pageSize,
+    );
+  }
 
   async findAll(query: FindAccommodationsQueryDto, actor: Actor) {
     const where = this.listWhere(query, actor);
@@ -211,6 +280,9 @@ export class AccommodationsService {
     this.assertCapacity(dto);
     const geo = await this.resolveGeo(dto);
     const admin = isAdmin(actor);
+    if (!admin) {
+      await this.users.ensureRole(actor.id, 'ACCOMMODATION_MANAGER');
+    }
     const managerIds = admin
       ? [...new Set(dto.managerUserIds ?? [])]
       : [actor.id];
@@ -233,13 +305,24 @@ export class AccommodationsService {
         actorId: actor.id,
         forcePrimaryIfFirst: !admin,
       });
-      return tx.accommodation.findUniqueOrThrow({
-        where: { id: row.id },
-        include: accommodationInclude,
-      });
+      return row;
     });
 
-    return this.serialize(created);
+    if (dto.contacts) {
+      await this.syncContacts(created.id, dto.contacts);
+    }
+
+    if (!admin) {
+      await this.applyYearContacts(
+        created.id,
+        currentJalaliYear(),
+        dto.yearContactMode ?? 'manager',
+        dto.contacts,
+        actor.id,
+      );
+    }
+
+    return this.findOne(created.id, actor);
   }
 
   async update(id: string, dto: UpdateAccommodationDto, actor: Actor) {
@@ -260,7 +343,7 @@ export class AccommodationsService {
     });
     const admin = isAdmin(actor);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       await tx.accommodation.update({
         where: { id },
         data: this.toData(dto, geo, true) as Prisma.AccommodationUncheckedUpdateInput,
@@ -268,7 +351,9 @@ export class AccommodationsService {
       if (admin && (dto.managerUserIds || dto.primaryManagerUserId !== undefined)) {
         const managerIds = dto.managerUserIds
           ? [...new Set(dto.managerUserIds)]
-          : current.managers.map((item) => item.userId);
+          : current.managers
+              .map((item) => item.userId)
+              .filter((userId): userId is string => Boolean(userId));
         await this.syncManagers(tx, {
           accommodationId: id,
           managerUserIds: managerIds,
@@ -282,13 +367,30 @@ export class AccommodationsService {
       } else if (!admin && dto.isPrimary === true) {
         await this.setUserPrimary(tx, actor.id, id);
       }
-      return tx.accommodation.findUniqueOrThrow({
-        where: { id },
-        include: accommodationInclude,
-      });
     });
 
-    return this.serialize(updated);
+    if (dto.contacts !== undefined) {
+      await this.syncContacts(id, dto.contacts ?? []);
+    }
+
+    return this.findOne(id, actor);
+  }
+
+  async setYearContacts(
+    id: string,
+    dto: SetAccommodationYearContactsDto,
+    actor: Actor,
+  ) {
+    await this.findRecord(id, actor);
+    const year = dto.year ?? currentJalaliYear();
+    await this.applyYearContacts(
+      id,
+      year,
+      dto.mode,
+      dto.contacts,
+      actor.id,
+    );
+    return this.findOne(id, actor);
   }
 
   async remove(id: string, actor: Actor) {
@@ -350,6 +452,7 @@ export class AccommodationsService {
           isPrimary: !hasPrimaryThisYear && previous.isPrimary,
         },
       });
+      await this.copyYearContactsBetweenYears(id, previousYear, selectedYear);
       return this.findOne(id, actor);
     }
 
@@ -570,6 +673,7 @@ export class AccommodationsService {
     }
 
     const copyManagers = dto.copyManagers !== false;
+    const copyYearContacts = dto.copyYearContacts !== false;
     const scope = this.listWhere({}, actor);
     const activeInSource = this.andWhere(scope, {
       managers: { some: { year: sourceYear } },
@@ -608,6 +712,7 @@ export class AccommodationsService {
           sourceYear,
           targetYear,
           copyManagers,
+          copyYearContacts,
         );
         if (result === 'skipped') skipped += 1;
         else transferred += 1;
@@ -630,6 +735,7 @@ export class AccommodationsService {
       sourceYear,
       targetYear,
       copyManagers,
+      copyYearContacts,
       requested: candidates.length,
       transferred,
       skipped,
@@ -648,6 +754,7 @@ export class AccommodationsService {
     sourceYear: number,
     targetYear: number,
     copyManagers: boolean,
+    copyYearContacts: boolean,
   ): Promise<'ok' | 'skipped'> {
     const existing = await this.prisma.accommodationManager.findFirst({
       where: { accommodationId, year: targetYear },
@@ -666,6 +773,13 @@ export class AccommodationsService {
           isPrimary: false,
         },
       });
+      if (copyYearContacts) {
+        await this.copyYearContactsBetweenYears(
+          accommodationId,
+          sourceYear,
+          targetYear,
+        );
+      }
       return 'ok';
     }
 
@@ -687,6 +801,13 @@ export class AccommodationsService {
           isPrimary: false,
         },
       });
+      if (copyYearContacts) {
+        await this.copyYearContactsBetweenYears(
+          accommodationId,
+          sourceYear,
+          targetYear,
+        );
+      }
       return 'ok';
     }
 
@@ -751,6 +872,14 @@ export class AccommodationsService {
         });
       }
     });
+
+    if (copyYearContacts) {
+      await this.copyYearContactsBetweenYears(
+        accommodationId,
+        sourceYear,
+        targetYear,
+      );
+    }
 
     return 'ok';
   }
@@ -1000,6 +1129,168 @@ export class AccommodationsService {
     }
 
     return data as Prisma.AccommodationUncheckedUpdateInput;
+  }
+
+  private async syncContacts(
+    accommodationId: string,
+    contacts: AccommodationContactInputDto[],
+  ) {
+    if (!contacts.length) {
+      await this.prisma.accommodationContact.deleteMany({
+        where: { accommodationId },
+      });
+      return;
+    }
+
+    const roles = contacts.map((item) => item.role);
+    await this.prisma.accommodationContact.deleteMany({
+      where: {
+        accommodationId,
+        role: { notIn: roles },
+      },
+    });
+
+    for (const contact of contacts) {
+      const { user } = await this.users.findOrCreatePilgrim({
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        nationalId: contact.nationalId,
+        phone: contact.phone,
+        birthDate: contact.birthDate ?? null,
+      });
+
+      await this.prisma.accommodationContact.upsert({
+        where: {
+          accommodationId_role: {
+            accommodationId,
+            role: contact.role,
+          },
+        },
+        create: {
+          accommodationId,
+          role: contact.role,
+          userId: user.id,
+        },
+        update: {
+          userId: user.id,
+        },
+      });
+    }
+  }
+
+  private async applyYearContacts(
+    accommodationId: string,
+    year: number,
+    mode: YearContactMode,
+    manualContacts: AccommodationContactInputDto[] | undefined,
+    fallbackManagerUserId: string,
+  ) {
+    if (mode === 'manager') {
+      const manager = await this.prisma.accommodationManager.findFirst({
+        where: {
+          accommodationId,
+          year,
+          userId: { not: null },
+        },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        select: { userId: true },
+      });
+      const userId = manager?.userId ?? fallbackManagerUserId;
+      await this.replaceYearContactsWithUser(accommodationId, year, userId);
+      return;
+    }
+
+    if (mode === 'fromAccommodation') {
+      const template = await this.prisma.accommodationContact.findMany({
+        where: { accommodationId },
+      });
+      await this.prisma.accommodationYearContact.deleteMany({
+        where: { accommodationId, year },
+      });
+      for (const contact of template) {
+        await this.prisma.accommodationYearContact.create({
+          data: {
+            accommodationId,
+            year,
+            role: contact.role,
+            userId: contact.userId,
+          },
+        });
+      }
+      return;
+    }
+
+    // manual
+    await this.prisma.accommodationYearContact.deleteMany({
+      where: { accommodationId, year },
+    });
+    for (const contact of manualContacts ?? []) {
+      const { user } = await this.users.findOrCreatePilgrim({
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        nationalId: contact.nationalId,
+        phone: contact.phone,
+        birthDate: contact.birthDate ?? null,
+      });
+      await this.prisma.accommodationYearContact.create({
+        data: {
+          accommodationId,
+          year,
+          role: contact.role,
+          userId: user.id,
+        },
+      });
+    }
+  }
+
+  private async replaceYearContactsWithUser(
+    accommodationId: string,
+    year: number,
+    userId: string,
+  ) {
+    const roles: AccommodationContactRole[] = [
+      'DEPUTY',
+      'RECEPTION',
+      'FACILITIES_SAFETY',
+      'SECURITY',
+      'HEALTH',
+      'CULTURAL',
+      'LOGISTICS_SUPPORT',
+    ];
+    await this.prisma.accommodationYearContact.deleteMany({
+      where: { accommodationId, year },
+    });
+    await this.prisma.accommodationYearContact.createMany({
+      data: roles.map((role) => ({
+        accommodationId,
+        year,
+        role,
+        userId,
+      })),
+    });
+  }
+
+  private async copyYearContactsBetweenYears(
+    accommodationId: string,
+    sourceYear: number,
+    targetYear: number,
+  ) {
+    const source = await this.prisma.accommodationYearContact.findMany({
+      where: { accommodationId, year: sourceYear },
+    });
+    if (!source.length) return;
+
+    await this.prisma.accommodationYearContact.deleteMany({
+      where: { accommodationId, year: targetYear },
+    });
+    await this.prisma.accommodationYearContact.createMany({
+      data: source.map((item) => ({
+        accommodationId,
+        year: targetYear,
+        role: item.role,
+        userId: item.userId,
+      })),
+    });
   }
 
   private async syncManagers(

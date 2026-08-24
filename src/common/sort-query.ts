@@ -5,11 +5,13 @@ export type SortDirection = (typeof sortDirections)[number];
  * Build Prisma orderBy: primary sort (if valid) then stable fallbacks.
  * Pass an explicit type argument, e.g.
  * resolveSortOrder<Prisma.UserOrderByWithRelationInput>(...)
+ *
+ * A builder may return one clause or several (e.g. date + time tie-break).
  */
 export function resolveSortOrder<TOrderBy>(
   sortBy: string | undefined,
   sortDir: SortDirection | undefined,
-  builders: Record<string, (dir: SortDirection) => TOrderBy>,
+  builders: Record<string, (dir: SortDirection) => TOrderBy | TOrderBy[]>,
   fallback: NoInfer<TOrderBy>[],
 ): TOrderBy[] {
   if (!sortBy || (sortDir !== 'asc' && sortDir !== 'desc')) {
@@ -19,5 +21,6 @@ export function resolveSortOrder<TOrderBy>(
   if (!build) {
     return fallback;
   }
-  return [build(sortDir), ...fallback];
+  const primary = build(sortDir);
+  return [...(Array.isArray(primary) ? primary : [primary]), ...fallback];
 }

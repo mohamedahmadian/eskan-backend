@@ -187,6 +187,14 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return super.create(dto);
   }
 
+  @Post(':id/password/recover')
+  resetPassword(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.resetPilgrimPasswordAndSms(id, actor.id);
+  }
+
   @Patch(':id/password')
   setPassword(
     @Param('id') id: string,

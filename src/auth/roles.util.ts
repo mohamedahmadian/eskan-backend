@@ -35,6 +35,14 @@ export function isGroupManager(user: RoleBearer | null | undefined) {
   return hasRole(user, 'GROUP_MANAGER');
 }
 
+export function isLicenseIssuer(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'LICENSE_ISSUER');
+}
+
+export function isUnitManager(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'UNIT_MANAGER');
+}
+
 export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
 }
