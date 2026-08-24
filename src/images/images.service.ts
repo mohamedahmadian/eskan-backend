@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import sharp from 'sharp';
+import { Jimp, JimpMime } from 'jimp';
 import { PrismaService } from '../prisma/prisma.service';
 
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_EDGE = 1600;
+const JPEG_QUALITY = 88;
 
 type ImageUpload = {
   buffer: Buffer;
@@ -27,19 +28,26 @@ export class ImagesService {
       throw new BadRequestException('فقط فایل تصویر مجاز است');
     }
 
-    const compressed = await sharp(file.buffer)
-      .rotate()
-      .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 88, effort: 4 })
-      .toBuffer({ resolveWithObject: true });
+    let image;
+    try {
+      image = await Jimp.read(file.buffer);
+    } catch {
+      throw new BadRequestException('فایل تصویر نامعتبر است');
+    }
+
+    if (image.width > MAX_EDGE || image.height > MAX_EDGE) {
+      image.scaleToFit({ w: MAX_EDGE, h: MAX_EDGE });
+    }
+
+    const data = await image.getBuffer(JimpMime.jpeg, { quality: JPEG_QUALITY });
 
     return this.prisma.storedImage.create({
       data: {
-        mimeType: 'image/webp',
-        data: compressed.data,
-        byteSize: compressed.data.length,
-        width: compressed.info.width,
-        height: compressed.info.height,
+        mimeType: JimpMime.jpeg,
+        data,
+        byteSize: data.length,
+        width: image.width,
+        height: image.height,
         originalName: file.originalname,
       },
       select: {
