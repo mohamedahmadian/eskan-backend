@@ -26,8 +26,11 @@ export class CreateCaravanDto {
   @IsString()
   description?: string | null;
 
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
   @IsUUID()
-  cityId: string;
+  cityId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

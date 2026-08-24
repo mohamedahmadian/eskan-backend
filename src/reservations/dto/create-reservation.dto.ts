@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -56,11 +57,22 @@ export class CreateReservationDto {
   @Min(0)
   femaleCount: number;
 
+  @IsBoolean()
+  requestsAccommodation: boolean;
+
+  @IsBoolean()
+  requestsBus: boolean;
+
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsUUID()
   caravanId?: string | null;
+
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((o) => o.type === ReservationType.GROUP)
+  @IsUUID()
+  groupId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

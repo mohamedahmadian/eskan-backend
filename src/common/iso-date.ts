@@ -30,3 +30,9 @@ export function parseOptionalIsoDate(
   }
   return parseIsoDate(value);
 }
+
+export function addDaysIso(value: string, days: number) {
+  const date = parseIsoDate(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}

@@ -99,12 +99,14 @@ model User {
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
   managedCaravans       Caravan[] @relation("CaravanManager")
+  managedGroups         Group[]   @relation("GroupManager")
   caravanContacts       CaravanContact[]
   createdReservations   Reservation[] @relation("ReservationCreator")
   managedReservations   Reservation[] @relation("ReservationCaravanManager")
   reservationMembers    ReservationMember[]
   reservationCaravanContacts ReservationCaravanContact[] @relation("ReservationCaravanContactPerson")
   reservationMemberInsuranceVerifications ReservationMember[] @relation("ReservationMemberInsuranceVerifier")
+  reservationMemberInsurancePayments ReservationMember[] @relation("ReservationMemberInsurancePayer")
   rejectedReservations  Reservation[] @relation("ReservationRejecter")
   cancelledReservations Reservation[] @relation("ReservationCanceller")
   reservationBasicInfoCompletions Reservation[] @relation("ReservationBasicInfoCompleter")
@@ -240,6 +242,29 @@ model CaravanContact {
   @@map("caravan_contacts")
 }
 
+model Group {
+  id            String   @id @default(uuid())
+  name          String
+  cityId        String
+  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  managerUserId String?
+  manager       User?    @relation("GroupManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  totalCount    Int      @default(0)
+  maleCount     Int      @default(0)
+  femaleCount   Int      @default(0)
+  eitaa         String?
+  bale          String?
+  telegram      String?
+  instagram     String?
+  reservations  Reservation[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([cityId])
+  @@index([managerUserId])
+  @@map("groups")
+}
+
 enum ReservationType {
   INDIVIDUAL
   GROUP
@@ -264,6 +289,11 @@ enum ReservationMemberInsuranceStatus {
   REJECTED
 }
 
+enum ReservationMemberInsurancePaidMethod {
+  MANAGEMENT
+  ONLINE_GATEWAY
+}
+
 model Reservation {
   id          String            @id @default(uuid())
   createdById String
@@ -281,12 +311,19 @@ model Reservation {
   stayEndDate      DateTime? @db.Date
   walkingStartDate DateTime? @db.Date
 
-  maleCount   Int @default(0)
-  femaleCount Int @default(0)
-  totalCount  Int @default(0)
+  requestsAccommodation Boolean @default(true)
+  requestsBus           Boolean @default(true)
+
+  requestedMaleCount   Int @default(0)
+  requestedFemaleCount Int @default(0)
+  maleCount            Int @default(0)
+  femaleCount          Int @default(0)
+  totalCount           Int @default(0)
 
   caravanId        String?
   caravan          Caravan? @relation(fields: [caravanId], references: [id], onDelete: SetNull)
+  groupId          String?
+  group            Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
   caravanManagerId String?
   caravanManager   User?    @relation("ReservationCaravanManager", fields: [caravanManagerId], references: [id], onDelete: Restrict)
 
@@ -340,6 +377,7 @@ model Reservation {
   @@index([status])
   @@index([year, type, status])
   @@index([caravanId])
+  @@index([groupId])
   @@index([caravanManagerId])
   @@index([walkingRouteId])
   @@index([originCityId])
@@ -357,6 +395,9 @@ model ReservationMember {
   insurancePaidAt       DateTime?
   insurancePaidAmount   Int?
   insurancePaymentRef   String?
+  insurancePaidMethod   ReservationMemberInsurancePaidMethod?
+  insurancePaidById     String?
+  insurancePaidBy       User? @relation("ReservationMemberInsurancePayer", fields: [insurancePaidById], references: [id], onDelete: Restrict)
   insuranceManualNote   String?
   insuranceVerifiedAt   DateTime?
   insuranceVerifiedById String?
@@ -368,6 +409,7 @@ model ReservationMember {
   @@unique([reservationId, userId])
   @@index([reservationId])
   @@index([userId])
+  @@index([insurancePaidById])
   @@map("reservation_members")
 }
 
@@ -409,6 +451,9 @@ model ReceptionSettings {
   insuranceOrganization  String @default("")
   insurancePremiumAmount Int    @default(0)
   insuranceCoverage      String @default("")
+
+  imamRezaMartyrdomDate DateTime? @db.Date
+  prophetDemiseDate     DateTime? @db.Date
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -520,6 +565,7 @@ model City {
   redCrescents               RedCrescent[]
   benefactors                Benefactor[]
   caravans                   Caravan[]
+  groups                     Group[]
   reservationOrigins         Reservation[]             @relation("ReservationOriginCity")
   users                      User[]                    @relation("UserHomeCity")
   representativeId           String?

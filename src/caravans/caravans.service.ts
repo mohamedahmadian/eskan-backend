@@ -171,7 +171,7 @@ export class CaravansService {
   }
 
   async create(dto: CreateCaravanDto, actor: RoleBearer & { id: string }) {
-    await this.assertCity(dto.cityId);
+    const cityId = await this.resolveCityId(dto.cityId, actor.id);
     await this.assertLicenseImage(dto.licenseImageId);
 
     const managerUserId = isAdmin(actor)
@@ -186,7 +186,7 @@ export class CaravansService {
         officeAddress: dto.officeAddress?.trim() || null,
         officePhone: dto.officePhone?.trim() || null,
         foundedYear: dto.foundedYear ?? null,
-        cityId: dto.cityId,
+        cityId,
         licenseNumber: dto.licenseNumber?.trim() || null,
         licenseImageId: dto.licenseImageId ?? null,
         managerUserId: resolved.managerUserId,
@@ -313,6 +313,23 @@ export class CaravansService {
     );
     await this.users.ensureRole(managerUserId, 'CARAVAN_MANAGER');
     return { managerUserId };
+  }
+
+  private async resolveCityId(cityId: string | null | undefined, actorId: string) {
+    const resolved = cityId || (await this.actorCityId(actorId));
+    if (!resolved) {
+      throw new BadRequestException('شهر انتخاب‌شده معتبر نیست');
+    }
+    await this.assertCity(resolved);
+    return resolved;
+  }
+
+  private async actorCityId(actorId: string) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { cityId: true },
+    });
+    return actor?.cityId ?? null;
   }
 
   private async assertCity(cityId: string) {

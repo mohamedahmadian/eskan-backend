@@ -33,6 +33,8 @@ export const reservationSortFields = [
   'totalCount',
   'originCity',
   'createdBy',
+  'caravan',
+  'caravanManager',
 ] as const;
 
 export type ReservationSortField = (typeof reservationSortFields)[number];
@@ -74,6 +76,11 @@ export class FindReservationsQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
   originCityId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsUUID()
+  caravanId?: string;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))

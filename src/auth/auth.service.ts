@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
-import { canAccessMyCaravans } from './roles.util';
+import { canAccessMyCaravans, canAccessMyGroups } from './roles.util';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -152,6 +152,9 @@ export class AuthService {
 
     for (const item of roleMenus) {
       if (item.menu.code === 'caravans.mine' && !canAccessMyCaravans(user)) {
+        continue;
+      }
+      if (item.menu.code === 'groups.mine' && !canAccessMyGroups(user)) {
         continue;
       }
       const mod = item.menu.module;

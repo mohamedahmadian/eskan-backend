@@ -23,6 +23,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AddReservationMemberDto } from './dto/add-reservation-member.dto';
+import { UpdateReservationMemberDto } from './dto/update-reservation-member.dto';
 import { ApproveReservationDto } from './dto/approve-reservation.dto';
 import { CopyPreviousMembersDto } from './dto/copy-previous-members.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -163,7 +164,7 @@ export class ReservationsController {
     @Body() dto: ApproveReservationDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.approve(id, actor, dto?.notes);
+    return this.reservations.approve(id, actor, dto);
   }
 
   @Post(':id/reject')
@@ -270,6 +271,17 @@ export class ReservationsController {
     return this.reservations.addMember(id, dto, actor);
   }
 
+  @Patch(':id/members/:memberId')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  updateMember(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: UpdateReservationMemberDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.updateMember(id, memberId, dto, actor);
+  }
+
   @Delete(':id/members/:memberId')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   removeMember(
@@ -287,7 +299,7 @@ export class ReservationsController {
     @Body() dto: CopyPreviousMembersDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.copyPreviousMembers(id, actor, dto.userIds);
+    return this.reservations.copyPreviousMembers(id, actor, dto.sourceReservationId);
   }
 
   @Post(':id/companions/complete')
@@ -304,6 +316,28 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.setContact(id, dto, actor);
+  }
+
+  @Post(':id/contacts/from-caravan')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  copyContactsFromCaravan(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.reservations.copyContactsFromCaravan(id, actor);
+  }
+
+  @Delete(':id/contacts')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  removeAllContacts(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.reservations.removeAllContacts(id, actor);
+  }
+
+  @Delete(':id/contacts/:role')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  removeContact(
+    @Param('id') id: string,
+    @Param('role') role: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.removeContact(id, role, actor);
   }
 
   @Post(':id/contacts/complete')

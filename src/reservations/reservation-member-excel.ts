@@ -5,6 +5,7 @@ import {
   normalizeNationalId,
   toLatinDigits,
 } from '../common/national-id';
+import { jalaliToIsoDate } from '../common/jalali-year';
 import { normalizePhone } from '../common/phone';
 import { UserGender } from '../generated/prisma/client';
 
@@ -40,9 +41,9 @@ const HEADER_ALIASES: Record<ColumnKey, string[]> = {
   nationalId: ['کدملی', 'nationalcode', 'nationalid', 'national_code'],
   firstName: ['نام', 'firstname', 'first_name'],
   lastName: ['نامخانوادگی', 'lastname', 'last_name'],
-  phone: ['تلفن', 'تلفنهمراه', 'شمارهموبایل', 'phone', 'mobile'],
+  phone: ['تلفن', 'تلفنهمراه', 'شمارههمراه', 'شمارهموبایل', 'موبایل', 'همراه', 'phone', 'mobile'],
   gender: ['جنسیت', 'gender'],
-  birthDate: ['تاریخولد', 'birthdate', 'birth_date', 'birthdate'],
+  birthDate: ['تاریخولد', 'تاریختولد', 'متولد', 'birthdate', 'birth_date'],
 };
 
 const DEFAULT_COLUMNS: Record<ColumnKey, number> = {
@@ -101,71 +102,89 @@ function excelSerialToIso(serial: number): string | null {
   return date.toISOString().slice(0, 10);
 }
 
-function jalaliToIso(jy: number, jm: number, jd: number): string | null {
-  if (jy < 1200 || jy > 1500 || jm < 1 || jm > 12 || jd < 1 || jd > 31) {
-    return null;
-  }
-  const gDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  const jDaysInMonth = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
-  let jy2 = jy - 979;
-  let jm2 = jm - 1;
-  let jd2 = jd - 1;
-  let jDayNo =
-    365 * jy2 + Math.floor(jy2 / 33) * 8 + Math.floor(((jy2 % 33) + 3) / 4);
-  for (let i = 0; i < jm2; i += 1) jDayNo += jDaysInMonth[i];
-  jDayNo += jd2;
-  let gDayNo = jDayNo + 79;
-  let gy = 1600 + 400 * Math.floor(gDayNo / 146097);
-  gDayNo %= 146097;
-  let leap = true;
-  if (gDayNo >= 36525) {
-    gDayNo -= 1;
-    gy += 100 * Math.floor(gDayNo / 36524);
-    gDayNo %= 36524;
-    if (gDayNo >= 365) gDayNo += 1;
-    else leap = false;
-  }
-  gy += 4 * Math.floor(gDayNo / 1461);
-  gDayNo %= 1461;
-  if (gDayNo >= 366) {
-    leap = false;
-    gDayNo -= 1;
-    gy += Math.floor(gDayNo / 365);
-    gDayNo %= 365;
-  }
-  let gm = 0;
-  for (; gm < 12; gm += 1) {
-    const days = gDaysInMonth[gm] + (gm === 1 && leap ? 1 : 0);
-    if (gDayNo < days) break;
-    gDayNo -= days;
-  }
-  const gd = gDayNo + 1;
-  return `${gy}-${String(gm + 1).padStart(2, '0')}-${String(gd).padStart(2, '0')}`;
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0');
 }
 
-function parseBirthDate(value: ExcelJS.CellValue): string | null {
-  const raw = cellToRaw(value);
-  if (raw == null || raw === '') return null;
-  if (raw instanceof Date) return dateToIso(raw);
-  if (typeof raw === 'number') return excelSerialToIso(raw);
+function cellDisplayText(cell: ExcelJS.Cell): string {
+  try {
+    const text = cell.text;
+    return typeof text === 'string' ? text : '';
+  } catch {
+    return '';
+  }
+}
 
-  const text = toLatinDigits(String(raw).trim()).replace(/[٫.]/g, '/');
-  if (!text) return null;
+function parseBirthDateText(input: string): string | null {
+  const latin = toLatinDigits(input)
+    .replace(/[\u200c\u200d\u200e\u200f\u202a-\u202e]/g, '')
+    .trim();
+  if (!latin) return null;
+  const dateOnly = (latin.split(/[T\s]/)[0] ?? '').replace(/[٫٬]/g, '/');
+  if (!dateOnly) return null;
 
-  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(dateOnly);
   if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    if (year >= 1700) {
+      return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+    }
+    return jalaliToIsoDate(year, month, day);
   }
 
-  const parts = text.split(/[/\\-]/).map((part) => Number(part));
-  if (parts.length === 3 && parts.every((n) => Number.isFinite(n))) {
-    const [y, m, d] = parts;
-    if (y >= 1700) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const slashed = dateOnly.replace(/[.]/g, '/');
+  const parts = slashed.split(/[/\\-–—]/).map((part) => Number(part));
+  if (parts.length === 3 && parts.every((n) => Number.isFinite(n) && n > 0)) {
+    const [first, second, third] = parts;
+    if (third >= 1200 && third <= 1600 && first <= 31) {
+      return jalaliToIsoDate(third, second, first);
     }
-    return jalaliToIso(y, m, d);
+    if (first >= 1200 && first <= 1600) {
+      return jalaliToIsoDate(first, second, third);
+    }
+    if (first >= 1700 && first <= 2200) {
+      return `${first}-${padDatePart(second)}-${padDatePart(third)}`;
+    }
   }
   return null;
+}
+
+function parseBirthDate(value: ExcelJS.CellValue, displayText?: string): string | null {
+  for (const text of [
+    displayText,
+    typeof cellToRaw(value) === 'string' ? String(cellToRaw(value)) : '',
+  ]) {
+    if (!text) continue;
+    const parsed = parseBirthDateText(text);
+    if (parsed) return parsed;
+  }
+
+  const raw = cellToRaw(value);
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    const year = raw.getUTCFullYear();
+    if (year >= 1200 && year <= 1600) {
+      return jalaliToIsoDate(year, raw.getUTCMonth() + 1, raw.getUTCDate());
+    }
+    return dateToIso(raw);
+  }
+  if (typeof raw === 'number') {
+    return excelSerialToIso(raw);
+  }
+  return null;
+}
+
+function parsePhone(value: ExcelJS.CellValue, displayText?: string): string {
+  const candidates = [displayText, cellToText(value)].filter(Boolean);
+  for (const text of candidates) {
+    const digits = toLatinDigits(text).replace(/\D/g, '');
+    if (!digits) continue;
+    const normalized =
+      digits.length === 10 && digits.startsWith('9') ? `0${digits}` : digits;
+    return normalizePhone(normalized);
+  }
+  return '';
 }
 
 function hasCellInput(value: ExcelJS.CellValue) {
@@ -237,21 +256,23 @@ function resolveColumns(firstRow: string[]): Record<ColumnKey, number> | null {
 
 function parseRow(
   rowNumber: number,
-  cells: Record<ColumnKey, ExcelJS.CellValue>,
+  cells: Record<ColumnKey, ExcelJS.Cell>,
 ): ParsedMemberImportRow {
-  const firstName = cellToText(cells.firstName);
-  const lastName = cellToText(cells.lastName);
-  const genderText = cellToText(cells.gender);
+  const firstName = cellToText(cells.firstName.value);
+  const lastName = cellToText(cells.lastName.value);
+  const genderText = cellToText(cells.gender.value);
   const gender = parseMemberGender(genderText);
-  const phoneRaw = cellToText(cells.phone).replace(/\s+/g, '');
-  const phone = phoneRaw ? normalizePhone(phoneRaw) : '';
-  const nationalRaw = cellToText(cells.nationalId).replace(/\s+/g, '');
+  const phone = parsePhone(cells.phone.value, cellDisplayText(cells.phone));
+  const nationalRaw = cellToText(cells.nationalId.value).replace(/\s+/g, '');
   const nationalId = nationalRaw ? normalizeNationalId(nationalRaw) : '';
-  const birthDateText = hasCellInput(cells.birthDate)
-    ? cellToText(cells.birthDate) || (parseBirthDate(cells.birthDate) ?? '')
+  const birthDisplay = cellDisplayText(cells.birthDate);
+  const birthDateText = hasCellInput(cells.birthDate.value)
+    ? birthDisplay ||
+      cellToText(cells.birthDate.value) ||
+      (parseBirthDate(cells.birthDate.value, birthDisplay) ?? '')
     : '';
-  const birthDate = hasCellInput(cells.birthDate)
-    ? parseBirthDate(cells.birthDate)
+  const birthDate = hasCellInput(cells.birthDate.value)
+    ? parseBirthDate(cells.birthDate.value, birthDisplay)
     : null;
 
   const errors: string[] = [];
@@ -262,7 +283,7 @@ function parseRow(
   if (!genderText) errors.push('missingGender');
   else if (!gender) errors.push('invalidGender');
   if (phone && !isValidOptionalPhone(phone)) errors.push('invalidPhone');
-  if (hasCellInput(cells.birthDate) && !birthDate) errors.push('invalidBirthDate');
+  if (hasCellInput(cells.birthDate.value) && !birthDate) errors.push('invalidBirthDate');
 
   return {
     rowNumber,
@@ -318,12 +339,12 @@ export async function parseReservationMemberExcel(
 
     rows.push(
       parseRow(rowNumber, {
-        nationalId: row.getCell(columns.nationalId).value,
-        firstName: row.getCell(columns.firstName).value,
-        lastName: row.getCell(columns.lastName).value,
-        phone: row.getCell(columns.phone).value,
-        gender: row.getCell(columns.gender).value,
-        birthDate: row.getCell(columns.birthDate).value,
+        nationalId: row.getCell(columns.nationalId),
+        firstName: row.getCell(columns.firstName),
+        lastName: row.getCell(columns.lastName),
+        phone: row.getCell(columns.phone),
+        gender: row.getCell(columns.gender),
+        birthDate: row.getCell(columns.birthDate),
       }),
     );
   });

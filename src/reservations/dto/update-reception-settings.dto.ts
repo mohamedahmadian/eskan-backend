@@ -1,5 +1,15 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { emptyToNull } from '../../common/dto-transform';
 
 export class UpdateReceptionSettingsDto {
   @IsBoolean()
@@ -64,4 +74,16 @@ export class UpdateReceptionSettingsDto {
   @IsString()
   @MaxLength(4000)
   insuranceCoverage: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsDateString()
+  imamRezaMartyrdomDate?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsDateString()
+  prophetDemiseDate?: string | null;
 }

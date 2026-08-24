@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CaravansModule } from './caravans/caravans.module';
+import { GroupsModule } from './groups/groups.module';
 import { GeoModule } from './geo/geo.module';
 import { ImagesModule } from './images/images.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -31,6 +32,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     ImagesModule,
     GeoModule,
     CaravansModule,
+    GroupsModule,
     SmsModule,
     AccommodationsModule,
     UsersModule,

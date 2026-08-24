@@ -31,6 +31,19 @@ export function isCaravanManager(user: RoleBearer | null | undefined) {
   return hasRole(user, 'CARAVAN_MANAGER');
 }
 
+export function isGroupManager(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'GROUP_MANAGER');
+}
+
 export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
+}
+
+export function canAccessMyGroups(user: RoleBearer | null | undefined) {
+  return (
+    isAdmin(user) ||
+    isGroupManager(user) ||
+    isCaravanManager(user) ||
+    isPilgrim(user)
+  );
 }

@@ -1870,6 +1870,58 @@ export class UsersService {
     return { user: this.toPublicUser(created), reused: false };
   }
 
+  async updatePilgrimIdentity(
+    id: string,
+    dto: {
+      firstName: string;
+      lastName: string;
+      nationalId: string;
+      phone?: string | null;
+      birthDate?: string | null;
+      gender: UserGender;
+    },
+  ) {
+    const current = await this.prisma.user.findUnique({ where: { id } });
+    if (!current) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    const nationalId = dto.nationalId.trim();
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    const phone = dto.phone ? normalizePhone(dto.phone) || null : null;
+    const birthDate = parseDateOnly(dto.birthDate);
+    const syncUsername = Boolean(current.nationalId) && current.username === current.nationalId;
+
+    await this.assertUniqueIdentity(
+      {
+        nationalId,
+        phone,
+        username: syncUsername ? nationalId : undefined,
+      },
+      id,
+    );
+    await this.ensureRole(id, 'PILGRIM');
+
+    try {
+      await this.prisma.user.update({
+        where: { id },
+        data: {
+          firstName,
+          lastName,
+          fullName: joinFullName(firstName, lastName),
+          nationalId,
+          phone,
+          gender: dto.gender,
+          birthDate,
+          ...(syncUsername ? { username: nationalId } : {}),
+        },
+      });
+    } catch (error) {
+      this.rethrowUnique(error);
+    }
+  }
+
   private async assertUniqueIdentity(
     dto: {
       username?: string;

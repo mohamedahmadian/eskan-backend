@@ -54,6 +54,27 @@ export function nextAfterCompanions(type: ReservationType): ReservationStatus {
   throw new Error('مرحله همراهان برای این نوع پذیرش وجود ندارد');
 }
 
+/** Owner can keep editing companions after the step is completed, until the file is finished. */
+export function companionEditStatuses(type: ReservationType): ReservationStatus[] {
+  if (type === ReservationType.GROUP) {
+    return [ReservationStatus.COMPANIONS, ReservationStatus.INSURANCE];
+  }
+  if (type === ReservationType.CARAVAN) {
+    return [
+      ReservationStatus.COMPANIONS,
+      ReservationStatus.CARAVAN_CONTACTS,
+      ReservationStatus.INSURANCE,
+    ];
+  }
+  return [];
+}
+
+/** Owner can keep editing caravan contacts after the step is completed, until the file is finished. */
+export function contactEditStatuses(type: ReservationType): ReservationStatus[] {
+  if (type !== ReservationType.CARAVAN) return [];
+  return [ReservationStatus.CARAVAN_CONTACTS, ReservationStatus.INSURANCE];
+}
+
 export function validReturnStatuses(type: ReservationType): ReservationStatus[] {
   if (type === ReservationType.INDIVIDUAL) {
     return [ReservationStatus.DRAFT, ReservationStatus.INSURANCE];
@@ -71,6 +92,32 @@ export function validReturnStatuses(type: ReservationType): ReservationStatus[] 
     ReservationStatus.CARAVAN_CONTACTS,
     ReservationStatus.INSURANCE,
   ];
+}
+
+const REWIND_STATUS_ORDER: ReservationStatus[] = [
+  ReservationStatus.DRAFT,
+  ReservationStatus.PENDING_MANAGEMENT_REVIEW,
+  ReservationStatus.COMPANIONS,
+  ReservationStatus.CARAVAN_CONTACTS,
+  ReservationStatus.INSURANCE,
+  ReservationStatus.COMPLETED,
+];
+
+function statusRank(status: ReservationStatus) {
+  return REWIND_STATUS_ORDER.indexOf(status);
+}
+
+/** Stages management can rewind a file to, from its current status. */
+export function validRewindStatuses(
+  type: ReservationType,
+  status: ReservationStatus,
+): ReservationStatus[] {
+  if (status === ReservationStatus.CANCELLED) return [];
+  const allowed = validReturnStatuses(type);
+  if (status === ReservationStatus.REJECTED) return allowed;
+  const currentRank = statusRank(status);
+  if (currentRank < 0) return [];
+  return allowed.filter((item) => statusRank(item) < currentRank);
 }
 
 export function isOccupyingStatus(status: ReservationStatus) {

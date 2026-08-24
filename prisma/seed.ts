@@ -1,9 +1,9 @@
-import "dotenv/config";
-import { join } from "node:path";
-import * as bcrypt from "bcrypt";
-import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { geoSeed } from "./geo-data";
+import 'dotenv/config';
+import { join } from 'node:path';
+import * as bcrypt from 'bcrypt';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { geoSeed } from './geo-data';
 import {
   codeFromNeshanSlug,
   displayCityNameFa,
@@ -12,7 +12,7 @@ import {
   nameEnFromNeshanSlug,
   uniqueCityCode,
   type IranCityNeshan,
-} from "./iran-neshan";
+} from './iran-neshan';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL as string,
@@ -21,490 +21,535 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const adminRole = await prisma.role.upsert({
-    where: { code: "ADMIN" },
-    update: { nameKey: "roles.admin" },
-    create: { code: "ADMIN", nameKey: "roles.admin" },
+    where: { code: 'ADMIN' },
+    update: { nameKey: 'roles.admin' },
+    create: { code: 'ADMIN', nameKey: 'roles.admin' },
   });
 
   const accommodationManagerRole = await prisma.role.upsert({
-    where: { code: "ACCOMMODATION_MANAGER" },
-    update: { nameKey: "roles.accommodationManager" },
+    where: { code: 'ACCOMMODATION_MANAGER' },
+    update: { nameKey: 'roles.accommodationManager' },
     create: {
-      code: "ACCOMMODATION_MANAGER",
-      nameKey: "roles.accommodationManager",
+      code: 'ACCOMMODATION_MANAGER',
+      nameKey: 'roles.accommodationManager',
     },
   });
 
   const caravanManagerRole = await prisma.role.upsert({
-    where: { code: "CARAVAN_MANAGER" },
-    update: { nameKey: "roles.caravanManager" },
-    create: { code: "CARAVAN_MANAGER", nameKey: "roles.caravanManager" },
+    where: { code: 'CARAVAN_MANAGER' },
+    update: { nameKey: 'roles.caravanManager' },
+    create: { code: 'CARAVAN_MANAGER', nameKey: 'roles.caravanManager' },
+  });
+
+  const groupManagerRole = await prisma.role.upsert({
+    where: { code: 'GROUP_MANAGER' },
+    update: { nameKey: 'roles.groupManager' },
+    create: { code: 'GROUP_MANAGER', nameKey: 'roles.groupManager' },
   });
 
   const pilgrimRole = await prisma.role.upsert({
-    where: { code: "PILGRIM" },
-    update: { nameKey: "roles.pilgrim" },
-    create: { code: "PILGRIM", nameKey: "roles.pilgrim" },
+    where: { code: 'PILGRIM' },
+    update: { nameKey: 'roles.pilgrim' },
+    create: { code: 'PILGRIM', nameKey: 'roles.pilgrim' },
   });
 
   await prisma.role.upsert({
-    where: { code: "HEADQUARTERS_REPRESENTATIVE" },
-    update: { nameKey: "roles.headquartersRepresentative" },
+    where: { code: 'HEADQUARTERS_REPRESENTATIVE' },
+    update: { nameKey: 'roles.headquartersRepresentative' },
     create: {
-      code: "HEADQUARTERS_REPRESENTATIVE",
-      nameKey: "roles.headquartersRepresentative",
+      code: 'HEADQUARTERS_REPRESENTATIVE',
+      nameKey: 'roles.headquartersRepresentative',
     },
   });
 
   const dashboard = await prisma.navModule.upsert({
-    where: { code: "dashboard" },
+    where: { code: 'dashboard' },
     update: {},
     create: {
-      code: "dashboard",
-      nameKey: "modules.dashboard",
-      icon: "layout-dashboard",
+      code: 'dashboard',
+      nameKey: 'modules.dashboard',
+      icon: 'layout-dashboard',
       sortOrder: 1,
     },
   });
 
   const pilgrims = await prisma.navModule.upsert({
-    where: { code: "pilgrims" },
+    where: { code: 'pilgrims' },
     update: {},
     create: {
-      code: "pilgrims",
-      nameKey: "modules.pilgrims",
-      icon: "users",
+      code: 'pilgrims',
+      nameKey: 'modules.pilgrims',
+      icon: 'users',
       sortOrder: 2,
     },
   });
 
   const caravans = await prisma.navModule.upsert({
-    where: { code: "caravans" },
+    where: { code: 'caravans' },
     update: {
-      nameKey: "modules.caravans",
-      icon: "footprints",
+      nameKey: 'modules.caravans',
+      icon: 'footprints',
       sortOrder: 3,
     },
     create: {
-      code: "caravans",
-      nameKey: "modules.caravans",
-      icon: "footprints",
+      code: 'caravans',
+      nameKey: 'modules.caravans',
+      icon: 'footprints',
       sortOrder: 3,
     },
   });
 
   const caravanManagement = await prisma.navModule.upsert({
-    where: { code: "caravan-management" },
+    where: { code: 'caravan-management' },
     update: {
-      nameKey: "modules.caravanManagement",
-      icon: "tent",
+      nameKey: 'modules.caravanManagement',
+      icon: 'tent',
       sortOrder: 4,
     },
     create: {
-      code: "caravan-management",
-      nameKey: "modules.caravanManagement",
-      icon: "tent",
+      code: 'caravan-management',
+      nameKey: 'modules.caravanManagement',
+      icon: 'tent',
       sortOrder: 4,
     },
   });
 
-  const sms = await prisma.navModule.upsert({
-    where: { code: "sms" },
+  const groupManagement = await prisma.navModule.upsert({
+    where: { code: 'group-management' },
     update: {
-      nameKey: "modules.sms",
-      icon: "message-square",
+      nameKey: 'modules.groupManagement',
+      icon: 'users-round',
+      sortOrder: 5,
+    },
+    create: {
+      code: 'group-management',
+      nameKey: 'modules.groupManagement',
+      icon: 'users-round',
+      sortOrder: 5,
+    },
+  });
+
+  const sms = await prisma.navModule.upsert({
+    where: { code: 'sms' },
+    update: {
+      nameKey: 'modules.sms',
+      icon: 'message-square',
       sortOrder: 6,
     },
     create: {
-      code: "sms",
-      nameKey: "modules.sms",
-      icon: "message-square",
+      code: 'sms',
+      nameKey: 'modules.sms',
+      icon: 'message-square',
       sortOrder: 6,
     },
   });
 
   const baseInfo = await prisma.navModule.upsert({
-    where: { code: "base-info" },
+    where: { code: 'base-info' },
     update: {
-      nameKey: "modules.baseInfo",
-      icon: "database",
+      nameKey: 'modules.baseInfo',
+      icon: 'database',
       sortOrder: 7,
     },
     create: {
-      code: "base-info",
-      nameKey: "modules.baseInfo",
-      icon: "database",
+      code: 'base-info',
+      nameKey: 'modules.baseInfo',
+      icon: 'database',
       sortOrder: 7,
     },
   });
 
   const accommodation = await prisma.navModule.upsert({
-    where: { code: "accommodation" },
+    where: { code: 'accommodation' },
     update: {
-      nameKey: "modules.accommodation",
-      icon: "building-2",
+      nameKey: 'modules.accommodation',
+      icon: 'building-2',
       sortOrder: 5,
     },
     create: {
-      code: "accommodation",
-      nameKey: "modules.accommodation",
-      icon: "building-2",
+      code: 'accommodation',
+      nameKey: 'modules.accommodation',
+      icon: 'building-2',
       sortOrder: 5,
     },
   });
 
   const headquarters = await prisma.navModule.upsert({
-    where: { code: "headquarters" },
+    where: { code: 'headquarters' },
     update: {
-      nameKey: "modules.headquarters",
-      icon: "landmark",
+      nameKey: 'modules.headquarters',
+      icon: 'landmark',
       sortOrder: 8,
     },
     create: {
-      code: "headquarters",
-      nameKey: "modules.headquarters",
-      icon: "landmark",
+      code: 'headquarters',
+      nameKey: 'modules.headquarters',
+      icon: 'landmark',
       sortOrder: 8,
     },
   });
 
   const logistics = await prisma.navModule.upsert({
-    where: { code: "logistics" },
+    where: { code: 'logistics' },
     update: {
-      nameKey: "modules.logistics",
-      icon: "package",
+      nameKey: 'modules.logistics',
+      icon: 'package',
       sortOrder: 9,
     },
     create: {
-      code: "logistics",
-      nameKey: "modules.logistics",
-      icon: "package",
+      code: 'logistics',
+      nameKey: 'modules.logistics',
+      icon: 'package',
       sortOrder: 9,
     },
   });
 
   const users = await prisma.navModule.upsert({
-    where: { code: "users" },
+    where: { code: 'users' },
     update: {},
     create: {
-      code: "users",
-      nameKey: "modules.users",
-      icon: "user-cog",
+      code: 'users',
+      nameKey: 'modules.users',
+      icon: 'user-cog',
       sortOrder: 10,
     },
   });
 
   const menus = [
     {
-      code: "dashboard.overview",
+      code: 'dashboard.overview',
       moduleId: dashboard.id,
-      nameKey: "menus.overview",
-      path: "/",
-      icon: "home",
+      nameKey: 'menus.overview',
+      path: '/',
+      icon: 'home',
       sortOrder: 1,
     },
     {
-      code: "pilgrims.list",
+      code: 'pilgrims.list',
       moduleId: pilgrims.id,
-      nameKey: "menus.pilgrimsList",
-      path: "/pilgrims",
-      icon: "users",
+      nameKey: 'menus.pilgrimsList',
+      path: '/pilgrims',
+      icon: 'users',
       sortOrder: 1,
     },
     {
-      code: "pilgrims.report",
+      code: 'pilgrims.report',
       moduleId: pilgrims.id,
-      nameKey: "menus.pilgrimsReport",
-      path: "/pilgrim-report",
-      icon: "chart-column",
+      nameKey: 'menus.pilgrimsReport',
+      path: '/pilgrim-report',
+      icon: 'chart-column',
       sortOrder: 2,
     },
     {
-      code: "caravans.list",
+      code: 'caravans.list',
       moduleId: caravanManagement.id,
-      nameKey: "menus.caravansList",
-      path: "/caravans",
-      icon: "footprints",
+      nameKey: 'menus.caravansList',
+      path: '/caravans',
+      icon: 'footprints',
       sortOrder: 1,
     },
     {
-      code: "caravans.managers",
+      code: 'caravans.managers',
       moduleId: caravanManagement.id,
-      nameKey: "menus.caravanManagers",
-      path: "/caravan-managers",
-      icon: "user-round-cog",
+      nameKey: 'menus.caravanManagers',
+      path: '/caravan-managers',
+      icon: 'user-round-cog',
       sortOrder: 2,
     },
     {
-      code: "caravans.mine",
-      moduleId: caravans.id,
-      nameKey: "menus.myCaravans",
-      path: "/my-caravans",
-      icon: "tent",
+      code: 'groups.list',
+      moduleId: groupManagement.id,
+      nameKey: 'menus.groupsList',
+      path: '/groups',
+      icon: 'users-round',
       sortOrder: 1,
     },
     {
-      code: "reservations.mine",
+      code: 'caravans.mine',
       moduleId: caravans.id,
-      nameKey: "menus.myReservations",
-      path: "/my-reservations",
-      icon: "scroll-text",
+      nameKey: 'menus.myCaravans',
+      path: '/my-caravans',
+      icon: 'tent',
+      sortOrder: 1,
+    },
+    {
+      code: 'groups.mine',
+      moduleId: caravans.id,
+      nameKey: 'menus.myGroups',
+      path: '/my-groups',
+      icon: 'users-round',
       sortOrder: 2,
     },
     {
-      code: "reservations.list",
+      code: 'reservations.mine',
       moduleId: caravans.id,
-      nameKey: "menus.reservationsAdmin",
-      path: "/reservations",
-      icon: "clipboard-list",
+      nameKey: 'menus.myReservations',
+      path: '/my-reservations',
+      icon: 'scroll-text',
       sortOrder: 3,
     },
     {
-      code: "reception.settings",
+      code: 'reservations.list',
       moduleId: caravans.id,
-      nameKey: "menus.receptionSettings",
-      path: "/reception-settings",
-      icon: "settings",
+      nameKey: 'menus.reservationsAdmin',
+      path: '/reservations',
+      icon: 'clipboard-list',
       sortOrder: 4,
     },
     {
-      code: "sms.settings",
-      moduleId: sms.id,
-      nameKey: "menus.smsSettings",
-      path: "/sms/settings",
-      icon: "settings",
-      sortOrder: 1,
-    },
-    {
-      code: "sms.send",
-      moduleId: sms.id,
-      nameKey: "menus.smsSend",
-      path: "/sms/send",
-      icon: "send",
-      sortOrder: 2,
-    },
-    {
-      code: "sms.report",
-      moduleId: sms.id,
-      nameKey: "menus.smsReport",
-      path: "/sms/report",
-      icon: "clipboard-list",
-      sortOrder: 3,
-    },
-    {
-      code: "base-info.countries",
-      moduleId: baseInfo.id,
-      nameKey: "menus.countries",
-      path: "/base-info/countries",
-      icon: "globe",
-      sortOrder: 1,
-    },
-    {
-      code: "base-info.provinces",
-      moduleId: baseInfo.id,
-      nameKey: "menus.provinces",
-      path: "/base-info/provinces",
-      icon: "map",
-      sortOrder: 2,
-    },
-    {
-      code: "base-info.cities",
-      moduleId: baseInfo.id,
-      nameKey: "menus.cities",
-      path: "/base-info/cities",
-      icon: "map-pin",
-      sortOrder: 3,
-    },
-    {
-      code: "base-info.walking-routes",
-      moduleId: baseInfo.id,
-      nameKey: "menus.walkingRoutes",
-      path: "/base-info/walking-routes",
-      icon: "route",
-      sortOrder: 4,
-    },
-    {
-      code: "base-info.food-suppliers",
-      moduleId: baseInfo.id,
-      nameKey: "menus.foodSuppliers",
-      path: "/base-info/food-suppliers",
-      icon: "utensils-crossed",
+      code: 'reservations.stats',
+      moduleId: caravans.id,
+      nameKey: 'menus.reservationsReport',
+      path: '/reservation-stats',
+      icon: 'chart-column',
       sortOrder: 5,
     },
     {
-      code: "base-info.medical-centers",
-      moduleId: baseInfo.id,
-      nameKey: "menus.medicalCenters",
-      path: "/base-info/medical-centers",
-      icon: "hospital",
+      code: 'reception.settings',
+      moduleId: caravans.id,
+      nameKey: 'menus.receptionSettings',
+      path: '/reception-settings',
+      icon: 'settings',
       sortOrder: 6,
     },
     {
-      code: "base-info.red-crescents",
+      code: 'sms.settings',
+      moduleId: sms.id,
+      nameKey: 'menus.smsSettings',
+      path: '/sms/settings',
+      icon: 'settings',
+      sortOrder: 1,
+    },
+    {
+      code: 'sms.send',
+      moduleId: sms.id,
+      nameKey: 'menus.smsSend',
+      path: '/sms/send',
+      icon: 'send',
+      sortOrder: 2,
+    },
+    {
+      code: 'sms.report',
+      moduleId: sms.id,
+      nameKey: 'menus.smsReport',
+      path: '/sms/report',
+      icon: 'clipboard-list',
+      sortOrder: 3,
+    },
+    {
+      code: 'base-info.countries',
       moduleId: baseInfo.id,
-      nameKey: "menus.redCrescents",
-      path: "/base-info/red-crescents",
-      icon: "heart-handshake",
+      nameKey: 'menus.countries',
+      path: '/base-info/countries',
+      icon: 'globe',
+      sortOrder: 1,
+    },
+    {
+      code: 'base-info.provinces',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.provinces',
+      path: '/base-info/provinces',
+      icon: 'map',
+      sortOrder: 2,
+    },
+    {
+      code: 'base-info.cities',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.cities',
+      path: '/base-info/cities',
+      icon: 'map-pin',
+      sortOrder: 3,
+    },
+    {
+      code: 'base-info.walking-routes',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.walkingRoutes',
+      path: '/base-info/walking-routes',
+      icon: 'route',
+      sortOrder: 4,
+    },
+    {
+      code: 'base-info.food-suppliers',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.foodSuppliers',
+      path: '/base-info/food-suppliers',
+      icon: 'utensils-crossed',
+      sortOrder: 5,
+    },
+    {
+      code: 'base-info.medical-centers',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.medicalCenters',
+      path: '/base-info/medical-centers',
+      icon: 'hospital',
+      sortOrder: 6,
+    },
+    {
+      code: 'base-info.red-crescents',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.redCrescents',
+      path: '/base-info/red-crescents',
+      icon: 'heart-handshake',
       sortOrder: 7,
     },
     {
-      code: "base-info.benefactors",
+      code: 'base-info.benefactors',
       moduleId: baseInfo.id,
-      nameKey: "menus.benefactors",
-      path: "/base-info/benefactors",
-      icon: "hand-heart",
+      nameKey: 'menus.benefactors',
+      path: '/base-info/benefactors',
+      icon: 'hand-heart',
       sortOrder: 8,
     },
     {
-      code: "headquarters.representatives",
+      code: 'headquarters.representatives',
       moduleId: headquarters.id,
-      nameKey: "menus.headquartersRepresentatives",
-      path: "/headquarters/representatives",
-      icon: "user-round",
+      nameKey: 'menus.headquartersRepresentatives',
+      path: '/headquarters/representatives',
+      icon: 'user-round',
       sortOrder: 1,
     },
     {
-      code: "users.list",
+      code: 'users.list',
       moduleId: users.id,
-      nameKey: "menus.usersList",
-      path: "/users",
-      icon: "user-cog",
+      nameKey: 'menus.usersList',
+      path: '/users',
+      icon: 'user-cog',
       sortOrder: 1,
     },
     {
-      code: "accommodation.managers",
+      code: 'accommodation.managers',
       moduleId: accommodation.id,
-      nameKey: "menus.accommodationManagers",
-      path: "/accommodation-managers",
-      icon: "user-round-check",
+      nameKey: 'menus.accommodationManagers',
+      path: '/accommodation-managers',
+      icon: 'user-round-check',
       sortOrder: 1,
     },
     {
-      code: "accommodation.list",
+      code: 'accommodation.list',
       moduleId: accommodation.id,
-      nameKey: "menus.accommodations",
-      path: "/accommodations",
-      icon: "building-2",
+      nameKey: 'menus.accommodations',
+      path: '/accommodations',
+      icon: 'building-2',
       sortOrder: 2,
     },
     {
-      code: "accommodation.year-management",
+      code: 'accommodation.year-management',
       moduleId: accommodation.id,
-      nameKey: "menus.accommodationYearManagement",
-      path: "/accommodation-year-management",
-      icon: "calendar-range",
+      nameKey: 'menus.accommodationYearManagement',
+      path: '/accommodation-year-management',
+      icon: 'calendar-range',
       sortOrder: 3,
     },
     {
-      code: "accommodation.report",
+      code: 'accommodation.report',
       moduleId: accommodation.id,
-      nameKey: "menus.accommodationReport",
-      path: "/accommodation-report",
-      icon: "chart-column",
+      nameKey: 'menus.accommodationReport',
+      path: '/accommodation-report',
+      icon: 'chart-column',
       sortOrder: 4,
     },
     {
-      code: "logistics.suppliers",
+      code: 'logistics.suppliers',
       moduleId: logistics.id,
-      nameKey: "menus.suppliers",
-      path: "/logistics/suppliers",
-      icon: "store",
+      nameKey: 'menus.suppliers',
+      path: '/logistics/suppliers',
+      icon: 'store',
       sortOrder: 1,
     },
     {
-      code: "logistics.loans",
+      code: 'logistics.loans',
       moduleId: logistics.id,
-      nameKey: "menus.loanManagement",
-      path: "/logistics/loans",
-      icon: "package-open",
+      nameKey: 'menus.loanManagement',
+      path: '/logistics/loans',
+      icon: 'package-open',
       sortOrder: 2,
     },
     {
-      code: "logistics.loan-report",
+      code: 'logistics.loan-report',
       moduleId: logistics.id,
-      nameKey: "menus.loanReport",
-      path: "/logistics/loan-report",
-      icon: "chart-column",
+      nameKey: 'menus.loanReport',
+      path: '/logistics/loan-report',
+      icon: 'chart-column',
       sortOrder: 3,
     },
     {
-      code: "logistics.item-quotas",
+      code: 'logistics.item-quotas',
       moduleId: logistics.id,
-      nameKey: "menus.itemQuotas",
-      path: "/logistics/item-quotas",
-      icon: "boxes",
+      nameKey: 'menus.itemQuotas',
+      path: '/logistics/item-quotas',
+      icon: 'boxes',
       sortOrder: 4,
     },
     {
-      code: "logistics.issue-voucher",
+      code: 'logistics.issue-voucher',
       moduleId: logistics.id,
-      nameKey: "menus.issueVoucher",
-      path: "/logistics/issue-voucher",
-      icon: "ticket",
+      nameKey: 'menus.issueVoucher',
+      path: '/logistics/issue-voucher',
+      icon: 'ticket',
       sortOrder: 5,
     },
     {
-      code: "logistics.vouchers",
+      code: 'logistics.vouchers',
       moduleId: logistics.id,
-      nameKey: "menus.voucherManagement",
-      path: "/logistics/vouchers",
-      icon: "clipboard-list",
+      nameKey: 'menus.voucherManagement',
+      path: '/logistics/vouchers',
+      icon: 'clipboard-list',
       sortOrder: 6,
     },
     {
-      code: "logistics.voucher-report",
+      code: 'logistics.voucher-report',
       moduleId: logistics.id,
-      nameKey: "menus.voucherReport",
-      path: "/logistics/voucher-report",
-      icon: "chart-column",
+      nameKey: 'menus.voucherReport',
+      path: '/logistics/voucher-report',
+      icon: 'chart-column',
       sortOrder: 7,
     },
     {
-      code: "logistics.my-vouchers",
+      code: 'logistics.my-vouchers',
       moduleId: logistics.id,
-      nameKey: "menus.myVouchers",
-      path: "/logistics/my-vouchers",
-      icon: "scroll-text",
+      nameKey: 'menus.myVouchers',
+      path: '/logistics/my-vouchers',
+      icon: 'scroll-text',
       sortOrder: 8,
     },
     {
-      code: "logistics.my-loans",
+      code: 'logistics.my-loans',
       moduleId: logistics.id,
-      nameKey: "menus.myLoans",
-      path: "/logistics/my-loans",
-      icon: "package-check",
+      nameKey: 'menus.myLoans',
+      path: '/logistics/my-loans',
+      icon: 'package-check',
       sortOrder: 9,
     },
     {
-      code: "logistics.settings",
+      code: 'logistics.settings',
       moduleId: logistics.id,
-      nameKey: "menus.logisticsSettings",
-      path: "/logistics/settings",
-      icon: "settings",
+      nameKey: 'menus.logisticsSettings',
+      path: '/logistics/settings',
+      icon: 'settings',
       sortOrder: 10,
     },
     {
-      code: "logistics.ice-vouchers",
+      code: 'logistics.ice-vouchers',
       moduleId: logistics.id,
-      nameKey: "menus.iceVouchers",
-      path: "/logistics/ice-vouchers",
-      icon: "snowflake",
+      nameKey: 'menus.iceVouchers',
+      path: '/logistics/ice-vouchers',
+      icon: 'snowflake',
       sortOrder: 11,
     },
     {
-      code: "logistics.my-ice-vouchers",
+      code: 'logistics.my-ice-vouchers',
       moduleId: logistics.id,
-      nameKey: "menus.myIceVouchers",
-      path: "/logistics/my-ice-vouchers",
-      icon: "snowflake",
+      nameKey: 'menus.myIceVouchers',
+      path: '/logistics/my-ice-vouchers',
+      icon: 'snowflake',
       sortOrder: 12,
     },
     {
-      code: "logistics.ice-voucher-report",
+      code: 'logistics.ice-voucher-report',
       moduleId: logistics.id,
-      nameKey: "menus.iceVoucherReport",
-      path: "/logistics/ice-voucher-report",
-      icon: "chart-column",
+      nameKey: 'menus.iceVoucherReport',
+      path: '/logistics/ice-voucher-report',
+      icon: 'chart-column',
       sortOrder: 13,
     },
   ];
@@ -536,14 +581,16 @@ async function main() {
   }
 
   const managerMenuCodes = new Set([
-    "dashboard.overview",
-    "accommodation.list",
-    "accommodation.report",
-    "logistics.my-vouchers",
-    "logistics.my-loans",
-    "logistics.my-ice-vouchers",
+    'dashboard.overview',
+    'accommodation.list',
+    'accommodation.report',
+    'logistics.my-vouchers',
+    'logistics.my-loans',
+    'logistics.my-ice-vouchers',
   ]);
-  for (const menu of menuRecords.filter((item) => managerMenuCodes.has(item.code))) {
+  for (const menu of menuRecords.filter((item) =>
+    managerMenuCodes.has(item.code),
+  )) {
     await prisma.roleMenu.upsert({
       where: {
         roleId_menuId: {
@@ -557,11 +604,14 @@ async function main() {
   }
 
   const caravanMenuCodes = new Set([
-    "dashboard.overview",
-    "caravans.mine",
-    "reservations.mine",
+    'dashboard.overview',
+    'caravans.mine',
+    'groups.mine',
+    'reservations.mine',
   ]);
-  const caravanListMenu = menuRecords.find((item) => item.code === "caravans.list");
+  const caravanListMenu = menuRecords.find(
+    (item) => item.code === 'caravans.list',
+  );
   if (caravanListMenu) {
     await prisma.roleMenu.deleteMany({
       where: {
@@ -570,7 +620,9 @@ async function main() {
       },
     });
   }
-  for (const menu of menuRecords.filter((item) => caravanMenuCodes.has(item.code))) {
+  for (const menu of menuRecords.filter((item) =>
+    caravanMenuCodes.has(item.code),
+  )) {
     await prisma.roleMenu.upsert({
       where: {
         roleId_menuId: {
@@ -583,11 +635,34 @@ async function main() {
     });
   }
 
-  const pilgrimMenuCodes = new Set([
-    "dashboard.overview",
-    "reservations.mine",
+  const groupMenuCodes = new Set([
+    'dashboard.overview',
+    'groups.mine',
+    'reservations.mine',
   ]);
-  const pilgrimMyCaravansMenu = menuRecords.find((item) => item.code === "caravans.mine");
+  for (const menu of menuRecords.filter((item) =>
+    groupMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: groupManagerRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: groupManagerRole.id, menuId: menu.id },
+    });
+  }
+
+  const pilgrimMenuCodes = new Set([
+    'dashboard.overview',
+    'reservations.mine',
+    'groups.mine',
+  ]);
+  const pilgrimMyCaravansMenu = menuRecords.find(
+    (item) => item.code === 'caravans.mine',
+  );
   if (pilgrimMyCaravansMenu) {
     await prisma.roleMenu.deleteMany({
       where: {
@@ -596,7 +671,9 @@ async function main() {
       },
     });
   }
-  for (const menu of menuRecords.filter((item) => pilgrimMenuCodes.has(item.code))) {
+  for (const menu of menuRecords.filter((item) =>
+    pilgrimMenuCodes.has(item.code),
+  )) {
     await prisma.roleMenu.upsert({
       where: {
         roleId_menuId: {
@@ -610,22 +687,22 @@ async function main() {
   }
 
   await prisma.smsSettings.upsert({
-    where: { id: "default" },
+    where: { id: 'default' },
     update: {},
     create: {
-      id: "default",
-      endpoint: "http://service.pejvaksoft.com",
-      senderNumber: "10009155191225",
-      username: "pejvaksoft",
-      password: "P@dd45465",
+      id: 'default',
+      endpoint: 'http://service.pejvaksoft.com',
+      senderNumber: '10009155191225',
+      username: 'pejvaksoft',
+      password: 'P@dd45465',
     },
   });
 
   await prisma.iceVoucherSettings.upsert({
-    where: { id: "default" },
+    where: { id: 'default' },
     update: {},
     create: {
-      id: "default",
+      id: 'default',
       moldsPer50Pilgrims: 1,
       costPerMold: 0,
     },
@@ -638,31 +715,31 @@ async function main() {
     10,
   );
   await prisma.user.upsert({
-    where: { username: "__system__" },
+    where: { username: '__system__' },
     update: {},
     create: {
-      username: "__system__",
+      username: '__system__',
       passwordHash: systemPasswordHash,
-      firstName: "سیستم",
-      lastName: "سامانه",
-      fullName: "سیستم سامانه",
-      locale: "fa",
-      status: "ACTIVE",
+      firstName: 'سیستم',
+      lastName: 'سامانه',
+      fullName: 'سیستم سامانه',
+      locale: 'fa',
+      status: 'ACTIVE',
     },
   });
 
-  const passwordHash = await bcrypt.hash("ChangeMe123!", 10);
+  const passwordHash = await bcrypt.hash('ChangeMe123!', 10);
   const adminUser = await prisma.user.upsert({
-    where: { username: "admin" },
+    where: { username: 'admin' },
     update: {},
     create: {
-      username: "admin",
+      username: 'admin',
       passwordHash,
-      firstName: "مدیر",
-      lastName: "سامانه",
-      fullName: "مدیر سامانه",
-      locale: "fa",
-      status: "ACTIVE",
+      firstName: 'مدیر',
+      lastName: 'سامانه',
+      fullName: 'مدیر سامانه',
+      locale: 'fa',
+      status: 'ACTIVE',
     },
   });
   await prisma.userRole.upsert({
@@ -676,7 +753,7 @@ async function main() {
 
 function loadIranNeshanData() {
   return loadIranProvincesAndCitiesNeshan(
-    join(__dirname, "iran_provinces_and_cities_neshan.csv"),
+    join(__dirname, 'iran_provinces_and_cities_neshan.csv'),
   );
 }
 
@@ -773,10 +850,10 @@ async function seedGeo() {
 
     for (const [provinceIndex, province] of country.provinces.entries()) {
       const location =
-        country.iso2 === "IR"
+        country.iso2 === 'IR'
           ? iranNeshan.provinces.get(province.nameFa)
           : undefined;
-      if (country.iso2 === "IR" && !location) {
+      if (country.iso2 === 'IR' && !location) {
         throw new Error(
           `Neshan location missing for Iranian province: ${province.nameFa}`,
         );
@@ -841,7 +918,7 @@ async function seedGeo() {
         });
       }
 
-      if (country.iso2 === "IR") {
+      if (country.iso2 === 'IR') {
         const cityRows = iranNeshan.citiesByProvince.get(province.nameFa) ?? [];
         if (cityRows.length === 0) {
           throw new Error(
@@ -854,9 +931,9 @@ async function seedGeo() {
   }
 
   const iranNames = new Set(
-    geoSeed.find((country) => country.iso2 === "IR")?.provinces.map(
-      (province) => province.nameFa,
-    ) ?? [],
+    geoSeed
+      .find((country) => country.iso2 === 'IR')
+      ?.provinces.map((province) => province.nameFa) ?? [],
   );
   for (const nameFa of iranNeshan.provinces.keys()) {
     if (!iranNames.has(nameFa)) {
