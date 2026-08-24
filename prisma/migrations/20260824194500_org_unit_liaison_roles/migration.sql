@@ -1,37 +1,23 @@
--- CreateTable
-CREATE TABLE "org_unit_accommodation_liaisons" (
-    "id" TEXT NOT NULL,
-    "unitId" TEXT NOT NULL,
-    "role" "AccommodationContactRole" NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+-- AlterTable: org_unit_accommodation_liaisons (userId → role)
+ALTER TABLE "org_unit_accommodation_liaisons" DROP CONSTRAINT "org_unit_accommodation_liaisons_userId_fkey";
 
-    CONSTRAINT "org_unit_accommodation_liaisons_pkey" PRIMARY KEY ("id")
-);
+DROP INDEX "org_unit_accommodation_liaisons_unitId_userId_key";
+DROP INDEX "org_unit_accommodation_liaisons_userId_idx";
 
--- CreateTable
-CREATE TABLE "org_unit_caravan_liaisons" (
-    "id" TEXT NOT NULL,
-    "unitId" TEXT NOT NULL,
-    "role" "CaravanContactRole" NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ALTER TABLE "org_unit_accommodation_liaisons" DROP COLUMN "userId";
+ALTER TABLE "org_unit_accommodation_liaisons" ADD COLUMN "role" "AccommodationContactRole" NOT NULL;
 
-    CONSTRAINT "org_unit_caravan_liaisons_pkey" PRIMARY KEY ("id")
-);
-
--- CreateIndex
 CREATE INDEX "org_unit_accommodation_liaisons_role_idx" ON "org_unit_accommodation_liaisons"("role");
-
--- CreateIndex
 CREATE UNIQUE INDEX "org_unit_accommodation_liaisons_unitId_role_key" ON "org_unit_accommodation_liaisons"("unitId", "role");
 
--- CreateIndex
+-- AlterTable: org_unit_caravan_liaisons (userId → role)
+ALTER TABLE "org_unit_caravan_liaisons" DROP CONSTRAINT "org_unit_caravan_liaisons_userId_fkey";
+
+DROP INDEX "org_unit_caravan_liaisons_unitId_userId_key";
+DROP INDEX "org_unit_caravan_liaisons_userId_idx";
+
+ALTER TABLE "org_unit_caravan_liaisons" DROP COLUMN "userId";
+ALTER TABLE "org_unit_caravan_liaisons" ADD COLUMN "role" "CaravanContactRole" NOT NULL;
+
 CREATE INDEX "org_unit_caravan_liaisons_role_idx" ON "org_unit_caravan_liaisons"("role");
-
--- CreateIndex
 CREATE UNIQUE INDEX "org_unit_caravan_liaisons_unitId_role_key" ON "org_unit_caravan_liaisons"("unitId", "role");
-
--- AddForeignKey
-ALTER TABLE "org_unit_accommodation_liaisons" ADD CONSTRAINT "org_unit_accommodation_liaisons_unitId_fkey" FOREIGN KEY ("unitId") REFERENCES "org_units"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "org_unit_caravan_liaisons" ADD CONSTRAINT "org_unit_caravan_liaisons_unitId_fkey" FOREIGN KEY ("unitId") REFERENCES "org_units"("id") ON DELETE CASCADE ON UPDATE CASCADE;
