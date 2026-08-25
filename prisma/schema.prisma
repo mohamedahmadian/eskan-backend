@@ -103,6 +103,7 @@ model User {
   accommodationContacts AccommodationContact[]
   accommodationYearContacts AccommodationYearContact[]
   managedCaravans       Caravan[] @relation("CaravanManager")
+  managedCaravanYears   CaravanYear[] @relation("CaravanYearManager")
   managedGroups         Group[]   @relation("GroupManager")
   caravanContacts       CaravanContact[]
   createdReservations   Reservation[] @relation("ReservationCreator")
@@ -131,6 +132,9 @@ model User {
   revokedLicenses       IssuedLicense[] @relation("LicenseRevoker")
   reservationPermitReviews Reservation[] @relation("ReservationPermitReviewer")
   managedOrgUnits       OrgUnit[] @relation("OrgUnitManager")
+  evaluationsAsEvaluator Evaluation[] @relation("EvaluationEvaluator")
+  evaluationsAsTarget    Evaluation[] @relation("EvaluationTarget")
+  evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -212,6 +216,7 @@ model StoredImage {
   caravanLicenses   Caravan[] @relation("CaravanLicenseImage")
   issuedLicenseFiles IssuedLicense[] @relation("IssuedLicenseFile")
   reservationPermitImages Reservation[] @relation("ReservationPermitImage")
+  headquartersLogos HeadquartersInfo[] @relation("HeadquartersLogo")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
@@ -242,6 +247,7 @@ model Caravan {
   managerUserId  String?
   manager        User?        @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   contacts       CaravanContact[]
+  years          CaravanYear[]
   reservations   Reservation[]
   issuedLicenses IssuedLicense[]
   totalCount     Int          @default(0)
@@ -275,6 +281,22 @@ model CaravanContact {
   @@unique([caravanId, role])
   @@index([userId])
   @@map("caravan_contacts")
+}
+
+model CaravanYear {
+  id            String   @id @default(uuid())
+  caravanId     String
+  caravan       Caravan  @relation(fields: [caravanId], references: [id], onDelete: Cascade)
+  year          Int
+  managerUserId String?
+  manager       User?    @relation("CaravanYearManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@unique([caravanId, year])
+  @@index([year])
+  @@index([caravanId, year])
+  @@index([managerUserId])
+  @@map("caravan_years")
 }
 
 enum IssuedLicenseStatus {
@@ -1146,6 +1168,45 @@ model IceVoucher {
   @@map("ice_vouchers")
 }
 
+model HeadquartersInfo {
+  id          String              @id @default(uuid())
+  name        String
+  title       String?
+  address     String?
+  description String?
+  logoId      String?
+  logo        StoredImage?        @relation("HeadquartersLogo", fields: [logoId], references: [id], onDelete: SetNull)
+  activityStartYear Int?
+  website     String?
+  eitaa       String?
+  bale        String?
+  telegram    String?
+  instagram   String?
+  phones      HeadquartersPhone[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([name])
+  @@index([createdAt])
+  @@map("headquarters_info")
+}
+
+model HeadquartersPhone {
+  id             String           @id @default(uuid())
+  headquartersId String
+  headquarters   HeadquartersInfo @relation(fields: [headquartersId], references: [id], onDelete: Cascade)
+  phone          String
+  department     String?
+  description    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([headquartersId])
+  @@index([phone])
+  @@index([createdAt])
+  @@map("headquarters_phones")
+}
+
 model OrgUnit {
   id               String   @id @default(uuid())
   name             String
@@ -1188,4 +1249,117 @@ model OrgUnitCaravanLiaison {
   @@unique([unitId, role])
   @@index([role])
   @@map("org_unit_caravan_liaisons")
+}
+
+/// ارزیاب در ماتریس نظرسنجی
+enum EvaluationEvaluatorType {
+  UNIT_MANAGER
+  CARAVAN_MANAGER
+  ACCOMMODATION_MANAGER
+  PILGRIM
+}
+
+/// ارزیابی‌شونده (فرد یا ستاد جمعیت)
+enum EvaluationTargetType {
+  CARAVAN_MANAGER
+  ACCOMMODATION_MANAGER
+  HEADQUARTERS
+}
+
+enum EvaluationCampaignStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum EvaluationStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// نوبت/دوره اجرای ارزیابی
+model EvaluationCampaign {
+  id          String                   @id @default(uuid())
+  title       String
+  description String?
+  startAt     DateTime                 @db.Date
+  endAt       DateTime                 @db.Date
+  status      EvaluationCampaignStatus @default(DRAFT)
+  evaluations Evaluation[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([status])
+  @@index([startAt])
+  @@index([endAt])
+  @@index([createdAt])
+  @@map("evaluation_campaigns")
+}
+
+/// بانک سوالات (جفت ارزیاب × ارزیابی‌شونده)
+model EvaluationQuestion {
+  id            String                   @id @default(uuid())
+  title         String
+  description   String?
+  evaluatorType EvaluationEvaluatorType
+  targetType    EvaluationTargetType
+  sortOrder     Int                      @default(0)
+  isActive      Boolean                  @default(true)
+  answers       EvaluationAnswer[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([evaluatorType, targetType, isActive, sortOrder])
+  @@index([createdAt])
+  @@map("evaluation_questions")
+}
+
+/// یک ارزیابی: ارزیاب × هدف × کمپین
+model Evaluation {
+  id            String                   @id @default(uuid())
+  campaignId    String
+  campaign      EvaluationCampaign       @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  evaluatorId   String
+  evaluator     User                     @relation("EvaluationEvaluator", fields: [evaluatorId], references: [id], onDelete: Restrict)
+  evaluatorType EvaluationEvaluatorType
+  /// null وقتی targetType = HEADQUARTERS
+  targetId      String?
+  target        User?                    @relation("EvaluationTarget", fields: [targetId], references: [id], onDelete: Restrict)
+  targetType    EvaluationTargetType
+  /// برای یکتایی: targetId یا ثابت HEADQUARTERS
+  targetKey     String
+  status        EvaluationStatus         @default(IN_PROGRESS)
+  startedAt     DateTime                 @default(now())
+  completedAt   DateTime?
+  submittedById String
+  submittedBy   User                     @relation("EvaluationSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt   DateTime?
+  answers       EvaluationAnswer[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([campaignId, evaluatorId, evaluatorType, targetType, targetKey])
+  @@index([campaignId])
+  @@index([evaluatorId, evaluatorType])
+  @@index([targetId, targetType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("evaluations")
+}
+
+model EvaluationAnswer {
+  id           String             @id @default(uuid())
+  evaluationId String
+  evaluation   Evaluation         @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     EvaluationQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  /// ۱ = خیلی خوب … ۵ = خیلی ضعیف
+  score        Int
+  description  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@unique([evaluationId, questionId])
+  @@index([questionId])
+  @@map("evaluation_answers")
 }

@@ -42,6 +42,22 @@ export class ImagesController {
     const image = await this.images.find(id);
     res.setHeader('Content-Type', image.mimeType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader(
+      'Content-Disposition',
+      contentDisposition(image.originalName, image.mimeType),
+    );
     res.send(Buffer.from(image.data));
   }
+}
+
+function contentDisposition(originalName: string | null, mimeType: string) {
+  const ext =
+    mimeType === 'image/png'
+      ? 'png'
+      : mimeType === 'image/jpeg'
+        ? 'jpg'
+        : 'bin';
+  const name = originalName?.trim() || `image.${ext}`;
+  const ascii = name.replace(/[^\w.\-]+/g, '_') || `image.${ext}`;
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }

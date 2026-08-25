@@ -8,6 +8,7 @@ import {
   HeadquartersRepresentativesController,
   PilgrimsUsersController,
 } from './role-scoped-users.controller';
+import { PublicAuthController } from './public-auth.controller';
 import { RolesController } from './roles.controller';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -16,6 +17,7 @@ import { UsersService } from './users.service';
   imports: [AuthModule, SmsModule],
   controllers: [
     AccountController,
+    PublicAuthController,
     UsersController,
     RolesController,
     PilgrimsUsersController,

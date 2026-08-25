@@ -105,7 +105,7 @@ export function displayCityNameFa(nameFa: string) {
 
 export function matchCity<T extends { nameFa: string; code: string }>(
   cities: T[],
-  row: IranCityNeshan,
+  row: { nameFa: string; slug?: string; code?: string },
 ): T | undefined {
   const target = normalizeFaName(row.nameFa);
   const exact = cities.find((city) => city.nameFa === row.nameFa);
@@ -121,8 +121,9 @@ export function matchCity<T extends { nameFa: string; code: string }>(
   });
   if (byBandar) return byBandar;
 
-  const code = codeFromNeshanSlug(row.slug);
+  const code = codeFromNeshanSlug(row.slug ?? row.code ?? "");
   const compactCode = code.replace(/-/g, "");
+  if (!code) return undefined;
   return cities.find(
     (city) =>
       city.code === code || city.code.replace(/-/g, "") === compactCode,

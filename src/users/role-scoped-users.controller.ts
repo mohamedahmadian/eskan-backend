@@ -21,7 +21,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateUserDto } from './dto/create-user.dto';
-import { FindPilgrimReportQueryDto } from './dto/find-pilgrim-report-query.dto';
+import { FindPilgrimHistoryQueryDto } from './dto/find-pilgrim-history-query.dto';
+import {
+  FindPilgrimReportCityTimelineQueryDto,
+  FindPilgrimReportExportQueryDto,
+  FindPilgrimReportProvinceTimelineQueryDto,
+  FindPilgrimReportQueryDto,
+} from './dto/find-pilgrim-report-query.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
@@ -104,14 +110,56 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return this.users.pilgrimReportGeo(query.year);
   }
 
-  @Get('report/religion')
-  reportReligion(@Query() query: FindPilgrimReportQueryDto) {
-    return this.users.pilgrimReportReligion(query.year);
-  }
-
   @Get('report/timeline')
   reportTimeline(@Query() query: FindPilgrimReportQueryDto) {
     return this.users.pilgrimReportTimeline(query.year);
+  }
+
+  @Get('report/province-timeline')
+  reportProvinceTimeline(
+    @Query() query: FindPilgrimReportProvinceTimelineQueryDto,
+  ) {
+    return this.users.pilgrimReportProvinceTimeline(query.provinceId);
+  }
+
+  @Get('report/province-timeline/export')
+  async exportProvinceTimeline(
+    @Query() query: FindPilgrimReportProvinceTimelineQueryDto,
+  ) {
+    const { buffer, filename } =
+      await this.users.exportPilgrimReportProvinceTimeline(query.provinceId);
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
+  @Get('report/city-timeline')
+  reportCityTimeline(@Query() query: FindPilgrimReportCityTimelineQueryDto) {
+    return this.users.pilgrimReportCityTimeline(query.cityId);
+  }
+
+  @Get('report/city-timeline/export')
+  async exportCityTimeline(@Query() query: FindPilgrimReportCityTimelineQueryDto) {
+    const { buffer, filename } = await this.users.exportPilgrimReportCityTimeline(
+      query.cityId,
+    );
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${filename}"`,
+    });
+  }
+
+  @Get('report/export')
+  async exportReport(@Query() query: FindPilgrimReportExportQueryDto) {
+    const { buffer, filename } = await this.users.exportPilgrimReport(
+      query.section,
+      query.year,
+    );
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${filename}"`,
+    });
   }
 
   @Get('report')
@@ -175,6 +223,14 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
   importPilgrims(@UploadedFile() file: ExcelUpload) {
     const upload = assertExcelUpload(file);
     return this.users.importPilgrimsFromExcel(upload.buffer);
+  }
+
+  @Get(':id/pilgrimage-history')
+  pilgrimageHistory(
+    @Param('id') id: string,
+    @Query() query: FindPilgrimHistoryQueryDto,
+  ) {
+    return this.users.findPilgrimageHistory(id, query);
   }
 
   @Get(':id')

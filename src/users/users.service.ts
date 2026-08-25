@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { isAdmin } from '../auth/roles.util';
+import { normalizeNationalId, toLatinDigits } from '../common/national-id';
 import { buildStyledExcelExport } from '../common/excel-export';
-import { currentJalaliYear, jalaliMonthRange, jalaliYearRange } from '../common/jalali-year';
-import { normalizePhone } from '../common/phone';
+import { currentJalaliYear, jalaliYearRange } from '../common/jalali-year';
+import { normalizeMobile, normalizePhone, phoneLookupValues } from '../common/phone';
 import {
   containsInsensitive,
   normalizeSearchDigits,
@@ -18,10 +19,18 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
-import { Prisma, Religion, UserGender, UserStatus } from '../generated/prisma/client';
+import {
+  Prisma,
+  Religion,
+  ReservationType,
+  UserGender,
+  UserStatus,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { FindPilgrimHistoryQueryDto } from './dto/find-pilgrim-history-query.dto';
+import { type PilgrimReportExportSection } from './dto/find-pilgrim-report-query.dto';
 import { SetPilgrimPasswordDto } from './dto/set-pilgrim-password.dto';
 import {
   CITY_ID_NONE,
@@ -105,9 +114,14 @@ const publicInclude = {
       province: { select: geoSelect },
     },
   },
+  managedCaravans: {
+    orderBy: [{ isActive: 'desc' as const }, { name: 'asc' as const }],
+    select: { id: true, name: true, isActive: true },
+  },
   _count: {
     select: {
       managedAccommodations: true,
+      managedCaravans: true,
       representedProvinces: true,
       representedCities: true,
     },
@@ -166,8 +180,18 @@ type PublicUserSource = {
     provinceId: string;
     province: { id: string; nameFa: string; nameEn: string };
   }[];
+  managedCaravans: {
+    id: string;
+    name: string;
+    isActive: boolean;
+    licenseNumber?: string | null;
+    totalCount?: number;
+    city?: { id: string; nameFa: string; nameEn: string; provinceId: string };
+    walkingRoute?: { id: string; name: string } | null;
+  }[];
   _count: {
     managedAccommodations: number;
+    managedCaravans: number;
     representedProvinces: number;
     representedCities: number;
   };
@@ -206,15 +230,10 @@ export class UsersService {
 
   async pilgrimReportSummary(year?: number) {
     const where = this.pilgrimScope(year);
-    const [total, genderRows, statusRows] = await Promise.all([
+    const [total, genderRows] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.groupBy({
         by: ['gender'],
-        where,
-        _count: { _all: true },
-      }),
-      this.prisma.user.groupBy({
-        by: ['status'],
         where,
         _count: { _all: true },
       }),
@@ -229,18 +248,10 @@ export class UsersService {
       else unspecified += row._count._all;
     }
 
-    let active = 0;
-    let inactive = 0;
-    for (const row of statusRows) {
-      if (row.status === UserStatus.ACTIVE) active = row._count._all;
-      else inactive += row._count._all;
-    }
-
     return {
       year: year ?? null,
       total,
       byGender: { male, female, unspecified },
-      byStatus: { active, inactive },
     };
   }
 
@@ -321,7 +332,7 @@ export class UsersService {
     };
 
     let orphanCountry = 0;
-    const byCountry = countryRows.flatMap((row) => {
+    const byCountryRows = countryRows.flatMap((row) => {
       if (row.countryId && countryName.has(row.countryId)) {
         return [
           {
@@ -336,7 +347,7 @@ export class UsersService {
     });
 
     let orphanProvince = 0;
-    const byProvince = provinceRows.flatMap((row) => {
+    const byProvinceRows = provinceRows.flatMap((row) => {
       if (row.provinceId && provinceName.has(row.provinceId)) {
         return [
           {
@@ -351,7 +362,7 @@ export class UsersService {
     });
 
     let orphanCity = 0;
-    const byCity = cityRows.flatMap((row) => {
+    const byCityRows = cityRows.flatMap((row) => {
       if (row.cityId && cityName.has(row.cityId)) {
         return [
           {
@@ -365,31 +376,95 @@ export class UsersService {
       return [];
     });
 
-    return {
-      year: year ?? null,
-      byCountry: withUnspecified(byCountry, unspecifiedCountry, orphanCountry),
-      byProvince: withUnspecified(byProvince, unspecifiedProvince, orphanProvince),
-      byCity: withUnspecified(byCity, unspecifiedCity, orphanCity),
-    };
-  }
+    const byCountry = withUnspecified(byCountryRows, unspecifiedCountry, orphanCountry);
+    const byProvince = withUnspecified(byProvinceRows, unspecifiedProvince, orphanProvince);
+    const byCity = withUnspecified(byCityRows, unspecifiedCity, orphanCity);
 
-  async pilgrimReportReligion(year?: number) {
-    const where = this.pilgrimScope(year);
-    const religionRows = await this.prisma.user.groupBy({
-      by: ['religion'],
-      where: { ...where, religion: { not: null } },
-      _count: { _all: true },
-    });
+    const withEmptyYoy = (rows: { id: string; name: string; count: number }[]) =>
+      rows.map((row) => ({
+        ...row,
+        previousCount: null,
+        changePercent: null,
+        changeCount: null,
+      }));
+
+    if (year == null) {
+      return {
+        year: null,
+        byCountry: withEmptyYoy(byCountry),
+        byProvince: withEmptyYoy(byProvince),
+        byCity: withEmptyYoy(byCity),
+      };
+    }
+
+    const prevWhere = this.pilgrimScope(year - 1);
+    const [
+      prevCountryRows,
+      prevProvinceRows,
+      prevCityRows,
+      prevUnspecifiedCountry,
+      prevUnspecifiedProvince,
+      prevUnspecifiedCity,
+    ] = await Promise.all([
+      this.prisma.user.groupBy({
+        by: ['countryId'],
+        where: { ...prevWhere, countryId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.groupBy({
+        by: ['provinceId'],
+        where: { ...prevWhere, provinceId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.groupBy({
+        by: ['cityId'],
+        where: { ...prevWhere, cityId: { not: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.user.count({ where: { ...prevWhere, countryId: null } }),
+      this.prisma.user.count({ where: { ...prevWhere, provinceId: null } }),
+      this.prisma.user.count({ where: { ...prevWhere, cityId: null } }),
+    ]);
+
+    const prevCountryCount = new Map(
+      prevCountryRows
+        .filter((row) => row.countryId)
+        .map((row) => [row.countryId!, row._count._all]),
+    );
+    const prevProvinceCount = new Map(
+      prevProvinceRows
+        .filter((row) => row.provinceId)
+        .map((row) => [row.provinceId!, row._count._all]),
+    );
+    const prevCityCount = new Map(
+      prevCityRows
+        .filter((row) => row.cityId)
+        .map((row) => [row.cityId!, row._count._all]),
+    );
+
+    const attachYoy = (
+      rows: { id: string; name: string; count: number }[],
+      previous: Map<string, number>,
+      previousUnspecified: number,
+    ) =>
+      rows.map((row) => {
+        const previousCount =
+          row.id === unspecifiedId
+            ? previousUnspecified
+            : (previous.get(row.id) ?? 0);
+        const changeCount = row.count - previousCount;
+        const changePercent =
+          previousCount === 0
+            ? null
+            : Math.round(((row.count - previousCount) / previousCount) * 100);
+        return { ...row, previousCount, changePercent, changeCount };
+      });
 
     return {
-      year: year ?? null,
-      byReligion: religionRows
-        .filter((row) => row.religion != null)
-        .map((row) => ({
-          religion: row.religion as Religion,
-          count: row._count._all,
-        }))
-        .sort((a, b) => b.count - a.count),
+      year,
+      byCountry: attachYoy(byCountry, prevCountryCount, prevUnspecifiedCountry),
+      byProvince: attachYoy(byProvince, prevProvinceCount, prevUnspecifiedProvince),
+      byCity: attachYoy(byCity, prevCityCount, prevUnspecifiedCity),
     };
   }
 
@@ -398,22 +473,12 @@ export class UsersService {
       userRoles: { some: { role: { code: 'PILGRIM' } } },
     };
 
-    const emptyYear: { year: number; count: number; changePercent: number | null }[] = [];
-    const emptyMonth: { month: number; count: number }[] = [];
-
-    const byMonthPromise =
-      year == null
-        ? Promise.resolve(emptyMonth)
-        : Promise.all(
-            Array.from({ length: 12 }, async (_, index) => {
-              const month = index + 1;
-              const { gte, lt } = jalaliMonthRange(year, month);
-              const count = await this.prisma.user.count({
-                where: { ...pilgrimRole, createdAt: { gte, lt } },
-              });
-              return { month, count };
-            }),
-          ).then((rows) => rows.filter((row) => row.count > 0));
+    const emptyYear: {
+      year: number;
+      count: number;
+      changePercent: number | null;
+      changeCount: number | null;
+    }[] = [];
 
     const bounds = await this.prisma.user.aggregate({
       where: pilgrimRole,
@@ -425,7 +490,6 @@ export class UsersService {
       return {
         year: year ?? null,
         byYear: emptyYear,
-        byMonth: await byMonthPromise,
       };
     }
 
@@ -447,35 +511,276 @@ export class UsersService {
       .map((row) => {
         const previous = yearCounts.find((item) => item.year === row.year - 1);
         const prevCount = previous?.count ?? 0;
+        const changeCount = previous == null ? null : row.count - prevCount;
         const changePercent =
           previous == null || prevCount === 0
             ? null
             : Math.round(((row.count - prevCount) / prevCount) * 100);
-        return { ...row, changePercent };
+        return { ...row, changePercent, changeCount };
       });
 
     return {
       year: year ?? null,
       byYear,
-      byMonth: await byMonthPromise,
     };
   }
 
+  private pilgrimProvinceScope(provinceId: string): Prisma.UserWhereInput {
+    const unspecifiedId = '__unspecified__';
+    return {
+      userRoles: { some: { role: { code: 'PILGRIM' } } },
+      provinceId: provinceId === unspecifiedId ? null : provinceId,
+    };
+  }
+
+  private pilgrimCityScope(cityId: string): Prisma.UserWhereInput {
+    const unspecifiedId = '__unspecified__';
+    return {
+      userRoles: { some: { role: { code: 'PILGRIM' } } },
+      cityId: cityId === unspecifiedId ? null : cityId,
+    };
+  }
+
+  private async yearlyGrowthRows(where: Prisma.UserWhereInput) {
+    const emptyYear: {
+      year: number;
+      count: number;
+      changePercent: number | null;
+      changeCount: number | null;
+    }[] = [];
+
+    const bounds = await this.prisma.user.aggregate({
+      where,
+      _min: { createdAt: true },
+      _max: { createdAt: true },
+    });
+
+    if (!bounds._min.createdAt || !bounds._max.createdAt) {
+      return emptyYear;
+    }
+
+    const fromYear = currentJalaliYear(bounds._min.createdAt);
+    const toYear = currentJalaliYear(bounds._max.createdAt);
+    const yearCounts = await Promise.all(
+      Array.from({ length: Math.max(0, toYear - fromYear + 1) }, async (_, index) => {
+        const jalaliYear = fromYear + index;
+        const { gte, lt } = jalaliYearRange(jalaliYear);
+        const count = await this.prisma.user.count({
+          where: { ...where, createdAt: { gte, lt } },
+        });
+        return { year: jalaliYear, count };
+      }),
+    );
+
+    return yearCounts
+      .filter((row) => row.count > 0)
+      .map((row) => {
+        const previous = yearCounts.find((item) => item.year === row.year - 1);
+        const prevCount = previous?.count ?? 0;
+        const changeCount = previous == null ? null : row.count - prevCount;
+        const changePercent =
+          previous == null || prevCount === 0
+            ? null
+            : Math.round(((row.count - prevCount) / prevCount) * 100);
+        return { ...row, changePercent, changeCount };
+      });
+  }
+
+  async pilgrimReportProvinceTimeline(provinceId: string) {
+    const unspecifiedId = '__unspecified__';
+    const where = this.pilgrimProvinceScope(provinceId);
+
+    let provinceName = 'نامشخص';
+    if (provinceId !== unspecifiedId) {
+      const province = await this.prisma.province.findUnique({
+        where: { id: provinceId },
+        select: { id: true, nameFa: true },
+      });
+      if (!province) {
+        throw new NotFoundException('استان یافت نشد');
+      }
+      provinceName = province.nameFa;
+    }
+
+    return {
+      provinceId,
+      provinceName,
+      byYear: await this.yearlyGrowthRows(where),
+    };
+  }
+
+  async exportPilgrimReportProvinceTimeline(provinceId: string) {
+    const report = await this.pilgrimReportProvinceTimeline(provinceId);
+    const buffer = await this.exportYearlyGrowthExcel(
+      report.provinceName.slice(0, 31) || 'استان',
+      report.byYear,
+    );
+    return {
+      buffer,
+      filename: 'pilgrims-report-province-years.xlsx',
+      provinceName: report.provinceName,
+    };
+  }
+
+  async pilgrimReportCityTimeline(cityId: string) {
+    const unspecifiedId = '__unspecified__';
+    const where = this.pilgrimCityScope(cityId);
+
+    let cityName = 'نامشخص';
+    if (cityId !== unspecifiedId) {
+      const city = await this.prisma.city.findUnique({
+        where: { id: cityId },
+        select: { id: true, nameFa: true },
+      });
+      if (!city) {
+        throw new NotFoundException('شهر یافت نشد');
+      }
+      cityName = city.nameFa;
+    }
+
+    return {
+      cityId,
+      cityName,
+      byYear: await this.yearlyGrowthRows(where),
+    };
+  }
+
+  async exportPilgrimReportCityTimeline(cityId: string) {
+    const report = await this.pilgrimReportCityTimeline(cityId);
+    const buffer = await this.exportYearlyGrowthExcel(
+      report.cityName.slice(0, 31) || 'شهر',
+      report.byYear,
+    );
+    return {
+      buffer,
+      filename: 'pilgrims-report-city-years.xlsx',
+      cityName: report.cityName,
+    };
+  }
+
+  private exportYearlyGrowthExcel(
+    sheetName: string,
+    rows: {
+      year: number;
+      count: number;
+      changePercent: number | null;
+      changeCount: number | null;
+    }[],
+  ) {
+    return buildStyledExcelExport({
+      sheetName,
+      columns: [
+        { header: 'سال', key: 'year', width: 12 },
+        { header: 'تعداد زائر', key: 'count', width: 16 },
+        { header: 'درصد رشد', key: 'changePercent', width: 14 },
+        { header: 'تغییر تعداد', key: 'changeCount', width: 14 },
+      ],
+      rows: rows.map((row) => ({
+        year: row.year,
+        count: row.count,
+        changePercent: row.changePercent ?? '',
+        changeCount: row.changeCount ?? '',
+      })),
+    });
+  }
+
   async pilgrimReport(year?: number) {
-    const [summary, geo, religion, timeline] = await Promise.all([
+    const [summary, geo, timeline] = await Promise.all([
       this.pilgrimReportSummary(year),
       this.pilgrimReportGeo(year),
-      this.pilgrimReportReligion(year),
       this.pilgrimReportTimeline(year),
     ]);
 
     return {
       ...summary,
       ...geo,
-      ...religion,
       byYear: timeline.byYear,
-      byMonth: timeline.byMonth,
     };
+  }
+
+  async exportPilgrimReport(section: PilgrimReportExportSection, year?: number) {
+    const unspecifiedId = '__unspecified__';
+    const geoLabel = (id: string, name: string) =>
+      id === unspecifiedId ? 'نامشخص' : name;
+    const sharePercent = (count: number, total: number) =>
+      total <= 0 ? 0 : Math.round((count / total) * 100);
+
+    if (section === 'year') {
+      const timeline = await this.pilgrimReportTimeline(year);
+      const buffer = await buildStyledExcelExport({
+        sheetName: 'سال',
+        columns: [
+          { header: 'سال', key: 'year', width: 12 },
+          { header: 'تعداد زائر', key: 'count', width: 16 },
+          { header: 'درصد رشد', key: 'changePercent', width: 14 },
+          { header: 'تغییر تعداد', key: 'changeCount', width: 14 },
+        ],
+        rows: timeline.byYear.map((row) => ({
+          year: row.year,
+          count: row.count,
+          changePercent: row.changePercent ?? '',
+          changeCount: row.changeCount ?? '',
+        })),
+      });
+      return { buffer, filename: 'pilgrims-report-year.xlsx' };
+    }
+
+    const [summary, geo] = await Promise.all([
+      this.pilgrimReportSummary(year),
+      this.pilgrimReportGeo(year),
+    ]);
+    const geoRows =
+      section === 'country'
+        ? geo.byCountry
+        : section === 'province'
+          ? geo.byProvince
+          : geo.byCity;
+    const sheetName =
+      section === 'country' ? 'کشور' : section === 'province' ? 'استان' : 'شهر';
+    const nameHeader =
+      section === 'country' ? 'عنوان' : section === 'province' ? 'استان' : 'شهر';
+    const withYear = year != null;
+    const withYoy = withYear && section !== 'country';
+    const buffer = await buildStyledExcelExport({
+      sheetName,
+      columns: [
+        { header: nameHeader, key: 'name', width: 24 },
+        {
+          header: withYear ? `تعداد سال ${year}` : 'تعداد زائر',
+          key: 'count',
+          width: 16,
+        },
+        ...(withYear
+          ? [
+              {
+                header: `تعداد سال ${year - 1}`,
+                key: 'previousCount',
+                width: 16,
+              },
+            ]
+          : []),
+        { header: 'درصد', key: 'percent', width: 12 },
+        ...(withYoy
+          ? [
+              { header: 'درصد رشد نسبت به سال قبل', key: 'changePercent', width: 22 },
+              { header: 'تغییر تعداد نسبت به سال قبل', key: 'changeCount', width: 24 },
+            ]
+          : []),
+      ],
+      rows: geoRows.map((row) => ({
+        name: geoLabel(row.id, row.name),
+        count: row.count,
+        ...(withYear ? { previousCount: row.previousCount ?? 0 } : {}),
+        percent: sharePercent(row.count, summary.total),
+        ...(withYoy
+          ? {
+              changePercent: row.changePercent ?? '',
+              changeCount: row.changeCount ?? '',
+            }
+          : {}),
+      })),
+    });
+    return { buffer, filename: `pilgrims-report-${section}.xlsx` };
   }
 
   async findAll(query: FindUsersQueryDto) {
@@ -531,6 +836,9 @@ export class UsersService {
         accommodationCount: (dir) => ({
           managedAccommodations: { _count: dir },
         }),
+        caravanCount: (dir) => ({
+          managedCaravans: { _count: dir },
+        }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
     );
@@ -547,6 +855,25 @@ export class UsersService {
             accommodation: {
               select: { id: true, name: true, type: true, status: true },
             },
+          },
+        },
+        managedCaravans: {
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            licenseNumber: true,
+            totalCount: true,
+            city: {
+              select: {
+                id: true,
+                nameFa: true,
+                nameEn: true,
+                provinceId: true,
+              },
+            },
+            walkingRoute: { select: { id: true, name: true } },
           },
         },
       },
@@ -739,6 +1066,127 @@ export class UsersService {
     return user;
   }
 
+  async findPilgrimageHistory(id: string, query: FindPilgrimHistoryQueryDto) {
+    await this.assertHasRole(id, 'PILGRIM', 'زائر یافت نشد');
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const where: Prisma.ReservationWhereInput = {
+      OR: [
+        { members: { some: { userId: id } } },
+        {
+          createdById: id,
+          type: { in: [ReservationType.INDIVIDUAL, ReservationType.GROUP] },
+        },
+      ],
+    };
+    const orderBy = resolveSortOrder<Prisma.ReservationOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        year: (dir) => ({ year: dir }),
+        type: (dir) => ({ type: dir }),
+        status: (dir) => ({ status: dir }),
+        stayStartDate: (dir) => ({ stayStartDate: dir }),
+        createdAt: (dir) => ({ createdAt: dir }),
+        caravan: (dir) => ({ caravan: { name: dir } }),
+      },
+      [{ year: 'desc' }, { stayStartDate: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    );
+    const geoSelect = {
+      id: true,
+      nameFa: true,
+      nameEn: true,
+      provinceId: true,
+    } as const;
+    const personSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      fullName: true,
+      nationalId: true,
+      phone: true,
+    } as const;
+
+    const [items, total] = await Promise.all([
+      this.prisma.reservation.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+        include: {
+          originCity: { select: geoSelect },
+          walkingRoute: { select: { id: true, name: true } },
+          caravan: {
+            select: {
+              id: true,
+              name: true,
+              officePhone: true,
+              foundedYear: true,
+              licenseNumber: true,
+              isActive: true,
+              maleCount: true,
+              femaleCount: true,
+              totalCount: true,
+              city: { select: geoSelect },
+              manager: { select: personSelect },
+            },
+          },
+          group: {
+            select: {
+              id: true,
+              name: true,
+              maleCount: true,
+              femaleCount: true,
+              totalCount: true,
+              city: { select: geoSelect },
+              manager: { select: personSelect },
+            },
+          },
+          caravanManager: { select: personSelect },
+          createdBy: { select: personSelect },
+          members: {
+            where: { userId: id },
+            select: { insuranceStatus: true },
+          },
+        },
+      }),
+      this.prisma.reservation.count({ where }),
+    ]);
+
+    return paginatedResult(
+      items.map((row) => ({
+        id: row.id,
+        year: row.year,
+        type: row.type,
+        status: row.status,
+        originCity: row.originCity,
+        walkingRoute: row.walkingRoute,
+        stayStartDate: toDateOnly(row.stayStartDate),
+        stayEndDate: toDateOnly(row.stayEndDate),
+        walkingStartDate: toDateOnly(row.walkingStartDate),
+        requestsAccommodation: row.requestsAccommodation,
+        requestsBus: row.requestsBus,
+        requestedMaleCount: row.requestedMaleCount,
+        requestedFemaleCount: row.requestedFemaleCount,
+        maleCount: row.maleCount,
+        femaleCount: row.femaleCount,
+        totalCount: row.totalCount,
+        hasPermit: row.hasPermit,
+        permitStatus: row.permitStatus,
+        createdAt: row.createdAt.toISOString(),
+        completedAt: row.completedAt?.toISOString() ?? null,
+        insuranceStatus: row.members[0]?.insuranceStatus ?? null,
+        isMember: row.members.length > 0,
+        caravan: row.caravan,
+        group: row.group,
+        caravanManager: row.caravanManager,
+        createdBy: row.createdBy,
+      })),
+      total,
+      page,
+      pageSize,
+    );
+  }
+
   async setPilgrimPassword(id: string, dto: SetPilgrimPasswordDto, actorId: string) {
     const user = await this.assertHasRole(id, 'PILGRIM', 'زائر یافت نشد');
     if (dto.sendSms && !user.phone) {
@@ -808,6 +1256,98 @@ export class UsersService {
 
   async recoverOwnPilgrimPassword(userId: string) {
     return this.resetUserPasswordAndSms(userId, userId);
+  }
+
+  /** بازیابی عمومی از صفحه ورود: کد ملی یا تلفن همراه، بدون افشای رمز در پاسخ. */
+  async forgotPasswordByIdentifier(identifier: string) {
+    const user = await this.findActiveByPhoneOrNationalId(identifier);
+    if (!user) {
+      return { status: 'not_found' as const };
+    }
+    if (!user.phone?.trim()) {
+      return { status: 'no_phone' as const };
+    }
+    await this.resetUserPasswordAndSms(user.id, user.id);
+    return { status: 'sent' as const };
+  }
+
+  /** ثبت‌نام عمومی زائر با رمز الگوی تکراری و ارسال پیامک. */
+  async selfRegisterPilgrim(dto: {
+    firstName: string;
+    lastName: string;
+    nationalId: string;
+    phone: string;
+    gender?: UserGender | null;
+  }) {
+    const nationalId = dto.nationalId.trim();
+    const phone = normalizeMobile(dto.phone);
+    if (!/^09\d{9}$/.test(phone)) {
+      throw new BadRequestException('شماره همراه معتبر نیست');
+    }
+
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    await this.assertUniqueIdentity({
+      username: nationalId,
+      nationalId,
+      phone,
+    });
+
+    const role = await this.ensureExistingRole('PILGRIM');
+    await this.sms.assertConfigured();
+    const password = resolvePilgrimResetPassword();
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const created = await this.prisma.user.create({
+      data: {
+        username: nationalId,
+        passwordHash,
+        firstName,
+        lastName,
+        fullName: joinFullName(firstName, lastName),
+        nationalId,
+        phone,
+        gender: dto.gender ?? null,
+        status: UserStatus.ACTIVE,
+        userRoles: { create: [{ roleId: role.id }] },
+      },
+      select: { id: true, fullName: true, phone: true },
+    });
+
+    await this.sms.send({
+      phone: created.phone!,
+      body: [
+        `زائر گرامی ${created.fullName}`,
+        'رمز عبور سامانه اسکان:',
+        password,
+        'ورود با کد ملی یا شماره همراه',
+      ].join('\n'),
+      sentById: created.id,
+    });
+
+    return { status: 'registered' as const };
+  }
+
+  private async findActiveByPhoneOrNationalId(identifier: string) {
+    const nationalId = normalizeNationalId(identifier);
+    const phones = phoneLookupValues(identifier);
+    const or: Prisma.UserWhereInput[] = [];
+    if (nationalId) {
+      or.push({ nationalId });
+    }
+    for (const phone of phones) {
+      or.push({ phone });
+    }
+    if (!or.length) {
+      return null;
+    }
+    return this.prisma.user.findFirst({
+      where: {
+        status: UserStatus.ACTIVE,
+        OR: or,
+      },
+      select: { id: true, phone: true },
+    });
   }
 
   /** تعریف رمز الگوی تکراری (مثل ۲۲۵۵۶۶۴۴) و پیامک — توسط ادمین یا خود کاربر */
@@ -1022,6 +1562,7 @@ export class UsersService {
       { email: text },
       { notes: text },
       { issuingOrganization: { name: text } },
+      { managedCaravans: { some: { name: text } } },
     ];
 
     if (!headquartersOnly) {
@@ -1238,6 +1779,7 @@ export class UsersService {
       updatedAt: user.updatedAt,
       roles: user.userRoles.map((item) => item.role),
       accommodationCount: user._count.managedAccommodations,
+      caravanCount: user._count.managedCaravans,
       representedProvinceCount: user._count.representedProvinces,
       representedCityCount: user._count.representedCities,
       representedProvinces: user.representedProvinces,
@@ -1252,6 +1794,15 @@ export class UsersService {
             accommodation: item.accommodation,
           }))
         : undefined,
+      caravans: user.managedCaravans?.map((item) => ({
+        id: item.id,
+        name: item.name,
+        isActive: item.isActive,
+        licenseNumber: item.licenseNumber,
+        totalCount: item.totalCount,
+        city: item.city,
+        walkingRoute: item.walkingRoute,
+      })),
     };
   }
 
@@ -1413,7 +1964,7 @@ export class UsersService {
       nationalId
         ? this.prisma.user.findFirst({
             where: { nationalId, ...exclude },
-            select: { id: true },
+            select: { id: true, fullName: true },
           })
         : Promise.resolve(null),
       phone
@@ -1433,6 +1984,7 @@ export class UsersService {
     return {
       taken: Boolean(nationalIdHit || phoneHit || usernameHit),
       nationalIdTaken: Boolean(nationalIdHit),
+      nationalIdOwnerName: nationalIdHit?.fullName?.trim() || null,
       phoneTaken: Boolean(phoneHit),
       usernameTaken: Boolean(usernameHit),
     };
@@ -1794,12 +2346,46 @@ export class UsersService {
   }
 
   private normalizeCityKey(value: string) {
-    return value
-      .trim()
-      .replace(/\s+/g, ' ')
+    return toLatinDigits(value)
+      .replace(/\u200c/g, '')
+      .replace(/[()]/g, '')
       .replace(/ي/g, 'ی')
       .replace(/ك/g, 'ک')
+      .replace(/\s+/g, '')
+      .trim()
       .toLowerCase();
+  }
+
+  private cityLookupKeys(nameFa: string, nameEn: string) {
+    const keys = [this.normalizeCityKey(nameFa), this.normalizeCityKey(nameEn)];
+    const fa = toLatinDigits(nameFa)
+      .replace(/\u200c/g, '')
+      .replace(/ي/g, 'ی')
+      .replace(/ك/g, 'ک')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const mashhadDistrict = fa.match(/^مشهد\s+(\d+)$/);
+    if (mashhadDistrict) {
+      keys.push(this.normalizeCityKey(`منطقه ${mashhadDistrict[1]}`));
+    }
+    if (fa === 'مشهد ثامن' || fa === 'مشهد 8') {
+      keys.push(this.normalizeCityKey('منطقه 8 (ثامن)'));
+      keys.push(this.normalizeCityKey('ثامن'));
+    }
+    if (fa === 'آشخانه' || fa === 'سملقان') {
+      keys.push(this.normalizeCityKey('مانه و سملقان'));
+    }
+    const parts = fa.split(/\s+/);
+    const lastPart = parts[parts.length - 1] ?? '';
+    if (
+      parts.length > 1 &&
+      parts[0].length >= 3 &&
+      !/^\d+$/.test(lastPart) &&
+      !/ثامن|منطقه/.test(fa)
+    ) {
+      keys.push(this.normalizeCityKey(parts[0]));
+    }
+    return keys.filter(Boolean);
   }
 
   private async preparePilgrimImport(buffer: Buffer): Promise<ParsedPilgrimImport> {
@@ -1836,13 +2422,10 @@ export class UsersService {
       });
 
       for (const city of cities) {
-        const faKey = this.normalizeCityKey(city.nameFa);
-        const enKey = this.normalizeCityKey(city.nameEn);
-        if (faKey && !cityIdByKey.has(faKey)) {
-          cityIdByKey.set(faKey, city.id);
-        }
-        if (enKey && !cityIdByKey.has(enKey)) {
-          cityIdByKey.set(enKey, city.id);
+        for (const key of this.cityLookupKeys(city.nameFa, city.nameEn)) {
+          if (!cityIdByKey.has(key)) {
+            cityIdByKey.set(key, city.id);
+          }
         }
       }
     }
@@ -2066,12 +2649,17 @@ export class UsersService {
         ...(excludeId ? { NOT: { id: excludeId } } : {}),
         OR: filters,
       },
-      select: { username: true, nationalId: true, phone: true, email: true },
+      select: { username: true, nationalId: true, phone: true, email: true, fullName: true },
     });
 
     for (const row of matches) {
       if (nationalId && row.nationalId === nationalId) {
-        throw new ConflictException('کد ملی تکراری است');
+        const name = row.fullName.trim();
+        throw new ConflictException(
+          name
+            ? `این کد ملی متعلق به ${name} است و امکان ثبت مجدد آن وجود ندارد`
+            : 'کد ملی تکراری است',
+        );
       }
       if (phone && row.phone === phone) {
         throw new ConflictException('شماره تلفن تکراری است');

@@ -277,7 +277,12 @@ export class AccommodationsService {
   }
 
   async create(dto: CreateAccommodationDto, actor: Actor) {
-    this.assertCapacity(dto);
+    this.assertCapacity({
+      maleCapacity: dto.maleCapacity,
+      femaleCapacity: dto.femaleCapacity,
+      assignedMaleCapacity: 0,
+      assignedFemaleCapacity: 0,
+    });
     const geo = await this.resolveGeo(dto);
     const admin = isAdmin(actor);
     if (!admin) {
@@ -330,10 +335,8 @@ export class AccommodationsService {
     this.assertCapacity({
       maleCapacity: dto.maleCapacity ?? current.maleCapacity,
       femaleCapacity: dto.femaleCapacity ?? current.femaleCapacity,
-      assignedMaleCapacity:
-        dto.assignedMaleCapacity ?? current.assignedMaleCapacity,
-      assignedFemaleCapacity:
-        dto.assignedFemaleCapacity ?? current.assignedFemaleCapacity,
+      assignedMaleCapacity: current.assignedMaleCapacity,
+      assignedFemaleCapacity: current.assignedFemaleCapacity,
     });
     const geo = await this.resolveGeo({
       countryId: dto.countryId === undefined ? current.countryId : dto.countryId,
@@ -1093,8 +1096,6 @@ export class AccommodationsService {
     set('managementType', dto.managementType as ManagementType | undefined);
     set('maleCapacity', dto.maleCapacity);
     set('femaleCapacity', dto.femaleCapacity);
-    set('assignedMaleCapacity', dto.assignedMaleCapacity);
-    set('assignedFemaleCapacity', dto.assignedFemaleCapacity);
     set('phone', dto.phone);
     set('address', dto.address);
     set('neshanAddress', dto.neshanAddress);
@@ -1431,12 +1432,12 @@ export class AccommodationsService {
         { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
         { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
         {
-          header: 'ظرفیت اختصاص‌داده‌شده مرد',
+          header: 'ظرفیت اختصاص‌شده مرد',
           key: 'assignedMaleCapacity',
           width: 22,
         },
         {
-          header: 'ظرفیت اختصاص‌داده‌شده زن',
+          header: 'ظرفیت اختصاص‌شده خانم',
           key: 'assignedFemaleCapacity',
           width: 22,
         },

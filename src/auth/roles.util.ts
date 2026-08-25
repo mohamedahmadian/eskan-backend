@@ -47,6 +47,13 @@ export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
 }
 
+export function canAccessMyReservations(user: RoleBearer | null | undefined) {
+  return (
+    !isAdmin(user) &&
+    (isPilgrim(user) || isCaravanManager(user) || isGroupManager(user))
+  );
+}
+
 export function canAccessMyGroups(user: RoleBearer | null | undefined) {
   return (
     isAdmin(user) ||
@@ -54,4 +61,8 @@ export function canAccessMyGroups(user: RoleBearer | null | undefined) {
     isCaravanManager(user) ||
     isPilgrim(user)
   );
+}
+
+export function canAccessMyAccommodations(user: RoleBearer | null | undefined) {
+  return Boolean(user) && !isAdmin(user);
 }

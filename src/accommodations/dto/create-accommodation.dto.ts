@@ -62,18 +62,6 @@ export class CreateAccommodationDto {
   femaleCapacity?: number;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  assignedMaleCapacity?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  assignedFemaleCapacity?: number;
-
-  @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsString()

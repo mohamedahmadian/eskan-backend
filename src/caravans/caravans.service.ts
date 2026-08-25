@@ -1,22 +1,30 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { isAdmin, type RoleBearer } from '../auth/roles.util';
+import { currentJalaliYear } from '../common/jalali-year';
 import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
+  wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
+import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
 import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
+import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
+import { TransferCaravansYearDto } from './dto/transfer-caravans-year.dto';
 import { UpdateCaravanDto } from './dto/update-caravan.dto';
+
+type Actor = RoleBearer & { id: string };
 
 const caravanInclude = {
   city: {
@@ -80,7 +88,31 @@ const caravanInclude = {
       },
     },
   },
+  years: {
+    orderBy: { year: 'desc' },
+    select: {
+      id: true,
+      year: true,
+      managerUserId: true,
+      manager: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          fullName: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.CaravanInclude;
+
+function toDateOnly(value?: Date | string | null) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+  return value.toISOString().slice(0, 10);
+}
 
 @Injectable()
 export class CaravansService {
@@ -155,6 +187,87 @@ export class CaravansService {
     return caravan;
   }
 
+  async findPilgrimageHistory(id: string, query: FindCaravanHistoryQueryDto) {
+    await this.findOne(id);
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const where: Prisma.ReservationWhereInput = { caravanId: id };
+    const orderBy = resolveSortOrder<Prisma.ReservationOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        year: (dir) => ({ year: dir }),
+        status: (dir) => ({ status: dir }),
+        stayStartDate: (dir) => ({ stayStartDate: dir }),
+        createdAt: (dir) => ({ createdAt: dir }),
+        originCity: (dir) => ({ originCity: { nameFa: dir } }),
+        totalCount: (dir) => ({ totalCount: dir }),
+      },
+      [{ year: 'desc' }, { stayStartDate: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+    );
+    const geoSelect = {
+      id: true,
+      nameFa: true,
+      nameEn: true,
+      provinceId: true,
+    } as const;
+    const personSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      fullName: true,
+      nationalId: true,
+      phone: true,
+    } as const;
+
+    const [items, total] = await Promise.all([
+      this.prisma.reservation.findMany({
+        where,
+        orderBy,
+        skip,
+        take,
+        include: {
+          originCity: { select: geoSelect },
+          walkingRoute: { select: { id: true, name: true } },
+          caravanManager: { select: personSelect },
+          createdBy: { select: personSelect },
+          _count: { select: { members: true } },
+        },
+      }),
+      this.prisma.reservation.count({ where }),
+    ]);
+
+    return paginatedResult(
+      items.map((row) => ({
+        id: row.id,
+        year: row.year,
+        type: row.type,
+        status: row.status,
+        originCity: row.originCity,
+        walkingRoute: row.walkingRoute,
+        stayStartDate: toDateOnly(row.stayStartDate),
+        stayEndDate: toDateOnly(row.stayEndDate),
+        walkingStartDate: toDateOnly(row.walkingStartDate),
+        requestsAccommodation: row.requestsAccommodation,
+        requestsBus: row.requestsBus,
+        requestedMaleCount: row.requestedMaleCount,
+        requestedFemaleCount: row.requestedFemaleCount,
+        maleCount: row.maleCount,
+        femaleCount: row.femaleCount,
+        totalCount: row.totalCount,
+        memberCount: row._count.members,
+        hasPermit: row.hasPermit,
+        permitStatus: row.permitStatus,
+        createdAt: row.createdAt.toISOString(),
+        completedAt: row.completedAt?.toISOString() ?? null,
+        caravanManager: row.caravanManager,
+        createdBy: row.createdBy,
+      })),
+      total,
+      page,
+      pageSize,
+    );
+  }
+
   private listWhere(query: FindCaravansQueryDto): Prisma.CaravanWhereInput | undefined {
     if (!query.q) return undefined;
     return {
@@ -176,6 +289,115 @@ export class CaravansService {
         { instagram: containsInsensitive(query.q) },
       ],
     };
+  }
+
+  private assertAdmin(actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+  }
+
+  private assertCanActivateYear(
+    caravan: { managerUserId: string | null },
+    actor: Actor,
+  ) {
+    if (isAdmin(actor) || caravan.managerUserId === actor.id) {
+      return;
+    }
+    throw new ForbiddenException('امکان فعال‌سازی سالانه این کاروان وجود ندارد');
+  }
+
+  private andWhere(
+    base: Prisma.CaravanWhereInput | undefined,
+    extra: Prisma.CaravanWhereInput,
+  ): Prisma.CaravanWhereInput {
+    if (!base || !Object.keys(base).length) {
+      return extra;
+    }
+    return { AND: [base, extra] };
+  }
+
+  private async syncCurrentYearManager(
+    caravanId: string,
+    managerUserId: string | null,
+  ) {
+    const year = currentJalaliYear();
+    const existing = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId, year } },
+      select: { id: true },
+    });
+    if (!existing) return;
+    await this.prisma.caravanYear.update({
+      where: { id: existing.id },
+      data: { managerUserId },
+    });
+  }
+
+  private async validYearManagerId(userId: string | null | undefined) {
+    if (!userId) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userRoles: { include: { role: { select: { code: true } } } } },
+    });
+    if (!user || !user.userRoles.some((item) => item.role.code === 'CARAVAN_MANAGER')) {
+      return null;
+    }
+    return userId;
+  }
+
+  private async transferOneToYear(
+    caravanId: string,
+    sourceYear: number,
+    targetYear: number,
+    copyManagers: boolean,
+  ): Promise<'ok' | 'skipped'> {
+    const existing = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId, year: targetYear } },
+      select: { id: true },
+    });
+    if (existing) {
+      return 'skipped';
+    }
+
+    if (!copyManagers) {
+      await this.prisma.caravanYear.create({
+        data: {
+          caravanId,
+          year: targetYear,
+          managerUserId: null,
+        },
+      });
+      return 'ok';
+    }
+
+    const source = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId, year: sourceYear } },
+      select: { managerUserId: true },
+    });
+    const caravan = await this.prisma.caravan.findUnique({
+      where: { id: caravanId },
+      select: { managerUserId: true },
+    });
+    const managerUserId = await this.validYearManagerId(
+      source?.managerUserId ?? caravan?.managerUserId,
+    );
+
+    await this.prisma.caravanYear.create({
+      data: {
+        caravanId,
+        year: targetYear,
+        managerUserId,
+      },
+    });
+
+    if (targetYear === currentJalaliYear() && managerUserId) {
+      await this.prisma.caravan.update({
+        where: { id: caravanId },
+        data: { managerUserId },
+      });
+    }
+
+    return 'ok';
   }
 
   async create(dto: CreateCaravanDto, actor: RoleBearer & { id: string }) {
@@ -208,6 +430,12 @@ export class CaravansService {
         telegram: dto.telegram?.trim() || null,
         instagram: dto.instagram?.trim() || null,
         isActive: dto.isActive ?? true,
+        years: {
+          create: {
+            year: currentJalaliYear(),
+            managerUserId: resolved.managerUserId,
+          },
+        },
       },
       include: caravanInclude,
     });
@@ -236,7 +464,7 @@ export class CaravansService {
       await this.assertLicenseImage(dto.licenseImageId);
     }
 
-    let resolved: { managerUserId: string } | null = null;
+    let resolved: { managerUserId: string | null } | null = null;
     if (isAdmin(actor)) {
       if (dto.managerUserId !== undefined) {
         resolved = await this.resolveManager(dto.managerUserId);
@@ -296,8 +524,16 @@ export class CaravansService {
       include: caravanInclude,
     });
 
+    if (resolved) {
+      await this.syncCurrentYearManager(id, resolved.managerUserId);
+    }
+
     if (dto.contacts !== undefined) {
       await this.syncContacts(id, dto.contacts);
+      return this.findOne(id);
+    }
+
+    if (resolved) {
       return this.findOne(id);
     }
 
@@ -310,15 +546,290 @@ export class CaravansService {
     return { ok: true };
   }
 
+  async yearStats(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({});
+    const [total, active, inactive] = await Promise.all([
+      this.prisma.caravan.count({ where: scope }),
+      this.prisma.caravan.count({
+        where: this.andWhere(scope, { years: { some: { year: selectedYear } } }),
+      }),
+      this.prisma.caravan.count({
+        where: this.andWhere(scope, { years: { none: { year: selectedYear } } }),
+      }),
+    ]);
+    return { year: selectedYear, total, active, inactive };
+  }
+
+  async findActiveInYear(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    return this.findYearList({ ...query, yearActivity: 'active' }, actor);
+  }
+
+  async findYearList(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const activity = query.yearActivity ?? 'all';
+    const base = this.listWhere({ q: query.q });
+    const yearFilter: Prisma.CaravanWhereInput =
+      activity === 'active'
+        ? { years: { some: { year: query.year } } }
+        : activity === 'inactive'
+          ? { years: { none: { year: query.year } } }
+          : {};
+    const where = this.andWhere(base, yearFilter);
+    const findMany = {
+      where,
+      orderBy: this.listOrderBy({
+        sortBy: query.sortBy,
+        sortDir: query.sortDir,
+      }),
+      include: caravanInclude,
+    };
+
+    const withFlag = <T extends { years: { year: number }[] }>(item: T) => ({
+      ...item,
+      activeInYear: item.years.some((row) => row.year === query.year),
+    });
+
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.caravan.findMany(findMany);
+      return items.map(withFlag);
+    }
+
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const [items, total] = await Promise.all([
+      this.prisma.caravan.findMany({ ...findMany, skip, take }),
+      this.prisma.caravan.count({ where }),
+    ]);
+    return paginatedResult(items.map(withFlag), total, page, pageSize);
+  }
+
+  async findInactiveInYear(query: FindYearManagementQueryDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const where = this.andWhere(this.listWhere({ q: query.q }), {
+      years: { none: { year: query.year } },
+    });
+    const items = await this.prisma.caravan.findMany({
+      where,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        city: { select: { id: true, nameFa: true, nameEn: true } },
+      },
+    });
+    return items;
+  }
+
+  async addToYear(caravanId: string, actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    return this.activateYear(caravanId, actor, year, false);
+  }
+
+  async activateAllInactive(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({});
+    const inactive = await this.prisma.caravan.findMany({
+      where: this.andWhere(scope, {
+        years: { none: { year: selectedYear } },
+      }),
+      select: { id: true },
+    });
+    if (!inactive.length) {
+      return { year: selectedYear, activated: 0 };
+    }
+
+    await this.prisma.caravanYear.createMany({
+      data: inactive.map((item) => ({
+        caravanId: item.id,
+        year: selectedYear,
+        managerUserId: null,
+      })),
+    });
+
+    return { year: selectedYear, activated: inactive.length };
+  }
+
+  async deactivateAllActive(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const scope = this.listWhere({});
+    const active = await this.prisma.caravan.findMany({
+      where: this.andWhere(scope, {
+        years: { some: { year: selectedYear } },
+      }),
+      select: { id: true },
+    });
+    if (!active.length) {
+      return { year: selectedYear, removed: 0, caravans: 0 };
+    }
+
+    const result = await this.prisma.caravanYear.deleteMany({
+      where: {
+        year: selectedYear,
+        caravanId: { in: active.map((item) => item.id) },
+      },
+    });
+
+    return { year: selectedYear, removed: result.count, caravans: active.length };
+  }
+
+  async removeFromYear(caravanId: string, actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    await this.findOne(caravanId);
+    const result = await this.prisma.caravanYear.deleteMany({
+      where: { caravanId, year: selectedYear },
+    });
+    if (result.count === 0) {
+      throw new NotFoundException('این کاروان در سال انتخاب‌شده فعال نیست');
+    }
+    return { ok: true, year: selectedYear, removed: result.count };
+  }
+
+  async transferYears(dto: TransferCaravansYearDto, actor: Actor) {
+    this.assertAdmin(actor);
+    const sourceYear = dto.sourceYear;
+    const targetYear = dto.targetYear ?? currentJalaliYear();
+    if (sourceYear === targetYear) {
+      throw new BadRequestException('سال مبدأ و مقصد نباید یکسان باشند');
+    }
+
+    const copyManagers = dto.copyManagers !== false;
+    const scope = this.listWhere({});
+    const activeInSource = this.andWhere(scope, {
+      years: { some: { year: sourceYear } },
+    });
+
+    let candidates: { id: string }[];
+    if (dto.all) {
+      candidates = await this.prisma.caravan.findMany({
+        where: activeInSource,
+        select: { id: true },
+      });
+    } else {
+      const ids = [...new Set(dto.caravanIds ?? [])];
+      if (!ids.length) {
+        throw new BadRequestException('حداقل یک کاروان برای انتقال انتخاب کنید');
+      }
+      candidates = await this.prisma.caravan.findMany({
+        where: this.andWhere(activeInSource, { id: { in: ids } }),
+        select: { id: true },
+      });
+      if (candidates.length !== ids.length) {
+        throw new BadRequestException(
+          'برخی کاروان‌های انتخاب‌شده در سال مبدأ فعال نیستند',
+        );
+      }
+    }
+
+    let transferred = 0;
+    let skipped = 0;
+    const errors: { caravanId: string; message: string }[] = [];
+
+    for (const { id } of candidates) {
+      try {
+        const result = await this.transferOneToYear(
+          id,
+          sourceYear,
+          targetYear,
+          copyManagers,
+        );
+        if (result === 'skipped') skipped += 1;
+        else transferred += 1;
+      } catch (error) {
+        skipped += 1;
+        const message =
+          error instanceof BadRequestException ||
+          error instanceof ConflictException ||
+          error instanceof ForbiddenException ||
+          error instanceof NotFoundException
+            ? String(error.message)
+            : error instanceof Error
+              ? error.message
+              : 'خطا در انتقال کاروان';
+        errors.push({ caravanId: id, message });
+      }
+    }
+
+    return {
+      sourceYear,
+      targetYear,
+      copyManagers,
+      requested: candidates.length,
+      transferred,
+      skipped,
+      errors,
+    };
+  }
+
+  async activateYear(
+    id: string,
+    actor: Actor,
+    year?: number,
+    copyPreviousManager = false,
+  ) {
+    const selectedYear = year ?? currentJalaliYear();
+    const caravan = await this.findOne(id);
+    this.assertCanActivateYear(caravan, actor);
+
+    const existing = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId: id, year: selectedYear } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('وضعیت این کاروان برای این سال قبلاً مشخص شده است');
+    }
+
+    if (copyPreviousManager) {
+      const previousYear = selectedYear - 1;
+      const previous = await this.prisma.caravanYear.findUnique({
+        where: { caravanId_year: { caravanId: id, year: previousYear } },
+      });
+      const previousManagerId = previous?.managerUserId ?? null;
+      if (!previousManagerId) {
+        throw new BadRequestException('مدیر سال قبل برای این کاروان یافت نشد');
+      }
+      const managerUserId = await this.validYearManagerId(previousManagerId);
+      if (!managerUserId) {
+        throw new BadRequestException('مدیر سال قبل دیگر معتبر نیست');
+      }
+
+      await this.prisma.caravanYear.create({
+        data: {
+          caravanId: id,
+          year: selectedYear,
+          managerUserId,
+        },
+      });
+      if (selectedYear === currentJalaliYear()) {
+        await this.prisma.caravan.update({
+          where: { id },
+          data: { managerUserId },
+        });
+      }
+      return this.findOne(id);
+    }
+
+    await this.prisma.caravanYear.create({
+      data: {
+        caravanId: id,
+        year: selectedYear,
+        managerUserId: null,
+      },
+    });
+    return this.findOne(id);
+  }
+
   count() {
     return this.prisma.caravan.count();
   }
 
   private async resolveManager(managerUserId?: string | null) {
     if (!managerUserId) {
-      throw new BadRequestException(
-        'مدیر کاروان را از فهرست زائران انتخاب کنید',
-      );
+      return { managerUserId: null };
     }
 
     await this.users.assertHasRole(

@@ -5,6 +5,10 @@ import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { geoSeed } from './geo-data';
 import {
+  extraIranCities,
+  loadOfficialIranCities,
+} from './iran-official';
+import {
   codeFromNeshanSlug,
   displayCityNameFa,
   loadIranProvincesAndCitiesNeshan,
@@ -248,6 +252,21 @@ async function main() {
     },
   });
 
+  const evaluations = await prisma.navModule.upsert({
+    where: { code: 'evaluations' },
+    update: {
+      nameKey: 'modules.evaluations',
+      icon: 'clipboard-list',
+      sortOrder: 12,
+    },
+    create: {
+      code: 'evaluations',
+      nameKey: 'modules.evaluations',
+      icon: 'clipboard-list',
+      sortOrder: 12,
+    },
+  });
+
   const menus = [
     {
       code: 'dashboard.overview',
@@ -290,6 +309,14 @@ async function main() {
       sortOrder: 2,
     },
     {
+      code: 'caravans.year-management',
+      moduleId: caravanManagement.id,
+      nameKey: 'menus.caravanYearManagement',
+      path: '/caravan-year-management',
+      icon: 'calendar-range',
+      sortOrder: 3,
+    },
+    {
       code: 'groups.list',
       moduleId: groupManagement.id,
       nameKey: 'menus.groupsList',
@@ -322,12 +349,20 @@ async function main() {
       sortOrder: 3,
     },
     {
+      code: 'reception.desk',
+      moduleId: caravans.id,
+      nameKey: 'menus.reception',
+      path: '/reception',
+      icon: 'scan-search',
+      sortOrder: 4,
+    },
+    {
       code: 'reservations.list',
       moduleId: caravans.id,
       nameKey: 'menus.reservationsAdmin',
       path: '/reservations',
       icon: 'clipboard-list',
-      sortOrder: 4,
+      sortOrder: 5,
     },
     {
       code: 'reservations.stats',
@@ -335,7 +370,7 @@ async function main() {
       nameKey: 'menus.reservationsReport',
       path: '/reservation-stats',
       icon: 'chart-column',
-      sortOrder: 5,
+      sortOrder: 6,
     },
     {
       code: 'reception.settings',
@@ -343,7 +378,7 @@ async function main() {
       nameKey: 'menus.receptionSettings',
       path: '/reception-settings',
       icon: 'settings',
-      sortOrder: 6,
+      sortOrder: 7,
     },
     {
       code: 'sms.settings',
@@ -456,6 +491,14 @@ async function main() {
       path: '/licenses/issued',
       icon: 'file-check',
       sortOrder: 2,
+    },
+    {
+      code: 'headquarters.info',
+      moduleId: headquarters.id,
+      nameKey: 'menus.headquartersInfo',
+      path: '/headquarters/info',
+      icon: 'landmark',
+      sortOrder: 0,
     },
     {
       code: 'headquarters.representatives',
@@ -641,6 +684,46 @@ async function main() {
       icon: 'chart-column',
       sortOrder: 13,
     },
+    {
+      code: 'evaluations.campaigns',
+      moduleId: evaluations.id,
+      nameKey: 'menus.evaluationCampaigns',
+      path: '/evaluations/campaigns',
+      icon: 'calendar-range',
+      sortOrder: 1,
+    },
+    {
+      code: 'evaluations.questions',
+      moduleId: evaluations.id,
+      nameKey: 'menus.evaluationQuestions',
+      path: '/evaluations/questions',
+      icon: 'message-square',
+      sortOrder: 2,
+    },
+    {
+      code: 'evaluations.list',
+      moduleId: evaluations.id,
+      nameKey: 'menus.evaluationsList',
+      path: '/evaluations',
+      icon: 'clipboard-list',
+      sortOrder: 3,
+    },
+    {
+      code: 'evaluations.submit',
+      moduleId: evaluations.id,
+      nameKey: 'menus.evaluationSubmit',
+      path: '/evaluations/submit',
+      icon: 'file-check',
+      sortOrder: 4,
+    },
+    {
+      code: 'evaluations.mine',
+      moduleId: evaluations.id,
+      nameKey: 'menus.myEvaluations',
+      path: '/my-evaluations',
+      icon: 'clipboard-list',
+      sortOrder: 5,
+    },
   ];
 
   const menuRecords = [];
@@ -669,12 +752,14 @@ async function main() {
     });
   }
 
-  // مدیر منوهای «مال من» پرونده/کاروان/گروه را ندارد (مخصوص زائر و نقش‌های مرتبط)
+  // مدیر منوهای «مال من» پرونده/کاروان/گروه/اسکان را ندارد (مخصوص زائر و نقش‌های مرتبط)
   const adminForbiddenMineMenus = menuRecords.filter(
     (item) =>
       item.code === 'reservations.mine' ||
       item.code === 'caravans.mine' ||
-      item.code === 'groups.mine',
+      item.code === 'groups.mine' ||
+      item.code === 'evaluations.mine' ||
+      item.code === 'accommodation.mine',
   );
   if (adminForbiddenMineMenus.length) {
     await prisma.roleMenu.deleteMany({
@@ -692,6 +777,7 @@ async function main() {
     'logistics.my-vouchers',
     'logistics.my-loans',
     'logistics.my-ice-vouchers',
+    'evaluations.mine',
   ]);
   const accommodationListMenu = menuRecords.find(
     (item) => item.code === 'accommodation.list',
@@ -747,6 +833,7 @@ async function main() {
     'groups.mine',
     'reservations.mine',
     'accommodation.mine',
+    'evaluations.mine',
   ]);
   const caravanListMenu = menuRecords.find(
     (item) => item.code === 'caravans.list',
@@ -801,6 +888,7 @@ async function main() {
     'caravans.mine',
     'groups.mine',
     'accommodation.mine',
+    'evaluations.mine',
   ]);
   for (const menu of menuRecords.filter((item) =>
     pilgrimMenuCodes.has(item.code),
@@ -854,6 +942,7 @@ async function main() {
     'dashboard.overview',
     'headquarters.accommodation-liaisons',
     'headquarters.caravan-liaisons',
+    'evaluations.mine',
   ]);
   for (const menu of menuRecords.filter((item) =>
     unitManagerMenuCodes.has(item.code),
@@ -941,6 +1030,69 @@ function loadIranNeshanData() {
   );
 }
 
+async function ensureIranCities(
+  provinceId: string,
+  rows: { nameFa: string; nameEn: string; code: string }[],
+) {
+  if (rows.length === 0) return;
+
+  const existing = await prisma.city.findMany({
+    where: { provinceId },
+    select: {
+      id: true,
+      code: true,
+      nameFa: true,
+      sortOrder: true,
+    },
+  });
+  const usedCodes = new Set(existing.map((city) => city.code));
+  const matchedIds = new Set<string>();
+  let nextSortOrder =
+    existing.reduce((max, city) => Math.max(max, city.sortOrder), 0) + 1;
+  const toCreate: {
+    provinceId: string;
+    code: string;
+    nameFa: string;
+    nameEn: string;
+    sortOrder: number;
+    isActive: boolean;
+  }[] = [];
+
+  for (const row of rows) {
+    const unmatched = existing.filter((city) => !matchedIds.has(city.id));
+    const match =
+      matchCity(unmatched, row) ?? matchCity(existing, row);
+
+    if (match && !matchedIds.has(match.id)) {
+      matchedIds.add(match.id);
+      continue;
+    }
+
+    const code = uniqueCityCode(row.code, usedCodes);
+    toCreate.push({
+      provinceId,
+      code,
+      nameFa: row.nameFa,
+      nameEn: row.nameEn,
+      sortOrder: nextSortOrder,
+      isActive: true,
+    });
+    existing.push({
+      id: `pending-${code}`,
+      code,
+      nameFa: row.nameFa,
+      sortOrder: nextSortOrder,
+    });
+    usedCodes.add(code);
+    matchedIds.add(`pending-${code}`);
+    nextSortOrder += 1;
+  }
+
+  if (toCreate.length > 0) {
+    await prisma.city.createMany({ data: toCreate });
+  }
+}
+
 async function applyIranCityNeshan(provinceId: string, rows: IranCityNeshan[]) {
   const existing = await prisma.city.findMany({
     where: { provinceId },
@@ -1009,6 +1161,9 @@ async function applyIranCityNeshan(provinceId: string, rows: IranCityNeshan[]) {
 
 async function seedGeo() {
   const iranNeshan = loadIranNeshanData();
+  const officialIran = loadOfficialIranCities(
+    join(__dirname, 'iran-official-cities.json'),
+  );
 
   for (const country of geoSeed) {
     const record = await prisma.country.upsert({
@@ -1110,6 +1265,32 @@ async function seedGeo() {
           );
         }
         await applyIranCityNeshan(provinceRecord.id, cityRows);
+
+        const officialRows =
+          officialIran.citiesByProvince[province.nameFa] ?? [];
+        if (officialRows.length === 0) {
+          throw new Error(
+            `Official city rows missing for Iranian province: ${province.nameFa}`,
+          );
+        }
+        await ensureIranCities(
+          provinceRecord.id,
+          officialRows.map((city) => ({
+            code: `o${city.id}`,
+            nameFa: city.nameFa,
+            nameEn: city.nameFa,
+          })),
+        );
+        await ensureIranCities(
+          provinceRecord.id,
+          extraIranCities
+            .filter((city) => city.provinceFa === province.nameFa)
+            .map((city) => ({
+              code: city.code,
+              nameFa: city.nameFa,
+              nameEn: city.nameEn,
+            })),
+        );
       }
     }
   }
@@ -1127,6 +1308,16 @@ async function seedGeo() {
   for (const nameFa of iranNeshan.citiesByProvince.keys()) {
     if (!iranNames.has(nameFa)) {
       throw new Error(`Neshan CSV city province not in geo seed: ${nameFa}`);
+    }
+  }
+  for (const nameFa of Object.keys(officialIran.citiesByProvince)) {
+    if (!iranNames.has(nameFa)) {
+      throw new Error(`Official city province not in geo seed: ${nameFa}`);
+    }
+  }
+  for (const extra of extraIranCities) {
+    if (!iranNames.has(extra.provinceFa)) {
+      throw new Error(`Extra city province not in geo seed: ${extra.provinceFa}`);
     }
   }
 }

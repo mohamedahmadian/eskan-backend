@@ -20,6 +20,11 @@ type ImageUpload = {
   originalname: string;
 };
 
+type EncodedImage = {
+  data: Buffer;
+  mimeType: (typeof JimpMime)['jpeg'] | (typeof JimpMime)['png'];
+};
+
 @Injectable()
 export class ImagesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -50,8 +55,11 @@ export class ImagesService {
       image.scaleToFit({ w: MAX_EDGE, h: MAX_EDGE });
     }
 
-    const data = await encodeJpegUnderLimit(image);
-    if (!data) {
+    const encoded = await encodeStoredImage(
+      image,
+      isPngSource(file) || image.hasAlpha(),
+    );
+    if (!encoded) {
       throw new BadRequestException(
         'پس از بهینه‌سازی، حجم تصویر هنوز بیش از حد مجاز است',
       );
@@ -59,12 +67,12 @@ export class ImagesService {
 
     return this.prisma.storedImage.create({
       data: {
-        mimeType: JimpMime.jpeg,
-        data: Buffer.from(data),
-        byteSize: data.length,
+        mimeType: encoded.mimeType,
+        data: Buffer.from(encoded.data),
+        byteSize: encoded.data.length,
         width: image.width,
         height: image.height,
-        originalName: file.originalname,
+        originalName: withStoredFileName(file.originalname, encoded.mimeType),
       },
       select: {
         id: true,
@@ -85,9 +93,56 @@ export class ImagesService {
   }
 }
 
+function isPngSource(file: ImageUpload) {
+  if (file.mimetype === JimpMime.png) {
+    return true;
+  }
+  if (/\.png$/i.test(file.originalname ?? '')) {
+    return true;
+  }
+  return (
+    file.buffer.length >= 4 &&
+    file.buffer[0] === 0x89 &&
+    file.buffer[1] === 0x50 &&
+    file.buffer[2] === 0x4e &&
+    file.buffer[3] === 0x47
+  );
+}
+
+function withStoredFileName(originalName: string | undefined, mimeType: string) {
+  const ext = mimeType === JimpMime.png ? 'png' : 'jpg';
+  const raw = (originalName ?? 'image').trim() || 'image';
+  const base = raw.replace(/\.[^.]+$/, '') || 'image';
+  return `${base}.${ext}`;
+}
+
+async function encodeStoredImage(
+  image: Awaited<ReturnType<typeof Jimp.read>>,
+  preferPng: boolean,
+): Promise<EncodedImage | null> {
+  if (preferPng) {
+    const png = await image.getBuffer(JimpMime.png);
+    if (png.length <= MAX_STORED_BYTES) {
+      return { data: png, mimeType: JimpMime.png };
+    }
+  }
+  const jpeg = await encodeJpegUnderLimit(image);
+  if (!jpeg) {
+    return null;
+  }
+  return { data: jpeg, mimeType: JimpMime.jpeg };
+}
+
 async function encodeJpegUnderLimit(
   image: Awaited<ReturnType<typeof Jimp.read>>,
 ) {
+  const source = image.hasAlpha()
+    ? new Jimp({
+        width: image.width,
+        height: image.height,
+        color: 0xffffffff,
+      }).composite(image, 0, 0)
+    : image;
   const qualities = [
     JPEG_QUALITY_START,
     82,
@@ -96,7 +151,7 @@ async function encodeJpegUnderLimit(
     64,
   ];
   for (const quality of qualities) {
-    const data = await image.getBuffer(JimpMime.jpeg, { quality });
+    const data = await source.getBuffer(JimpMime.jpeg, { quality });
     if (data.length <= MAX_STORED_BYTES) {
       return data;
     }

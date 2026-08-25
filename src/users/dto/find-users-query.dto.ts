@@ -20,6 +20,7 @@ export const userSortFields = [
   'nationalId',
   'city',
   'accommodationCount',
+  'caravanCount',
 ] as const;
 
 export type UserSortField = (typeof userSortFields)[number];

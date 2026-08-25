@@ -5,7 +5,12 @@ import { toLatinDigits } from '../common/national-id';
 import { UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
-import { canAccessMyCaravans, canAccessMyGroups } from './roles.util';
+import {
+  canAccessMyAccommodations,
+  canAccessMyCaravans,
+  canAccessMyGroups,
+  canAccessMyReservations,
+} from './roles.util';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -159,6 +164,12 @@ export class AuthService {
         continue;
       }
       if (item.menu.code === 'groups.mine' && !canAccessMyGroups(user)) {
+        continue;
+      }
+      if (item.menu.code === 'reservations.mine' && !canAccessMyReservations(user)) {
+        continue;
+      }
+      if (item.menu.code === 'accommodation.mine' && !canAccessMyAccommodations(user)) {
         continue;
       }
       const mod = item.menu.module;

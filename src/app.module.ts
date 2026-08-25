@@ -16,6 +16,8 @@ import { RedCrescentsModule } from './red-crescents/red-crescents.module';
 import { BenefactorsModule } from './benefactors/benefactors.module';
 import { GovernmentOrganizationsModule } from './government-organizations/government-organizations.module';
 import { OrgUnitsModule } from './org-units/org-units.module';
+import { HeadquartersInfoModule } from './headquarters-info/headquarters-info.module';
+import { HeadquartersPhonesModule } from './headquarters-phones/headquarters-phones.module';
 import { IssuedLicensesModule } from './issued-licenses/issued-licenses.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { SupplierItemsModule } from './supplier-items/supplier-items.module';
@@ -26,6 +28,8 @@ import { IceVouchersModule } from './ice-vouchers/ice-vouchers.module';
 import { WalkingRoutesModule } from './walking-routes/walking-routes.module';
 import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { ReceptionModule } from './reception/reception.module';
+import { EvaluationsModule } from './evaluations/evaluations.module';
 
 @Module({
   imports: [
@@ -46,6 +50,8 @@ import { ReservationsModule } from './reservations/reservations.module';
     BenefactorsModule,
     GovernmentOrganizationsModule,
     OrgUnitsModule,
+    HeadquartersInfoModule,
+    HeadquartersPhonesModule,
     IssuedLicensesModule,
     SuppliersModule,
     SupplierItemsModule,
@@ -55,6 +61,8 @@ import { ReservationsModule } from './reservations/reservations.module';
     IceVouchersModule,
     PublicVouchersModule,
     ReservationsModule,
+    ReceptionModule,
+    EvaluationsModule,
   ],
   controllers: [AppController],
 })
