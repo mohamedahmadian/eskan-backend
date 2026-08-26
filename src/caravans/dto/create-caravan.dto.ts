@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   MinLength,
   ValidateIf,
@@ -55,6 +56,13 @@ export class CreateCaravanDto {
   @ValidateIf((_, value) => value != null)
   @IsUUID('4')
   managerUserId?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1300)
+  @Max(1600)
+  year?: number;
 
   @IsOptional()
   @Type(() => Number)

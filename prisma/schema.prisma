@@ -1277,6 +1277,13 @@ enum EvaluationStatus {
   COMPLETED
 }
 
+/// نوع پاسخ سوال ارزیابی
+enum EvaluationAnswerType {
+  FIVE_SCALE
+  TEXT
+  YES_NO
+}
+
 /// نوبت/دوره اجرای ارزیابی
 model EvaluationCampaign {
   id          String                   @id @default(uuid())
@@ -1303,6 +1310,7 @@ model EvaluationQuestion {
   description   String?
   evaluatorType EvaluationEvaluatorType
   targetType    EvaluationTargetType
+  answerType    EvaluationAnswerType     @default(FIVE_SCALE)
   sortOrder     Int                      @default(0)
   isActive      Boolean                  @default(true)
   answers       EvaluationAnswer[]
@@ -1310,6 +1318,7 @@ model EvaluationQuestion {
   updatedAt     DateTime                 @updatedAt
 
   @@index([evaluatorType, targetType, isActive, sortOrder])
+  @@index([answerType])
   @@index([createdAt])
   @@map("evaluation_questions")
 }
@@ -1353,8 +1362,13 @@ model EvaluationAnswer {
   evaluation   Evaluation         @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   questionId   String
   question     EvaluationQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
-  /// ۱ = خیلی خوب … ۵ = خیلی ضعیف
-  score        Int
+  /// پنج‌گزینه‌ای: ۱ = خیلی خوب … ۵ = خیلی ضعیف
+  score        Int?
+  /// بله و خیر
+  yesNo        Boolean?
+  /// پاسخ متنی
+  textValue    String?
+  /// توضیح اختیاری کنار پاسخ پنج‌گزینه‌ای
   description  String?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt

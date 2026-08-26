@@ -13,6 +13,7 @@ import { emptyToNull, emptyToUndefined } from '../../common/dto-transform';
 import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
 import {
+  EVALUATION_ANSWER_TYPES,
   EVALUATION_EVALUATOR_TYPES,
   EVALUATION_TARGET_TYPES,
 } from '../evaluation.constants';
@@ -33,6 +34,10 @@ export class CreateEvaluationQuestionDto {
 
   @IsIn([...EVALUATION_TARGET_TYPES])
   targetType: (typeof EVALUATION_TARGET_TYPES)[number];
+
+  @IsOptional()
+  @IsIn([...EVALUATION_ANSWER_TYPES])
+  answerType?: (typeof EVALUATION_ANSWER_TYPES)[number];
 
   @IsOptional()
   @Type(() => Number)
@@ -67,6 +72,10 @@ export class UpdateEvaluationQuestionDto {
   targetType?: (typeof EVALUATION_TARGET_TYPES)[number];
 
   @IsOptional()
+  @IsIn([...EVALUATION_ANSWER_TYPES])
+  answerType?: (typeof EVALUATION_ANSWER_TYPES)[number];
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
@@ -82,6 +91,7 @@ export const evaluationQuestionSortFields = [
   'title',
   'evaluatorType',
   'targetType',
+  'answerType',
   'sortOrder',
   'isActive',
   'createdAt',
@@ -97,6 +107,11 @@ export class FindEvaluationQuestionsQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsIn([...EVALUATION_TARGET_TYPES])
   targetType?: (typeof EVALUATION_TARGET_TYPES)[number];
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...EVALUATION_ANSWER_TYPES])
+  answerType?: (typeof EVALUATION_ANSWER_TYPES)[number];
 
   @IsOptional()
   @Transform(({ value }) => {

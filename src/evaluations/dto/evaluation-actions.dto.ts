@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -49,11 +50,23 @@ export class EvaluationAnswerItemDto {
   @IsUUID()
   questionId: string;
 
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(SCORE_MIN)
   @Max(SCORE_MAX)
-  score: number;
+  score?: number | null;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  yesNo?: boolean | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  textValue?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

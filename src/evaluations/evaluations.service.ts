@@ -28,6 +28,7 @@ import {
   EVALUATION_EVALUATOR_TYPES,
   EVALUATION_PAIRS,
   isPairAllowed,
+  normalizeEvaluationAnswer,
   resolveTargetKey,
 } from './evaluation.constants';
 import { EvaluationQuestionsService } from './evaluation-questions.service';
@@ -297,16 +298,32 @@ export class EvaluationsService {
       evaluation.evaluatorType,
       evaluation.targetType,
     );
-    const questionIds = new Set(questions.map((q) => q.id));
+    const questionById = new Map(questions.map((q) => [q.id, q]));
+    const normalized: {
+      questionId: string;
+      score: number | null;
+      yesNo: boolean | null;
+      textValue: string | null;
+      description: string | null;
+    }[] = [];
+
     for (const answer of dto.answers) {
-      if (!questionIds.has(answer.questionId)) {
+      const question = questionById.get(answer.questionId);
+      if (!question) {
         throw new BadRequestException('یکی از سوالات به این ارزیابی تعلق ندارد');
       }
+      const parsed = normalizeEvaluationAnswer(question.answerType, answer);
+      if (!parsed.ok) {
+        throw new BadRequestException(
+          `پاسخ سوال «${question.title}» با نوع پاسخ آن هم‌خوان نیست`,
+        );
+      }
+      normalized.push({ questionId: answer.questionId, ...parsed.data });
     }
 
     const complete = dto.complete !== false;
     if (complete) {
-      const answered = new Set(dto.answers.map((a) => a.questionId));
+      const answered = new Set(normalized.map((a) => a.questionId));
       const missing = questions.filter((q) => !answered.has(q.id));
       if (missing.length) {
         throw new BadRequestException('به همه سوالات پاسخ دهید');
@@ -314,7 +331,7 @@ export class EvaluationsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      for (const answer of dto.answers) {
+      for (const answer of normalized) {
         await tx.evaluationAnswer.upsert({
           where: {
             evaluationId_questionId: {
@@ -326,11 +343,15 @@ export class EvaluationsService {
             evaluationId: id,
             questionId: answer.questionId,
             score: answer.score,
-            description: answer.description?.trim() || null,
+            yesNo: answer.yesNo,
+            textValue: answer.textValue,
+            description: answer.description,
           },
           update: {
             score: answer.score,
-            description: answer.description?.trim() || null,
+            yesNo: answer.yesNo,
+            textValue: answer.textValue,
+            description: answer.description,
           },
         });
       }

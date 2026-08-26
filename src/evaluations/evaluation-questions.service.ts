@@ -36,6 +36,7 @@ export class EvaluationQuestionsService {
         title: (dir) => ({ title: dir }),
         evaluatorType: (dir) => ({ evaluatorType: dir }),
         targetType: (dir) => ({ targetType: dir }),
+        answerType: (dir) => ({ answerType: dir }),
         sortOrder: (dir) => ({ sortOrder: dir }),
         isActive: (dir) => ({ isActive: dir }),
         createdAt: (dir) => ({ createdAt: dir }),
@@ -91,6 +92,7 @@ export class EvaluationQuestionsService {
         description: dto.description?.trim() || null,
         evaluatorType: dto.evaluatorType,
         targetType: dto.targetType,
+        answerType: dto.answerType ?? 'FIVE_SCALE',
         sortOrder: dto.sortOrder ?? 0,
         isActive: dto.isActive ?? true,
       },
@@ -104,6 +106,16 @@ export class EvaluationQuestionsService {
     if (!isPairAllowed(evaluatorType, targetType)) {
       throw new BadRequestException('این ترکیب ارزیاب و ارزیابی‌شونده مجاز نیست');
     }
+    if (dto.answerType && dto.answerType !== current.answerType) {
+      const answerCount = await this.prisma.evaluationAnswer.count({
+        where: { questionId: id },
+      });
+      if (answerCount > 0) {
+        throw new BadRequestException(
+          'نوع پاسخ سوالی که قبلاً پاسخ دارد قابل تغییر نیست',
+        );
+      }
+    }
     return this.prisma.evaluationQuestion.update({
       where: { id },
       data: {
@@ -114,6 +126,7 @@ export class EvaluationQuestionsService {
             : dto.description?.trim() || null,
         evaluatorType: dto.evaluatorType,
         targetType: dto.targetType,
+        answerType: dto.answerType,
         sortOrder: dto.sortOrder,
         isActive: dto.isActive,
       },
@@ -143,6 +156,9 @@ export class EvaluationQuestionsService {
     }
     if (query.targetType) {
       filters.push({ targetType: query.targetType });
+    }
+    if (query.answerType) {
+      filters.push({ answerType: query.answerType });
     }
     if (query.isActive !== undefined) {
       filters.push({ isActive: query.isActive });

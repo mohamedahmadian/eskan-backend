@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { isAdmin, type RoleBearer } from '../auth/roles.util';
 import { currentJalaliYear } from '../common/jalali-year';
 import {
@@ -14,9 +15,19 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
-import { Prisma } from '../generated/prisma/client';
+import { Prisma, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { joinFullName } from '../users/user-profile.util';
 import { UsersService } from '../users/users.service';
+import {
+  cityLookupKeys,
+  normalizeCaravanNameKey,
+  normalizeCityLookupKey,
+  parseCaravanImportExcel,
+  type CaravanImportIssueRow,
+  type CaravanImportRow,
+  type ParsedCaravanImport,
+} from './caravan-excel-import.util';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
 import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
@@ -112,6 +123,31 @@ function toDateOnly(value?: Date | string | null) {
     return value.slice(0, 10);
   }
   return value.toISOString().slice(0, 10);
+}
+
+function parseDateOnly(value?: string | null) {
+  if (value == null || value === '') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return null;
+  return new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z`);
+}
+
+function issueFromRow(
+  row: CaravanImportRow,
+  reasons: string[],
+): CaravanImportIssueRow {
+  return {
+    rowNumber: row.rowNumber,
+    caravanName: row.caravanName,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    nationalId: row.nationalId,
+    phone: row.phone,
+    city: row.cityName ?? '',
+    birthDate: row.birthDate ?? '',
+    year: row.years.join('، '),
+    reasons,
+  };
 }
 
 @Injectable()
@@ -432,7 +468,7 @@ export class CaravansService {
         isActive: dto.isActive ?? true,
         years: {
           create: {
-            year: currentJalaliYear(),
+            year: dto.year ?? currentJalaliYear(),
             managerUserId: resolved.managerUserId,
           },
         },
@@ -823,8 +859,507 @@ export class CaravansService {
     return this.findOne(id);
   }
 
+  async assignYear(
+    id: string,
+    year: number,
+    managerUserId: string | null,
+    actor: Actor,
+  ) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    await this.findOne(id);
+    const resolved = await this.resolveManager(managerUserId);
+    const existing = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId: id, year } },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await this.prisma.caravanYear.update({
+        where: { id: existing.id },
+        data: { managerUserId: resolved.managerUserId },
+      });
+    } else {
+      await this.prisma.caravanYear.create({
+        data: {
+          caravanId: id,
+          year,
+          managerUserId: resolved.managerUserId,
+        },
+      });
+    }
+
+    if (year === currentJalaliYear()) {
+      await this.prisma.caravan.update({
+        where: { id },
+        data: { managerUserId: resolved.managerUserId },
+      });
+    }
+
+    return this.findOne(id);
+  }
+
+  async removeYear(id: string, yearId: string, actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    await this.findOne(id);
+    const row = await this.prisma.caravanYear.findFirst({
+      where: { id: yearId, caravanId: id },
+      select: { id: true },
+    });
+    if (!row) {
+      throw new NotFoundException('این سال فعالیت یافت نشد');
+    }
+    await this.prisma.caravanYear.delete({ where: { id: yearId } });
+    return this.findOne(id);
+  }
+
   count() {
     return this.prisma.caravan.count();
+  }
+
+  async previewImport(buffer: Buffer) {
+    const parsed = await this.prepareImport(buffer);
+    return {
+      total: parsed.rows.length,
+      invalid: parsed.invalid,
+      invalidRows: parsed.invalidRows,
+      adjusted: parsed.adjusted,
+      adjustedRows: parsed.adjustedRows,
+    };
+  }
+
+  async importFromExcel(buffer: Buffer) {
+    const { rows, invalid, invalidRows, adjusted, adjustedRows } =
+      await this.prepareImport(buffer);
+
+    if (!rows.length) {
+      return {
+        total: 0,
+        managersCreated: 0,
+        managersReused: 0,
+        caravansCreated: 0,
+        caravansReused: 0,
+        yearsAdded: 0,
+        yearsSkipped: 0,
+        invalid,
+        invalidRows,
+        adjusted,
+        adjustedRows,
+      };
+    }
+
+    const [pilgrimRole, managerRole, iran, fallbackCityId] = await Promise.all([
+      this.prisma.role.findUnique({ where: { code: 'PILGRIM' } }),
+      this.prisma.role.findUnique({ where: { code: 'CARAVAN_MANAGER' } }),
+      this.prisma.country.findUnique({
+        where: { iso2: 'IR' },
+        select: { id: true },
+      }),
+      this.resolveFallbackCityId(),
+    ]);
+    if (!pilgrimRole || !managerRole) {
+      throw new BadRequestException('نقش زائر یا مدیر کاروان در سامانه یافت نشد');
+    }
+    if (!fallbackCityId) {
+      throw new BadRequestException('شهری برای ثبت کاروان در سامانه یافت نشد');
+    }
+
+    const cityIds = [
+      ...new Set(rows.map((row) => row.cityId).filter((id): id is string => Boolean(id))),
+    ];
+    const cityGeo = await this.loadCityGeoMap(cityIds);
+    const iranCountryId = iran?.id ?? null;
+    const currentYear = currentJalaliYear();
+
+    const existingCaravans = await this.prisma.caravan.findMany({
+      select: { id: true, name: true, managerUserId: true },
+    });
+    const caravanByName = new Map(
+      existingCaravans.map((item) => [normalizeCaravanNameKey(item.name), item]),
+    );
+
+    const existingYears = await this.prisma.caravanYear.findMany({
+      select: { caravanId: true, year: true },
+    });
+    const yearKeys = new Set(
+      existingYears.map((item) => `${item.caravanId}:${item.year}`),
+    );
+
+    const passwordByNationalId = new Map<string, string>();
+    const conflictRows: CaravanImportIssueRow[] = [];
+    let managersCreated = 0;
+    let managersReused = 0;
+    let caravansCreated = 0;
+    let caravansReused = 0;
+    let yearsAdded = 0;
+    let yearsSkipped = 0;
+
+    for (const row of rows) {
+      const manager = await this.resolveImportManager(row, {
+        pilgrimRoleId: pilgrimRole.id,
+        managerRoleId: managerRole.id,
+        cityGeo,
+        iranCountryId,
+        passwordByNationalId,
+      });
+      if ('error' in manager) {
+        conflictRows.push(issueFromRow(row, [manager.error]));
+        continue;
+      }
+      if (manager.created) managersCreated += 1;
+      else managersReused += 1;
+
+      const nameKey = normalizeCaravanNameKey(row.caravanName);
+      let caravan = caravanByName.get(nameKey);
+      if (!caravan) {
+        const cityId = row.cityId || fallbackCityId;
+        const created = await this.prisma.caravan.create({
+          data: {
+            name: row.caravanName,
+            cityId,
+            managerUserId: manager.id,
+            isActive: true,
+          },
+          select: { id: true, name: true, managerUserId: true },
+        });
+        caravan = created;
+        caravanByName.set(nameKey, created);
+        caravansCreated += 1;
+      } else {
+        caravansReused += 1;
+      }
+
+      if (!row.years.length) continue;
+
+      const toCreate: { caravanId: string; year: number; managerUserId: string }[] =
+        [];
+      for (const year of row.years) {
+        const key = `${caravan.id}:${year}`;
+        if (yearKeys.has(key)) {
+          yearsSkipped += 1;
+          continue;
+        }
+        toCreate.push({
+          caravanId: caravan.id,
+          year,
+          managerUserId: manager.id,
+        });
+        yearKeys.add(key);
+      }
+      if (toCreate.length) {
+        await this.prisma.caravanYear.createMany({ data: toCreate });
+        yearsAdded += toCreate.length;
+      }
+
+      if (row.years.includes(currentYear) && caravan.managerUserId !== manager.id) {
+        await this.prisma.caravan.update({
+          where: { id: caravan.id },
+          data: { managerUserId: manager.id },
+        });
+        caravan.managerUserId = manager.id;
+      }
+    }
+
+    const allInvalidRows = [...invalidRows, ...conflictRows].sort(
+      (a, b) => a.rowNumber - b.rowNumber,
+    );
+
+    return {
+      total: rows.length,
+      managersCreated,
+      managersReused,
+      caravansCreated,
+      caravansReused,
+      yearsAdded,
+      yearsSkipped,
+      invalid: allInvalidRows.length,
+      invalidRows: allInvalidRows,
+      adjusted,
+      adjustedRows,
+    };
+  }
+
+  private async prepareImport(buffer: Buffer): Promise<ParsedCaravanImport> {
+    const parsed = await parseCaravanImportExcel(buffer);
+    if (!parsed.rows.length && parsed.invalid === 0) {
+      throw new BadRequestException('فایل اکسل خالی است یا قالب آن صحیح نیست');
+    }
+    const withCities = await this.resolveImportCities(parsed);
+    return this.rejectNewManagersWithoutName(withCities);
+  }
+
+  private async rejectNewManagersWithoutName(
+    parsed: ParsedCaravanImport,
+  ): Promise<ParsedCaravanImport> {
+    const missingName = parsed.rows.filter(
+      (row) => !row.firstName.trim() || !row.lastName.trim(),
+    );
+    if (!missingName.length) return parsed;
+
+    const nationalIds = [...new Set(missingName.map((row) => row.nationalId))];
+    const existing = await this.prisma.user.findMany({
+      where: { nationalId: { in: nationalIds } },
+      select: { nationalId: true },
+    });
+    const known = new Set(existing.map((item) => item.nationalId).filter(Boolean));
+
+    const rows: CaravanImportRow[] = [];
+    const invalidRows = [...parsed.invalidRows];
+    for (const row of parsed.rows) {
+      if (
+        (!row.firstName.trim() || !row.lastName.trim()) &&
+        !known.has(row.nationalId)
+      ) {
+        invalidRows.push(issueFromRow(row, ['missingManagerName']));
+        continue;
+      }
+      rows.push(row);
+    }
+
+    return {
+      rows,
+      invalid: invalidRows.length,
+      invalidRows: invalidRows.sort((a, b) => a.rowNumber - b.rowNumber),
+      adjusted: parsed.adjusted,
+      adjustedRows: parsed.adjustedRows,
+    };
+  }
+
+  private async resolveImportCities(
+    parsed: ParsedCaravanImport,
+  ): Promise<ParsedCaravanImport> {
+    const names = [
+      ...new Set(
+        parsed.rows
+          .map((row) => row.cityName?.trim())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ];
+
+    const cityIdByKey = new Map<string, string>();
+    if (names.length) {
+      const cities = await this.prisma.city.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          nameFa: true,
+          nameEn: true,
+          isProvinceCapital: true,
+          sortOrder: true,
+        },
+        orderBy: [{ isProvinceCapital: 'desc' }, { sortOrder: 'asc' }],
+      });
+      for (const city of cities) {
+        for (const key of cityLookupKeys(city.nameFa, city.nameEn)) {
+          if (!cityIdByKey.has(key)) {
+            cityIdByKey.set(key, city.id);
+          }
+        }
+      }
+    }
+
+    const rows: CaravanImportRow[] = [];
+    const adjustedByRow = new Map<number, CaravanImportIssueRow>();
+    for (const item of parsed.adjustedRows) {
+      adjustedByRow.set(item.rowNumber, { ...item, reasons: [...item.reasons] });
+    }
+
+    for (const row of parsed.rows) {
+      if (!row.cityName) {
+        rows.push({ ...row, cityId: null });
+        continue;
+      }
+      const cityId = cityIdByKey.get(normalizeCityLookupKey(row.cityName));
+      if (!cityId) {
+        const adjustments = [...row.adjustments, 'clearedCity'];
+        rows.push({ ...row, cityName: null, cityId: null, adjustments });
+        const existing = adjustedByRow.get(row.rowNumber);
+        if (existing) {
+          existing.reasons = [...existing.reasons, 'clearedCity'];
+          if (!existing.city) existing.city = row.cityName;
+        } else {
+          adjustedByRow.set(row.rowNumber, issueFromRow(row, ['clearedCity']));
+        }
+        continue;
+      }
+      rows.push({ ...row, cityId });
+    }
+
+    const adjustedRows = [...adjustedByRow.values()].sort(
+      (a, b) => a.rowNumber - b.rowNumber,
+    );
+
+    return {
+      rows,
+      invalid: parsed.invalidRows.length,
+      invalidRows: parsed.invalidRows,
+      adjusted: adjustedRows.length,
+      adjustedRows,
+    };
+  }
+
+  private async resolveFallbackCityId() {
+    const mashhad = await this.prisma.city.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { nameFa: 'مشهد' },
+          { nameEn: { equals: 'Mashhad', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (mashhad) return mashhad.id;
+    const anyCity = await this.prisma.city.findFirst({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true },
+    });
+    return anyCity?.id ?? null;
+  }
+
+  private async loadCityGeoMap(cityIds: string[]) {
+    const map = new Map<string, { provinceId: string; countryId: string }>();
+    if (!cityIds.length) return map;
+    const cities = await this.prisma.city.findMany({
+      where: { id: { in: cityIds } },
+      select: {
+        id: true,
+        provinceId: true,
+        province: { select: { countryId: true } },
+      },
+    });
+    for (const city of cities) {
+      map.set(city.id, {
+        provinceId: city.provinceId,
+        countryId: city.province.countryId,
+      });
+    }
+    return map;
+  }
+
+  private async resolveImportManager(
+    row: CaravanImportRow,
+    ctx: {
+      pilgrimRoleId: string;
+      managerRoleId: string;
+      cityGeo: Map<string, { provinceId: string; countryId: string }>;
+      iranCountryId: string | null;
+      passwordByNationalId: Map<string, string>;
+    },
+  ): Promise<{ id: string; created: boolean } | { error: string }> {
+    const existing = await this.prisma.user.findUnique({
+      where: { nationalId: row.nationalId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        birthDate: true,
+        cityId: true,
+      },
+    });
+
+    if (existing) {
+      if (row.phone && existing.phone && existing.phone !== row.phone) {
+        const phoneOwner = await this.prisma.user.findUnique({
+          where: { phone: row.phone },
+          select: { id: true },
+        });
+        if (phoneOwner && phoneOwner.id !== existing.id) {
+          return { error: 'phoneTaken' };
+        }
+      }
+      await this.users.ensureRole(existing.id, 'PILGRIM');
+      await this.users.ensureRole(existing.id, 'CARAVAN_MANAGER');
+      const patch: Prisma.UserUpdateInput = {};
+      if (row.firstName && row.lastName && (!existing.firstName || !existing.lastName)) {
+        patch.firstName = row.firstName;
+        patch.lastName = row.lastName;
+        patch.fullName = joinFullName(row.firstName, row.lastName);
+      }
+      if (row.phone && !existing.phone) patch.phone = row.phone;
+      if (row.birthDate && !existing.birthDate) {
+        patch.birthDate = parseDateOnly(row.birthDate);
+      }
+      if (row.cityId && !existing.cityId) {
+        const geo = ctx.cityGeo.get(row.cityId);
+        patch.city = { connect: { id: row.cityId } };
+        if (geo) {
+          patch.province = { connect: { id: geo.provinceId } };
+          patch.country = { connect: { id: geo.countryId } };
+        }
+      }
+      if (Object.keys(patch).length) {
+        try {
+          await this.prisma.user.update({ where: { id: existing.id }, data: patch });
+        } catch {
+          // uniqueness on phone should not block granting the manager role
+        }
+      }
+      return { id: existing.id, created: false };
+    }
+
+    if (!row.firstName.trim() || !row.lastName.trim()) {
+      return { error: 'missingManagerName' };
+    }
+
+    const phoneOwner = await this.prisma.user.findUnique({
+      where: { phone: row.phone },
+      select: { id: true },
+    });
+    if (phoneOwner) {
+      return { error: 'phoneTaken' };
+    }
+
+    let passwordHash = ctx.passwordByNationalId.get(row.nationalId);
+    if (!passwordHash) {
+      passwordHash = await bcrypt.hash(row.nationalId, 8);
+      ctx.passwordByNationalId.set(row.nationalId, passwordHash);
+    }
+
+    let username = row.nationalId;
+    const usernameTaken = await this.prisma.user.findUnique({
+      where: { username },
+      select: { id: true },
+    });
+    if (usernameTaken) {
+      username = `${row.nationalId}_${Date.now().toString(36)}`;
+    }
+
+    const geo = row.cityId ? ctx.cityGeo.get(row.cityId) : undefined;
+    try {
+      const created = await this.prisma.user.create({
+        data: {
+          username,
+          passwordHash,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          fullName: joinFullName(row.firstName, row.lastName),
+          locale: 'fa',
+          status: UserStatus.ACTIVE,
+          nationalId: row.nationalId,
+          phone: row.phone,
+          birthDate: parseDateOnly(row.birthDate),
+          cityId: row.cityId ?? null,
+          provinceId: geo?.provinceId ?? null,
+          countryId: geo?.countryId ?? ctx.iranCountryId,
+          userRoles: {
+            create: [
+              { roleId: ctx.pilgrimRoleId },
+              { roleId: ctx.managerRoleId },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      return { id: created.id, created: true };
+    } catch {
+      return { error: 'phoneTaken' };
+    }
   }
 
   private async resolveManager(managerUserId?: string | null) {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,8 +8,12 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,6 +21,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { ActivateAllCaravanYearDto } from './dto/activate-all-caravan-year.dto';
 import { ActivateCaravanYearDto } from './dto/activate-caravan-year.dto';
 import { AddCaravanYearDto } from './dto/add-caravan-year.dto';
+import { AssignCaravanYearDto } from './dto/assign-caravan-year.dto';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
 import { FindCaravanYearQueryDto } from './dto/find-caravan-year-query.dto';
@@ -31,6 +37,29 @@ type RequestUser = {
 };
 
 const mineRoles = ['ADMIN', 'CARAVAN_MANAGER', 'PILGRIM'] as const;
+
+type ExcelUpload = {
+  buffer: Buffer;
+  size: number;
+  mimetype: string;
+  originalname: string;
+};
+
+function assertExcelUpload(file?: ExcelUpload) {
+  if (!file?.buffer?.length) {
+    throw new BadRequestException('فایل اکسل انتخاب نشده است');
+  }
+  const name = file.originalname?.toLowerCase() ?? '';
+  if (!name.endsWith('.xlsx')) {
+    throw new BadRequestException('فقط فایل اکسل با پسوند xlsx مجاز است');
+  }
+  return file;
+}
+
+const excelUploadInterceptor = FileInterceptor('file', {
+  storage: memoryStorage(),
+  limits: { fileSize: 64 * 1024 * 1024 },
+});
 
 @Controller('caravans')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -125,6 +154,20 @@ export class CaravansController {
     return this.caravans.removeFromYear(caravanId, actor, query.year);
   }
 
+  @Post('import/preview')
+  @UseInterceptors(excelUploadInterceptor)
+  previewImport(@UploadedFile() file: ExcelUpload) {
+    const upload = assertExcelUpload(file);
+    return this.caravans.previewImport(upload.buffer);
+  }
+
+  @Post('import')
+  @UseInterceptors(excelUploadInterceptor)
+  importCaravans(@UploadedFile() file: ExcelUpload) {
+    const upload = assertExcelUpload(file);
+    return this.caravans.importFromExcel(upload.buffer);
+  }
+
   @Get(':id/pilgrimage-history')
   @Roles(...mineRoles)
   pilgrimageHistory(
@@ -154,6 +197,24 @@ export class CaravansController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.caravans.activateYear(id, actor, dto.year, dto.copyPreviousManager);
+  }
+
+  @Post(':id/years')
+  assignYear(
+    @Param('id') id: string,
+    @Body() dto: AssignCaravanYearDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.caravans.assignYear(id, dto.year, dto.managerUserId ?? null, actor);
+  }
+
+  @Delete(':id/years/:yearId')
+  removeYear(
+    @Param('id') id: string,
+    @Param('yearId') yearId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.caravans.removeYear(id, yearId, actor);
   }
 
   @Patch(':id')

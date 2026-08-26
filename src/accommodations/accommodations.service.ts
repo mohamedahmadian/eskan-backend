@@ -309,6 +309,7 @@ export class AccommodationsService {
             : null,
         actorId: actor.id,
         forcePrimaryIfFirst: !admin,
+        year: dto.year,
       });
       return row;
     });
@@ -470,9 +471,12 @@ export class AccommodationsService {
     return this.findOne(id, actor);
   }
 
-  async assignManager(id: string, userId: string, year: number, actor: Actor) {
+  async assignManager(id: string, userId: string | null, year: number, actor: Actor) {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    if (!userId) {
+      return this.activateYear(id, actor, year, false);
     }
     await this.findRecord(id, actor);
 
@@ -1302,9 +1306,10 @@ export class AccommodationsService {
       primaryUserId: string | null;
       actorId: string;
       forcePrimaryIfFirst: boolean;
+      year?: number;
     },
   ) {
-    const year = currentJalaliYear();
+    const year = input.year ?? currentJalaliYear();
     const uniqueIds = [...new Set(input.managerUserIds)];
     if (input.primaryUserId && !uniqueIds.includes(input.primaryUserId)) {
       uniqueIds.push(input.primaryUserId);
@@ -1358,6 +1363,14 @@ export class AccommodationsService {
     }
 
     if (!uniqueIds.length) {
+      await tx.accommodationManager.create({
+        data: {
+          accommodationId: input.accommodationId,
+          userId: null,
+          year,
+          isPrimary: false,
+        },
+      });
       return;
     }
 

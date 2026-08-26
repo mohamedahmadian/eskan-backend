@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   MinLength,
   ValidateIf,
@@ -199,6 +200,13 @@ export class CreateAccommodationDto {
   @IsInt()
   @Min(0)
   toiletCount?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1300)
+  @Max(1600)
+  year?: number;
 
   @IsOptional()
   @IsArray()
