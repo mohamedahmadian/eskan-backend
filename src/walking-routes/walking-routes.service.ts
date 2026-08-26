@@ -9,7 +9,11 @@ import {
   paginationArgs,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
-import { Prisma } from '../generated/prisma/client';
+import {
+  Prisma,
+  ReservationStatus,
+  ReservationType,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWalkingRouteDto, type WalkingRouteStageDto } from './dto/create-walking-route.dto';
 import { FindWalkingRoutesQueryDto } from './dto/find-walking-routes-query.dto';
@@ -18,11 +22,14 @@ import { UpdateWalkingRouteDto } from './dto/update-walking-route.dto';
 const geoSelect = { id: true, nameFa: true, nameEn: true };
 
 const walkingRouteInclude = {
-  entryBorderCity: {
+  entryBorder: {
     select: {
-      ...geoSelect,
-      provinceId: true,
+      id: true,
+      name: true,
+      borderType: true,
+      neighboringCountry: { select: { ...geoSelect, iso2: true } },
       province: { select: { ...geoSelect, countryId: true } },
+      city: { select: { ...geoSelect, provinceId: true } },
     },
   },
   originCountries: {
@@ -37,6 +44,8 @@ const walkingRouteInclude = {
         select: {
           ...geoSelect,
           provinceId: true,
+          latitude: true,
+          longitude: true,
           province: { select: { ...geoSelect, countryId: true } },
         },
       },
@@ -83,7 +92,7 @@ export class WalkingRoutesService {
       {
         name: (dir) => ({ name: dir }),
         distanceToMashhadKm: (dir) => ({ distanceToMashhadKm: dir }),
-        entryBorder: (dir) => ({ entryBorderCity: { nameFa: dir } }),
+        entryBorder: (dir) => ({ entryBorder: { name: dir } }),
         stageCount: (dir) => ({ stages: { _count: dir } }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -101,17 +110,52 @@ export class WalkingRoutesService {
     return this.serialize(item);
   }
 
+  async findActiveForManager(userId: string) {
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        walkingRouteId: { not: null },
+        status: {
+          notIn: [ReservationStatus.CANCELLED, ReservationStatus.REJECTED],
+        },
+        OR: [
+          { caravanManagerId: userId },
+          { createdById: userId, type: ReservationType.CARAVAN },
+        ],
+      },
+      orderBy: [{ year: 'desc' }, { updatedAt: 'desc' }],
+      select: { walkingRouteId: true, status: true },
+      take: 30,
+    });
+    const preferred =
+      reservations.find(
+        (row) => row.status !== ReservationStatus.COMPLETED,
+      ) ?? reservations[0];
+    if (preferred?.walkingRouteId) {
+      return { route: await this.findOne(preferred.walkingRouteId) };
+    }
+
+    const caravan = await this.prisma.caravan.findFirst({
+      where: { managerUserId: userId, walkingRouteId: { not: null } },
+      orderBy: [{ isActive: 'desc' }, { updatedAt: 'desc' }],
+      select: { walkingRouteId: true },
+    });
+    if (caravan?.walkingRouteId) {
+      return { route: await this.findOne(caravan.walkingRouteId) };
+    }
+    return { route: null };
+  }
+
   async create(dto: CreateWalkingRouteDto) {
-    const { entryBorderCityId, originCountryIds, stages } =
+    const { entryBorderId, originCountryIds, stages } =
       await this.validateRelated(dto);
-    if (!entryBorderCityId || !originCountryIds || !stages) {
+    if (!entryBorderId || !originCountryIds || !stages) {
       throw new BadRequestException('اطلاعات مسیر ناقص است');
     }
     const created = await this.prisma.walkingRoute.create({
       data: {
         name: dto.name.trim(),
         distanceToMashhadKm: new Prisma.Decimal(dto.distanceToMashhadKm),
-        entryBorderCityId,
+        entryBorderId,
         originCountries: {
           create: originCountryIds.map((countryId) => ({ countryId })),
         },
@@ -136,7 +180,7 @@ export class WalkingRoutesService {
             dto.distanceToMashhadKm === undefined
               ? undefined
               : new Prisma.Decimal(dto.distanceToMashhadKm),
-          entryBorderCityId: related.entryBorderCityId,
+          entryBorderId: related.entryBorderId,
         },
       });
       if (related.originCountryIds) {
@@ -179,6 +223,9 @@ export class WalkingRoutesService {
     query: FindWalkingRoutesQueryDto,
   ): Prisma.WalkingRouteWhereInput {
     const filters: Prisma.WalkingRouteWhereInput[] = [];
+    if (query.entryBorderId) {
+      filters.push({ entryBorderId: query.entryBorderId });
+    }
     if (query.originCountryId) {
       filters.push({
         originCountries: { some: { countryId: query.originCountryId } },
@@ -195,6 +242,7 @@ export class WalkingRoutesService {
       filters.push({
         OR: [
           { name: containsInsensitive(query.q) },
+          { entryBorder: { name: containsInsensitive(query.q) } },
           {
             stages: {
               some: { description: containsInsensitive(query.q) },
@@ -242,9 +290,15 @@ export class WalkingRoutesService {
       }
     }
 
-    let entryBorderCityId = dto.entryBorderCityId;
-    if (entryBorderCityId) {
-      await this.assertIranianCity(entryBorderCityId, 'شهر مرز ورودی معتبر نیست');
+    let entryBorderId = dto.entryBorderId;
+    if (entryBorderId) {
+      const border = await this.prisma.entryBorder.findUnique({
+        where: { id: entryBorderId },
+        select: { id: true },
+      });
+      if (!border) {
+        throw new BadRequestException('مرز ورودی معتبر نیست');
+      }
     }
 
     if (stages) {
@@ -272,17 +326,7 @@ export class WalkingRoutesService {
       }
     }
 
-    return { entryBorderCityId, originCountryIds, stages };
-  }
-
-  private async assertIranianCity(cityId: string, message: string) {
-    const city = await this.prisma.city.findUnique({
-      where: { id: cityId },
-      include: { province: { include: { country: true } } },
-    });
-    if (!city || city.province.country.iso2 !== 'IR') {
-      throw new BadRequestException(message);
-    }
+    return { entryBorderId, originCountryIds, stages };
   }
 
   private stageData(stage: WalkingRouteStageDto) {
@@ -309,13 +353,17 @@ export class WalkingRoutesService {
       id: item.id,
       name: item.name,
       distanceToMashhadKm: Number(item.distanceToMashhadKm),
-      entryBorderCityId: item.entryBorderCityId,
-      entryBorderCity: item.entryBorderCity,
+      entryBorderId: item.entryBorderId,
+      entryBorder: item.entryBorder,
       originCountries: item.originCountries.map((row) => row.country),
       stages: item.stages.map((stage) => ({
         id: stage.id,
         cityId: stage.cityId,
-        city: stage.city,
+        city: {
+          ...stage.city,
+          latitude: num(stage.city.latitude),
+          longitude: num(stage.city.longitude),
+        },
         stageNumber: stage.stageNumber,
         distanceToNextKm: num(stage.distanceToNextKm),
         distanceToPreviousKm: num(stage.distanceToPreviousKm),

@@ -1,12 +1,18 @@
 import { Transform } from 'class-transformer';
-import { IsString, MinLength } from 'class-validator';
+import { IsIn, IsString, MinLength } from 'class-validator';
 import { toLatinDigits } from '../../common/national-id';
+
+export const forgotPasswordChannels = ['sms', 'email'] as const;
+export type ForgotPasswordChannel = (typeof forgotPasswordChannels)[number];
 
 export class ForgotPasswordDto {
   @Transform(({ value }) =>
-    typeof value === 'string' ? toLatinDigits(value.trim()).replace(/[\s-]/g, '') : value,
+    typeof value === 'string' ? toLatinDigits(value.trim()) : value,
   )
   @IsString()
-  @MinLength(8)
+  @MinLength(3)
   identifier: string;
+
+  @IsIn([...forgotPasswordChannels])
+  channel: ForgotPasswordChannel;
 }

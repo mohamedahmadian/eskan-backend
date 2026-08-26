@@ -84,6 +84,15 @@ async function main() {
     },
   });
 
+  const governmentOrgOfficerRole = await prisma.role.upsert({
+    where: { code: 'GOVERNMENT_ORG_OFFICER' },
+    update: { nameKey: 'roles.governmentOrgOfficer' },
+    create: {
+      code: 'GOVERNMENT_ORG_OFFICER',
+      nameKey: 'roles.governmentOrgOfficer',
+    },
+  });
+
   const dashboard = await prisma.navModule.upsert({
     where: { code: 'dashboard' },
     update: {},
@@ -317,6 +326,14 @@ async function main() {
       sortOrder: 3,
     },
     {
+      code: 'caravans.report',
+      moduleId: caravanManagement.id,
+      nameKey: 'menus.caravanReport',
+      path: '/caravan-report',
+      icon: 'chart-column',
+      sortOrder: 4,
+    },
+    {
       code: 'groups.list',
       moduleId: groupManagement.id,
       nameKey: 'menus.groupsList',
@@ -373,12 +390,52 @@ async function main() {
       sortOrder: 6,
     },
     {
+      code: 'caravans.provincial-monitoring',
+      moduleId: caravans.id,
+      nameKey: 'menus.provincialMonitoring',
+      path: '/provincial-monitoring',
+      icon: 'map',
+      sortOrder: 7,
+    },
+    {
+      code: 'caravans.national-monitoring',
+      moduleId: caravans.id,
+      nameKey: 'menus.nationalMonitoring',
+      path: '/national-monitoring',
+      icon: 'chart-column',
+      sortOrder: 8,
+    },
+    {
       code: 'reception.settings',
       moduleId: caravans.id,
       nameKey: 'menus.receptionSettings',
       path: '/reception-settings',
       icon: 'settings',
-      sortOrder: 7,
+      sortOrder: 9,
+    },
+    {
+      code: 'caravans.support-requests',
+      moduleId: caravans.id,
+      nameKey: 'menus.supportRequests',
+      path: '/support-requests',
+      icon: 'hand-heart',
+      sortOrder: 10,
+    },
+    {
+      code: 'caravans.support-request-report',
+      moduleId: caravans.id,
+      nameKey: 'menus.supportRequestReport',
+      path: '/support-request-report',
+      icon: 'chart-column',
+      sortOrder: 11,
+    },
+    {
+      code: 'location.mine',
+      moduleId: caravans.id,
+      nameKey: 'menus.myLocation',
+      path: '/my-location',
+      icon: 'map-pin',
+      sortOrder: 10,
     },
     {
       code: 'sms.settings',
@@ -429,12 +486,20 @@ async function main() {
       sortOrder: 3,
     },
     {
+      code: 'base-info.entry-borders',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.entryBorders',
+      path: '/base-info/entry-borders',
+      icon: 'fence',
+      sortOrder: 4,
+    },
+    {
       code: 'base-info.walking-routes',
       moduleId: baseInfo.id,
       nameKey: 'menus.walkingRoutes',
       path: '/base-info/walking-routes',
       icon: 'route',
-      sortOrder: 4,
+      sortOrder: 5,
     },
     {
       code: 'base-info.food-suppliers',
@@ -442,7 +507,7 @@ async function main() {
       nameKey: 'menus.foodSuppliers',
       path: '/base-info/food-suppliers',
       icon: 'utensils-crossed',
-      sortOrder: 5,
+      sortOrder: 6,
     },
     {
       code: 'base-info.medical-centers',
@@ -450,7 +515,7 @@ async function main() {
       nameKey: 'menus.medicalCenters',
       path: '/base-info/medical-centers',
       icon: 'hospital',
-      sortOrder: 6,
+      sortOrder: 7,
     },
     {
       code: 'base-info.red-crescents',
@@ -458,7 +523,7 @@ async function main() {
       nameKey: 'menus.redCrescents',
       path: '/base-info/red-crescents',
       icon: 'heart-handshake',
-      sortOrder: 7,
+      sortOrder: 8,
     },
     {
       code: 'base-info.benefactors',
@@ -466,7 +531,7 @@ async function main() {
       nameKey: 'menus.benefactors',
       path: '/base-info/benefactors',
       icon: 'hand-heart',
-      sortOrder: 8,
+      sortOrder: 9,
     },
     {
       code: 'base-info.government-organizations',
@@ -474,7 +539,7 @@ async function main() {
       nameKey: 'menus.governmentOrganizations',
       path: '/base-info/government-organizations',
       icon: 'building',
-      sortOrder: 9,
+      sortOrder: 10,
     },
     {
       code: 'licenses.issue',
@@ -759,7 +824,8 @@ async function main() {
       item.code === 'caravans.mine' ||
       item.code === 'groups.mine' ||
       item.code === 'evaluations.mine' ||
-      item.code === 'accommodation.mine',
+      item.code === 'accommodation.mine' ||
+      item.code === 'location.mine',
   );
   if (adminForbiddenMineMenus.length) {
     await prisma.roleMenu.deleteMany({
@@ -834,6 +900,7 @@ async function main() {
     'reservations.mine',
     'accommodation.mine',
     'evaluations.mine',
+    'location.mine',
   ]);
   const caravanListMenu = menuRecords.find(
     (item) => item.code === 'caravans.list',
@@ -889,6 +956,7 @@ async function main() {
     'groups.mine',
     'accommodation.mine',
     'evaluations.mine',
+    'location.mine',
   ]);
   for (const menu of menuRecords.filter((item) =>
     pilgrimMenuCodes.has(item.code),
@@ -934,6 +1002,37 @@ async function main() {
       where: {
         roleId: licenseIssuerRole.id,
         menuId: { in: licenseIssuerForbiddenMenus.map((item) => item.id) },
+      },
+    });
+  }
+
+  const governmentOrgOfficerMenuCodes = new Set([
+    'dashboard.overview',
+    'caravans.support-requests',
+    'caravans.support-request-report',
+  ]);
+  for (const menu of menuRecords.filter((item) =>
+    governmentOrgOfficerMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: governmentOrgOfficerRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: governmentOrgOfficerRole.id, menuId: menu.id },
+    });
+  }
+  const governmentOrgOfficerForbiddenMenus = menuRecords.filter(
+    (item) => !governmentOrgOfficerMenuCodes.has(item.code),
+  );
+  if (governmentOrgOfficerForbiddenMenus.length) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: governmentOrgOfficerRole.id,
+        menuId: { in: governmentOrgOfficerForbiddenMenus.map((item) => item.id) },
       },
     });
   }

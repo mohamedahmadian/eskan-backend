@@ -560,6 +560,9 @@ export class ReservationsService {
           walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate) ?? null,
           requestsAccommodation: dto.requestsAccommodation ?? true,
           requestsBus: dto.requestsBus ?? true,
+          requestsSimCard: dto.requestsSimCard ?? false,
+          requestsBankCard: dto.requestsBankCard ?? false,
+          specialServices: dto.specialServices?.trim() || null,
           requestedMaleCount: maleCount,
           requestedFemaleCount: femaleCount,
           maleCount,
@@ -580,6 +583,7 @@ export class ReservationsService {
           caravanId: caravan?.id ?? null,
           maleCount,
           femaleCount,
+          year: dto.year,
         });
       }
       if (asDraft) {
@@ -752,6 +756,12 @@ export class ReservationsService {
       walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate),
       requestsAccommodation: dto.requestsAccommodation,
       requestsBus: dto.requestsBus,
+      requestsSimCard: dto.requestsSimCard,
+      requestsBankCard: dto.requestsBankCard,
+      specialServices:
+        dto.specialServices === undefined
+          ? undefined
+          : dto.specialServices?.trim() || null,
       requestedMaleCount,
       requestedFemaleCount,
       ...(pendingReview && !(dualCounts && explicitApproved)
@@ -777,6 +787,7 @@ export class ReservationsService {
           ? undefined
           : dto.createWizardStep?.trim() || null,
       ...permitPatch,
+      ...(isAdmin(actor) ? issuedServicesPatch(dto) : {}),
     };
 
     const countsChanged =
@@ -816,6 +827,8 @@ export class ReservationsService {
             type === ReservationType.CARAVAN ? (caravan?.id ?? null) : null,
           maleCount: partySyncMale,
           femaleCount: partySyncFemale,
+          year,
+          updateYear: isOccupyingStatus(current.status),
         });
       }
       return row;
@@ -880,6 +893,8 @@ export class ReservationsService {
         caravanId: current.caravanId,
         maleCount: counts.maleCount,
         femaleCount: counts.femaleCount,
+        year: current.year,
+        updateYear: true,
       });
       return this.serialize(updated, actor);
     });
@@ -981,6 +996,8 @@ export class ReservationsService {
           caravanId: current.caravanId,
           maleCount: countsForStatus.maleCount,
           femaleCount: countsForStatus.femaleCount,
+          year: current.year,
+          updateYear: isOccupyingStatus(status),
         });
       }
       this.emitWorkflowEvent('return', id, actor.id);
@@ -2386,6 +2403,17 @@ export class ReservationsService {
       },
       include: reservationInclude,
     });
+    if (autoApprove) {
+      await this.syncPartyCapacity(tx, {
+        type: current.type,
+        groupId: current.groupId,
+        caravanId: current.caravanId,
+        maleCount: requestedMale,
+        femaleCount: requestedFemale,
+        year: current.year,
+        updateYear: true,
+      });
+    }
     return this.serialize(updated, actor);
   }
 
@@ -2491,9 +2519,11 @@ export class ReservationsService {
       caravanId?: string | null;
       maleCount: number;
       femaleCount: number;
+      year?: number;
+      updateYear?: boolean;
     },
   ) {
-    const { type, groupId, caravanId, maleCount, femaleCount } = params;
+    const { type, groupId, caravanId, maleCount, femaleCount, year, updateYear } = params;
     const totalCount = maleCount + femaleCount;
     if (type === ReservationType.GROUP && groupId) {
       await tx.group.update({
@@ -2507,6 +2537,19 @@ export class ReservationsService {
         where: { id: caravanId },
         data: { maleCount, femaleCount, totalCount },
       });
+      const yearRow =
+        updateYear && year
+          ? await tx.caravanYear.findUnique({
+              where: { caravanId_year: { caravanId, year } },
+              select: { id: true },
+            })
+          : null;
+      if (yearRow) {
+        await tx.caravanYear.update({
+          where: { id: yearRow.id },
+          data: { maleCount, femaleCount },
+        });
+      }
     }
   }
 
@@ -3315,6 +3358,9 @@ export class ReservationsService {
       walkingStartDate: toDateOnly(row.walkingStartDate),
       requestsAccommodation: row.requestsAccommodation,
       requestsBus: row.requestsBus,
+      requestsSimCard: row.requestsSimCard,
+      requestsBankCard: row.requestsBankCard,
+      specialServices: row.specialServices,
       requestedMaleCount: row.requestedMaleCount,
       requestedFemaleCount: row.requestedFemaleCount,
       maleCount: row.maleCount,
@@ -3354,6 +3400,18 @@ export class ReservationsService {
       walkingStartDate: toDateOnly(row.walkingStartDate),
       requestsAccommodation: row.requestsAccommodation,
       requestsBus: row.requestsBus,
+      requestsSimCard: row.requestsSimCard,
+      requestsBankCard: row.requestsBankCard,
+      specialServices: row.specialServices,
+      simCardNumber: row.simCardNumber,
+      simCardOperator: row.simCardOperator,
+      simCardDeliveredAt: toDateOnly(row.simCardDeliveredAt),
+      simCardInitialCharge: row.simCardInitialCharge,
+      bankCardNumber: row.bankCardNumber,
+      bankCardIban: row.bankCardIban,
+      bankCardBank: row.bankCardBank,
+      bankCardDeliveredAt: toDateOnly(row.bankCardDeliveredAt),
+      bankCardInitialBalance: row.bankCardInitialBalance,
       requestedMaleCount: row.requestedMaleCount,
       requestedFemaleCount: row.requestedFemaleCount,
       maleCount: row.maleCount,
@@ -3482,6 +3540,49 @@ function toDateOnly(value?: Date | string | null) {
   if (!value) return null;
   if (typeof value === 'string') return value.slice(0, 10);
   return value.toISOString().slice(0, 10);
+}
+
+function optionalTrimmed(value?: string | null) {
+  if (value === undefined) return undefined;
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function optionalDigits(value?: string | null) {
+  if (value === undefined) return undefined;
+  if (value == null || value === '') return null;
+  const digits = toLatinDigits(value).replace(/\D/g, '');
+  return digits.length ? digits : null;
+}
+
+function optionalIban(value?: string | null) {
+  if (value === undefined) return undefined;
+  if (value == null || value === '') return null;
+  const normalized = toLatinDigits(value).replace(/\s/g, '').toUpperCase();
+  return normalized.length ? normalized : null;
+}
+
+function issuedServicesPatch(
+  dto: UpdateReservationDto,
+): Prisma.ReservationUncheckedUpdateInput {
+  return {
+    simCardNumber: optionalDigits(dto.simCardNumber),
+    simCardOperator: optionalTrimmed(dto.simCardOperator),
+    simCardDeliveredAt: parseOptionalIsoDate(dto.simCardDeliveredAt),
+    simCardInitialCharge:
+      dto.simCardInitialCharge === undefined
+        ? undefined
+        : dto.simCardInitialCharge,
+    bankCardNumber: optionalDigits(dto.bankCardNumber),
+    bankCardIban: optionalIban(dto.bankCardIban),
+    bankCardBank: optionalTrimmed(dto.bankCardBank),
+    bankCardDeliveredAt: parseOptionalIsoDate(dto.bankCardDeliveredAt),
+    bankCardInitialBalance:
+      dto.bankCardInitialBalance === undefined
+        ? undefined
+        : dto.bankCardInitialBalance,
+  };
 }
 
 function emptyPermitData() {

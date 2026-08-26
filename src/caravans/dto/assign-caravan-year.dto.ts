@@ -14,4 +14,16 @@ export class AssignCaravanYearDto {
   @ValidateIf((_, value) => value != null)
   @IsUUID()
   managerUserId?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maleCount?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  femaleCount?: number;
 }

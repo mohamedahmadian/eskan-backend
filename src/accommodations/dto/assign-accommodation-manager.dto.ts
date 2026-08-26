@@ -14,4 +14,16 @@ export class AssignAccommodationManagerDto {
   @Min(1300)
   @Max(1600)
   year: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maleCapacity?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  femaleCapacity?: number;
 }

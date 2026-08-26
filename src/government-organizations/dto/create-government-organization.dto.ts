@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MinLength, ValidateIf } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
 
 export class CreateGovernmentOrganizationDto {
@@ -22,8 +22,8 @@ export class CreateGovernmentOrganizationDto {
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsString()
-  contactPerson?: string | null;
+  @IsUUID()
+  contactUserId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

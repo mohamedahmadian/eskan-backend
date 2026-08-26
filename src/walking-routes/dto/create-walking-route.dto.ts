@@ -62,7 +62,7 @@ export class CreateWalkingRouteDto {
   distanceToMashhadKm: number;
 
   @IsUUID()
-  entryBorderCityId: string;
+  entryBorderId: string;
 
   @IsArray()
   @ArrayMinSize(1)

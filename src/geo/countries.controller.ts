@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -23,6 +24,7 @@ export class CountriesController {
   constructor(private readonly geo: GeoService) {}
 
   @Get()
+  @Public()
   findAll(@Query() query: FindGeoQueryDto) {
     return this.geo.findCountries(query);
   }

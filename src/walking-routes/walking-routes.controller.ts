@@ -9,13 +9,21 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { isAdmin } from '../auth/roles.util';
 import { CreateWalkingRouteDto } from './dto/create-walking-route.dto';
+import { FindActiveWalkingRouteQueryDto } from './dto/find-active-walking-route-query.dto';
 import { FindWalkingRoutesQueryDto } from './dto/find-walking-routes-query.dto';
 import { UpdateWalkingRouteDto } from './dto/update-walking-route.dto';
 import { WalkingRoutesService } from './walking-routes.service';
+
+type RequestUser = {
+  id: string;
+  userRoles?: { role: { code: string } }[];
+};
 
 @Controller('walking-routes')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +35,17 @@ export class WalkingRoutesController {
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER', 'GROUP_MANAGER')
   findAll(@Query() query: FindWalkingRoutesQueryDto) {
     return this.walkingRoutes.findAll(query);
+  }
+
+  @Get('active')
+  @Roles('ADMIN', 'CARAVAN_MANAGER')
+  findActive(
+    @CurrentUser() user: RequestUser,
+    @Query() query: FindActiveWalkingRouteQueryDto,
+  ) {
+    const targetId =
+      query.userId && isAdmin(user) ? query.userId : user.id;
+    return this.walkingRoutes.findActiveForManager(targetId);
   }
 
   @Get(':id')

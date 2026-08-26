@@ -24,6 +24,7 @@ import { AddCaravanYearDto } from './dto/add-caravan-year.dto';
 import { AssignCaravanYearDto } from './dto/assign-caravan-year.dto';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
+import { FindCaravanReportQueryDto } from './dto/find-caravan-report-query.dto';
 import { FindCaravanYearQueryDto } from './dto/find-caravan-year-query.dto';
 import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
@@ -79,6 +80,14 @@ export class CaravansController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.caravans.findMine(query, actor.id);
+  }
+
+  @Get('report')
+  report(
+    @Query() query: FindCaravanReportQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.caravans.report(actor, query.year);
   }
 
   @Get('year-management/stats')
@@ -205,7 +214,10 @@ export class CaravansController {
     @Body() dto: AssignCaravanYearDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.caravans.assignYear(id, dto.year, dto.managerUserId ?? null, actor);
+    return this.caravans.assignYear(id, dto.year, dto.managerUserId ?? null, actor, {
+      maleCount: dto.maleCount,
+      femaleCount: dto.femaleCount,
+    });
   }
 
   @Delete(':id/years/:yearId')

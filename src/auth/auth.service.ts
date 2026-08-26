@@ -1,8 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { toLatinDigits } from '../common/national-id';
-import { UserGender, UserStatus } from '../generated/prisma/client';
+import { normalizeNationalId, normalizePassportNumber, toLatinDigits } from '../common/national-id';
+import { phoneLookupValues } from '../common/phone';
+import { Prisma, UserGender, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
 import {
@@ -47,14 +48,24 @@ export class AuthService {
   async login(dto: LoginDto) {
     const identifier = toLatinDigits(dto.username.trim());
     const password = toLatinDigits(dto.password);
+    const nationalId = normalizeNationalId(identifier);
+    const passport = normalizePassportNumber(identifier);
+    const email = identifier.includes('@') ? identifier.toLowerCase() : '';
+    const or: Prisma.UserWhereInput[] = [{ username: identifier }];
+    if (nationalId) {
+      or.push({ nationalId });
+    }
+    if (passport && passport !== nationalId) {
+      or.push({ nationalId: passport });
+    }
+    for (const phone of phoneLookupValues(identifier)) {
+      or.push({ phone });
+    }
+    if (email) {
+      or.push({ email });
+    }
     const user = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: identifier },
-          { nationalId: identifier },
-          { phone: identifier },
-        ],
-      },
+      where: { OR: or },
       include: userWithRoles,
     });
 

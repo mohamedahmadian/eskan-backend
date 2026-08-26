@@ -8,6 +8,7 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
@@ -91,6 +92,21 @@ export class CreateReservationDto {
   @IsOptional()
   @IsBoolean()
   requestsBus?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requestsSimCard?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requestsBankCard?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MaxLength(500)
+  specialServices?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

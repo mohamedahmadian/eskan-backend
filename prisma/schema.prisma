@@ -37,6 +37,20 @@ enum SupplierType {
   OTHER
 }
 
+enum SupportRequestType {
+  GOODS
+  PLACE
+  TRANSPORT
+  OTHER
+}
+
+enum SupportRequestStatus {
+  PENDING
+  IN_PROGRESS
+  FULFILLED
+  REJECTED
+}
+
 model Role {
   id        String     @id @default(uuid())
   code      String     @unique
@@ -89,8 +103,17 @@ model User {
   province            Province?     @relation("UserHomeProvince", fields: [provinceId], references: [id], onDelete: SetNull)
   cityId              String?
   city                City?         @relation("UserHomeCity", fields: [cityId], references: [id], onDelete: SetNull)
+  locationProvinceId  String?
+  locationProvince    Province?     @relation("UserLocationProvince", fields: [locationProvinceId], references: [id], onDelete: SetNull)
+  locationCityId      String?
+  locationCity        City?         @relation("UserLocationCity", fields: [locationCityId], references: [id], onDelete: SetNull)
+  latitude            Decimal?      @db.Decimal(10, 7)
+  longitude           Decimal?      @db.Decimal(10, 7)
+  locationNotes       String?
+  locationUpdatedAt   DateTime?
   issuingOrganizationId String?
-  issuingOrganization   GovernmentOrganization? @relation(fields: [issuingOrganizationId], references: [id], onDelete: Restrict)
+  issuingOrganization   GovernmentOrganization? @relation("GovernmentOrganizationUsers", fields: [issuingOrganizationId], references: [id], onDelete: Restrict)
+  contactForOrganization GovernmentOrganization? @relation("GovernmentOrganizationContact")
   photoId             String?
   photo               StoredImage?  @relation("UserPhoto", fields: [photoId], references: [id], onDelete: SetNull)
   nationalCardPhotoId String?
@@ -135,6 +158,8 @@ model User {
   evaluationsAsEvaluator Evaluation[] @relation("EvaluationEvaluator")
   evaluationsAsTarget    Evaluation[] @relation("EvaluationTarget")
   evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
+  requestedSupportRequests SupportRequest[] @relation("SupportRequestRequester")
+  handledSupportRequests   SupportRequest[] @relation("SupportRequestHandler")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -145,6 +170,8 @@ model User {
   @@index([countryId])
   @@index([provinceId])
   @@index([cityId])
+  @@index([locationProvinceId])
+  @@index([locationCityId])
   @@index([issuingOrganizationId])
   @@map("users")
 }
@@ -154,17 +181,51 @@ model GovernmentOrganization {
   name          String
   phone         String?
   address       String?
-  contactPerson String?
+  contactUserId String?  @unique
+  contactUser   User?    @relation("GovernmentOrganizationContact", fields: [contactUserId], references: [id], onDelete: SetNull)
   mobile        String?
   description   String?
-  users         User[]
+  users         User[]   @relation("GovernmentOrganizationUsers")
   issuedLicenses IssuedLicense[]
+  supportRequests SupportRequest[] @relation("SupportRequestOrganization")
+  handledSupportRequests SupportRequest[] @relation("SupportRequestHandlingOrganization")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([name])
   @@index([createdAt])
   @@map("government_organizations")
+}
+
+model SupportRequest {
+  id                     String                @id @default(uuid())
+  organizationId         String
+  organization           GovernmentOrganization @relation("SupportRequestOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  type                   SupportRequestType
+  subject                String
+  quantity               Int?
+  requestedAt            DateTime              @db.Date
+  neededBy               DateTime?             @db.Date
+  description            String?
+  status                 SupportRequestStatus  @default(PENDING)
+  handlingOrganizationId String?
+  handlingOrganization   GovernmentOrganization? @relation("SupportRequestHandlingOrganization", fields: [handlingOrganizationId], references: [id], onDelete: Restrict)
+  handledAt              DateTime?             @db.Date
+  handlingNotes          String?
+  requestedById          String?
+  requestedBy            User?                 @relation("SupportRequestRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  handledById            String?
+  handledBy              User?                 @relation("SupportRequestHandler", fields: [handledById], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@index([organizationId])
+  @@index([handlingOrganizationId])
+  @@index([status])
+  @@index([type])
+  @@index([requestedAt])
+  @@index([createdAt])
+  @@map("support_requests")
 }
 
 model NavModule {
@@ -290,6 +351,8 @@ model CaravanYear {
   year          Int
   managerUserId String?
   manager       User?    @relation("CaravanYearManager", fields: [managerUserId], references: [id], onDelete: SetNull)
+  maleCount     Int      @default(0)
+  femaleCount   Int      @default(0)
   createdAt     DateTime @default(now())
 
   @@unique([caravanId, year])
@@ -431,6 +494,20 @@ model Reservation {
 
   requestsAccommodation Boolean @default(true)
   requestsBus           Boolean @default(true)
+  requestsSimCard       Boolean @default(false)
+  requestsBankCard      Boolean @default(false)
+  specialServices       String?
+
+  simCardNumber         String?
+  simCardOperator       String?
+  simCardDeliveredAt    DateTime? @db.Date
+  simCardInitialCharge  Int?
+
+  bankCardNumber         String?
+  bankCardIban           String?
+  bankCardBank           String?
+  bankCardDeliveredAt    DateTime? @db.Date
+  bankCardInitialBalance Int?
 
   requestedMaleCount   Int @default(0)
   requestedFemaleCount Int @default(0)
@@ -664,6 +741,7 @@ model Country {
   accommodations         Accommodation[]
   users                  User[]
   walkingRouteOrigins    WalkingRouteOriginCountry[]
+  entryBorders           EntryBorder[]
   createdAt              DateTime                    @default(now())
   updatedAt              DateTime                    @updatedAt
 
@@ -692,8 +770,10 @@ model Province {
   redCrescents    RedCrescent[]
   benefactors      Benefactor[]
   users            User[]          @relation("UserHomeProvince")
+  locatedUsers     User[]          @relation("UserLocationProvince")
   representativeId String?
   representative   User?           @relation("ProvinceHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
+  entryBorders     EntryBorder[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
@@ -727,10 +807,11 @@ model City {
   groups                     Group[]
   reservationOrigins         Reservation[]             @relation("ReservationOriginCity")
   users                      User[]                    @relation("UserHomeCity")
+  locatedUsers               User[]                    @relation("UserLocationCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
-  walkingRouteEntryBorders   WalkingRoute[]            @relation("WalkingRouteEntryBorder")
   walkingRouteStages         WalkingRouteStage[]
+  entryBorders               EntryBorder[]
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
 
@@ -738,6 +819,37 @@ model City {
   @@index([provinceId, isActive, sortOrder])
   @@index([representativeId])
   @@map("cities")
+}
+
+enum EntryBorderType {
+  LAND
+  AIR
+  SEA
+}
+
+model EntryBorder {
+  id                   String          @id @default(uuid())
+  name                 String
+  neighboringCountryId String
+  neighboringCountry   Country         @relation(fields: [neighboringCountryId], references: [id], onDelete: Restrict)
+  provinceId           String
+  province             Province        @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId               String
+  city                 City            @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  borderType           EntryBorderType
+  isActive             Boolean         @default(true)
+  description          String?
+  walkingRoutes        WalkingRoute[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([name])
+  @@index([neighboringCountryId])
+  @@index([provinceId])
+  @@index([cityId])
+  @@index([borderType])
+  @@index([isActive])
+  @@map("entry_borders")
 }
 
 enum AccommodationType {
@@ -868,6 +980,8 @@ model AccommodationManager {
   userId           String?
   user             User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
   year             Int
+  maleCapacity     Int           @default(0)
+  femaleCapacity   Int           @default(0)
   isPrimary        Boolean       @default(false)
   createdAt        DateTime      @default(now())
 
@@ -967,8 +1081,8 @@ model WalkingRoute {
   id                  String                      @id @default(uuid())
   name                String
   distanceToMashhadKm Decimal                     @db.Decimal(8, 2)
-  entryBorderCityId   String
-  entryBorderCity     City                        @relation("WalkingRouteEntryBorder", fields: [entryBorderCityId], references: [id], onDelete: Restrict)
+  entryBorderId       String
+  entryBorder         EntryBorder                 @relation(fields: [entryBorderId], references: [id], onDelete: Restrict)
   originCountries     WalkingRouteOriginCountry[]
   stages              WalkingRouteStage[]
   reservations        Reservation[]
@@ -978,7 +1092,7 @@ model WalkingRoute {
   updatedAt           DateTime                    @updatedAt
 
   @@index([name])
-  @@index([entryBorderCityId])
+  @@index([entryBorderId])
   @@map("walking_routes")
 }
 

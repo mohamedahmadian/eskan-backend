@@ -18,6 +18,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { SetUserPasswordDto } from './dto/set-user-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { UsersService } from './users.service';
 
 type RequestUser = { id: string };
@@ -60,6 +61,11 @@ export class UsersController {
   @Post()
   create(@Body() dto: CreateUserDto) {
     return this.users.create(dto);
+  }
+
+  @Patch(':id/location')
+  updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
+    return this.users.updateLocation(id, dto);
   }
 
   @Patch(':id')

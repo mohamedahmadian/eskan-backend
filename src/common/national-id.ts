@@ -22,6 +22,13 @@ export function normalizeNationalId(input: string) {
   return digits;
 }
 
+/** شماره گذرنامه: حروف و رقم لاتین، بدون فاصله. */
+export function normalizePassportNumber(input: string) {
+  return toLatinDigits(input.trim())
+    .replace(/[\s-]/g, '')
+    .toUpperCase();
+}
+
 export function isValidIranianNationalId(input: string) {
   const id = normalizeNationalId(input);
   if (!/^\d{10}$/.test(id) || /^(\d)\1{9}$/.test(id)) {

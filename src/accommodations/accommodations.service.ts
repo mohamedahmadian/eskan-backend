@@ -310,6 +310,8 @@ export class AccommodationsService {
         actorId: actor.id,
         forcePrimaryIfFirst: !admin,
         year: dto.year,
+        maleCapacity: dto.maleCapacity ?? 0,
+        femaleCapacity: dto.femaleCapacity ?? 0,
       });
       return row;
     });
@@ -333,9 +335,11 @@ export class AccommodationsService {
 
   async update(id: string, dto: UpdateAccommodationDto, actor: Actor) {
     const current = await this.findRecord(id, actor);
+    const nextMale = dto.maleCapacity ?? current.maleCapacity;
+    const nextFemale = dto.femaleCapacity ?? current.femaleCapacity;
     this.assertCapacity({
-      maleCapacity: dto.maleCapacity ?? current.maleCapacity,
-      femaleCapacity: dto.femaleCapacity ?? current.femaleCapacity,
+      maleCapacity: nextMale,
+      femaleCapacity: nextFemale,
       assignedMaleCapacity: current.assignedMaleCapacity,
       assignedFemaleCapacity: current.assignedFemaleCapacity,
     });
@@ -352,6 +356,15 @@ export class AccommodationsService {
         where: { id },
         data: this.toData(dto, geo, true) as Prisma.AccommodationUncheckedUpdateInput,
       });
+      if (dto.maleCapacity !== undefined || dto.femaleCapacity !== undefined) {
+        await this.syncYearCapacities(
+          tx,
+          id,
+          currentJalaliYear(),
+          nextMale,
+          nextFemale,
+        );
+      }
       if (admin && (dto.managerUserIds || dto.primaryManagerUserId !== undefined)) {
         const managerIds = dto.managerUserIds
           ? [...new Set(dto.managerUserIds)]
@@ -367,6 +380,8 @@ export class AccommodationsService {
               : dto.primaryManagerUserId,
           actorId: actor.id,
           forcePrimaryIfFirst: false,
+          maleCapacity: nextMale,
+          femaleCapacity: nextFemale,
         });
       } else if (!admin && dto.isPrimary === true) {
         await this.setUserPrimary(tx, actor.id, id);
@@ -410,7 +425,7 @@ export class AccommodationsService {
     copyPreviousManager = false,
   ) {
     const selectedYear = year ?? currentJalaliYear();
-    await this.findRecord(id, actor);
+    const current = await this.findRecord(id, actor);
 
     const existing = await this.prisma.accommodationManager.findFirst({
       where: { accommodationId: id, year: selectedYear },
@@ -454,6 +469,8 @@ export class AccommodationsService {
           userId: previous.userId,
           year: selectedYear,
           isPrimary: !hasPrimaryThisYear && previous.isPrimary,
+          maleCapacity: previous.maleCapacity,
+          femaleCapacity: previous.femaleCapacity,
         },
       });
       await this.copyYearContactsBetweenYears(id, previousYear, selectedYear);
@@ -466,52 +483,111 @@ export class AccommodationsService {
         userId: null,
         year: selectedYear,
         isPrimary: false,
+        maleCapacity: current.maleCapacity,
+        femaleCapacity: current.femaleCapacity,
       },
     });
     return this.findOne(id, actor);
   }
 
-  async assignManager(id: string, userId: string | null, year: number, actor: Actor) {
+  async assignManager(
+    id: string,
+    userId: string | null,
+    year: number,
+    actor: Actor,
+    capacities?: { maleCapacity?: number; femaleCapacity?: number },
+  ) {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
-    if (!userId) {
+    const hasCapacityInput =
+      capacities?.maleCapacity !== undefined || capacities?.femaleCapacity !== undefined;
+    if (!userId && !hasCapacityInput) {
       return this.activateYear(id, actor, year, false);
     }
-    await this.findRecord(id, actor);
+    const current = await this.findRecord(id, actor);
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { userRoles: { include: { role: { select: { code: true } } } } },
-    });
-    if (!user || !user.userRoles.some((item) => item.role.code === 'ACCOMMODATION_MANAGER')) {
-      throw new BadRequestException('مدیر اسکان انتخاب‌شده معتبر نیست');
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: { userRoles: { include: { role: { select: { code: true } } } } },
+      });
+      if (!user || !user.userRoles.some((item) => item.role.code === 'ACCOMMODATION_MANAGER')) {
+        throw new BadRequestException('مدیر اسکان انتخاب‌شده معتبر نیست');
+      }
     }
 
-    const existing = await this.prisma.accommodationManager.findUnique({
-      where: {
-        userId_accommodationId_year: { userId, accommodationId: id, year },
-      },
+    const existingYear = await this.prisma.accommodationManager.findFirst({
+      where: { accommodationId: id, year },
+      select: { id: true, maleCapacity: true, femaleCapacity: true },
     });
-    if (existing) {
+    const existingAssignment = userId
+      ? await this.prisma.accommodationManager.findUnique({
+          where: {
+            userId_accommodationId_year: { userId, accommodationId: id, year },
+          },
+        })
+      : null;
+    if (existingAssignment && !hasCapacityInput) {
       throw new ConflictException('این مدیر برای این سال قبلاً به این اسکان تخصیص داده شده است');
     }
 
-    const hasPrimaryThisYear = await this.prisma.accommodationManager.findFirst({
-      where: { userId, year, isPrimary: true },
-      select: { id: true },
-    });
+    const nextCaps = {
+      maleCapacity:
+        capacities?.maleCapacity ?? existingYear?.maleCapacity ?? current.maleCapacity,
+      femaleCapacity:
+        capacities?.femaleCapacity ?? existingYear?.femaleCapacity ?? current.femaleCapacity,
+    };
 
     await this.prisma.$transaction(async (tx) => {
-      await this.removeUnassignedYear(tx, id, year);
-      await tx.accommodationManager.create({
-        data: {
-          userId,
-          accommodationId: id,
-          year,
-          isPrimary: !hasPrimaryThisYear,
-        },
-      });
+      if (userId && !existingAssignment) {
+        const hasPrimaryThisYear = await tx.accommodationManager.findFirst({
+          where: { userId, year, isPrimary: true },
+          select: { id: true },
+        });
+        await this.removeUnassignedYear(tx, id, year);
+        await tx.accommodationManager.create({
+          data: {
+            userId,
+            accommodationId: id,
+            year,
+            isPrimary: !hasPrimaryThisYear,
+            ...nextCaps,
+          },
+        });
+      } else if (!userId && !existingYear) {
+        await tx.accommodationManager.create({
+          data: {
+            userId: null,
+            accommodationId: id,
+            year,
+            isPrimary: false,
+            ...nextCaps,
+          },
+        });
+      }
+      await this.syncYearCapacities(
+        tx,
+        id,
+        year,
+        nextCaps.maleCapacity,
+        nextCaps.femaleCapacity,
+      );
+      if (year === currentJalaliYear() && hasCapacityInput) {
+        this.assertCapacity({
+          maleCapacity: nextCaps.maleCapacity,
+          femaleCapacity: nextCaps.femaleCapacity,
+          assignedMaleCapacity: current.assignedMaleCapacity,
+          assignedFemaleCapacity: current.assignedFemaleCapacity,
+        });
+        await tx.accommodation.update({
+          where: { id },
+          data: {
+            maleCapacity: nextCaps.maleCapacity,
+            femaleCapacity: nextCaps.femaleCapacity,
+          },
+        });
+      }
     });
     return this.findOne(id, actor);
   }
@@ -616,7 +692,7 @@ export class AccommodationsService {
       where: this.andWhere(scope, {
         managers: { none: { year: selectedYear } },
       }),
-      select: { id: true },
+      select: { id: true, maleCapacity: true, femaleCapacity: true },
     });
     if (!inactive.length) {
       return { year: selectedYear, activated: 0 };
@@ -628,6 +704,8 @@ export class AccommodationsService {
         userId: null,
         year: selectedYear,
         isPrimary: false,
+        maleCapacity: item.maleCapacity,
+        femaleCapacity: item.femaleCapacity,
       })),
     });
 
@@ -771,6 +849,21 @@ export class AccommodationsService {
       return 'skipped';
     }
 
+    const sourceYearRow = await this.prisma.accommodationManager.findFirst({
+      where: { accommodationId, year: sourceYear },
+      select: { maleCapacity: true, femaleCapacity: true },
+    });
+    const accommodation = sourceYearRow
+      ? null
+      : await this.prisma.accommodation.findUnique({
+          where: { id: accommodationId },
+          select: { maleCapacity: true, femaleCapacity: true },
+        });
+    const yearCaps = {
+      maleCapacity: sourceYearRow?.maleCapacity ?? accommodation?.maleCapacity ?? 0,
+      femaleCapacity: sourceYearRow?.femaleCapacity ?? accommodation?.femaleCapacity ?? 0,
+    };
+
     if (!copyManagers) {
       await this.prisma.accommodationManager.create({
         data: {
@@ -778,6 +871,7 @@ export class AccommodationsService {
           userId: null,
           year: targetYear,
           isPrimary: false,
+          ...yearCaps,
         },
       });
       if (copyYearContacts) {
@@ -806,6 +900,7 @@ export class AccommodationsService {
           userId: null,
           year: targetYear,
           isPrimary: false,
+          ...yearCaps,
         },
       });
       if (copyYearContacts) {
@@ -860,6 +955,8 @@ export class AccommodationsService {
             userId: manager.userId,
             year: targetYear,
             isPrimary: !hasPrimaryThisYear && manager.isPrimary,
+            maleCapacity: manager.maleCapacity,
+            femaleCapacity: manager.femaleCapacity,
           },
         });
       }
@@ -875,6 +972,7 @@ export class AccommodationsService {
             userId: null,
             year: targetYear,
             isPrimary: false,
+            ...yearCaps,
           },
         });
       }
@@ -1307,9 +1405,15 @@ export class AccommodationsService {
       actorId: string;
       forcePrimaryIfFirst: boolean;
       year?: number;
+      maleCapacity?: number;
+      femaleCapacity?: number;
     },
   ) {
     const year = input.year ?? currentJalaliYear();
+    const yearCaps = {
+      maleCapacity: input.maleCapacity ?? 0,
+      femaleCapacity: input.femaleCapacity ?? 0,
+    };
     const uniqueIds = [...new Set(input.managerUserIds)];
     if (input.primaryUserId && !uniqueIds.includes(input.primaryUserId)) {
       uniqueIds.push(input.primaryUserId);
@@ -1352,12 +1456,13 @@ export class AccommodationsService {
             year,
           },
         },
-        update: {},
+        update: { ...yearCaps },
         create: {
           accommodationId: input.accommodationId,
           userId,
           year,
           isPrimary: false,
+          ...yearCaps,
         },
       });
     }
@@ -1369,6 +1474,7 @@ export class AccommodationsService {
           userId: null,
           year,
           isPrimary: false,
+          ...yearCaps,
         },
       });
       return;
@@ -1387,6 +1493,19 @@ export class AccommodationsService {
     if (primaryId) {
       await this.setUserPrimary(tx, primaryId, input.accommodationId, year);
     }
+  }
+
+  private async syncYearCapacities(
+    tx: Prisma.TransactionClient,
+    accommodationId: string,
+    year: number,
+    maleCapacity: number,
+    femaleCapacity: number,
+  ) {
+    await tx.accommodationManager.updateMany({
+      where: { accommodationId, year },
+      data: { maleCapacity, femaleCapacity },
+    });
   }
 
   private async setUserPrimary(

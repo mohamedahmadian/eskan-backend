@@ -43,6 +43,10 @@ export function isUnitManager(user: RoleBearer | null | undefined) {
   return hasRole(user, 'UNIT_MANAGER');
 }
 
+export function isGovernmentOrgOfficer(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'GOVERNMENT_ORG_OFFICER');
+}
+
 export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
 }

@@ -34,6 +34,7 @@ import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/
 import { CheckIdentityDto } from './dto/check-identity.dto';
 import { SetPilgrimPasswordDto } from './dto/set-pilgrim-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { UsersService } from './users.service';
 
 type ExcelUpload = {
@@ -76,6 +77,11 @@ abstract class RoleScopedUsersController {
 
   async update(id: string, dto: UpdateUserDto) {
     return this.users.updateKeepingRole(id, dto, this.roleCode);
+  }
+
+  async updateLocation(id: string, dto: UpdateUserLocationDto) {
+    await this.users.assertHasRole(id, this.roleCode, this.notFoundMessage);
+    return this.users.updateLocation(id, dto);
   }
 
   async remove(id: string, actor: RequestUser) {
@@ -260,6 +266,11 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return this.users.setPilgrimPassword(id, dto, actor.id);
   }
 
+  @Patch(':id/location')
+  updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
+    return super.updateLocation(id, dto);
+  }
+
   @Patch(':id')
   override update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return super.update(id, dto);
@@ -302,6 +313,11 @@ export class CaravanManagersController extends RoleScopedUsersController {
     return super.create(dto);
   }
 
+  @Patch(':id/location')
+  updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
+    return super.updateLocation(id, dto);
+  }
+
   @Patch(':id')
   override update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return super.update(id, dto);
@@ -342,6 +358,11 @@ export class AccommodationManagersController extends RoleScopedUsersController {
   @Post()
   override create(@Body() dto: CreateUserDto) {
     return super.create(dto);
+  }
+
+  @Patch(':id/location')
+  updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
+    return super.updateLocation(id, dto);
   }
 
   @Patch(':id')
@@ -397,6 +418,11 @@ export class HeadquartersRepresentativesController extends RoleScopedUsersContro
   @Post()
   override create(@Body() dto: CreateUserDto) {
     return super.create(dto);
+  }
+
+  @Patch(':id/location')
+  updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
+    return super.updateLocation(id, dto);
   }
 
   @Patch(':id')

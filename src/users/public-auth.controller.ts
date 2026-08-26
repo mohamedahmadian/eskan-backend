@@ -10,7 +10,7 @@ export class PublicAuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.users.forgotPasswordByIdentifier(dto.identifier);
+    return this.users.forgotPasswordByIdentifier(dto.identifier, dto.channel);
   }
 
   @Post('register')

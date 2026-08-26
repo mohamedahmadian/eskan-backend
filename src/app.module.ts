@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CaravansModule } from './caravans/caravans.module';
 import { GroupsModule } from './groups/groups.module';
+import { EntryBordersModule } from './entry-borders/entry-borders.module';
 import { GeoModule } from './geo/geo.module';
 import { ImagesModule } from './images/images.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -30,6 +31,9 @@ import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ReceptionModule } from './reception/reception.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
+import { ProvincialMonitoringModule } from './provincial-monitoring/provincial-monitoring.module';
+import { NationalMonitoringModule } from './national-monitoring/national-monitoring.module';
+import { SupportRequestsModule } from './support-requests/support-requests.module';
 
 @Module({
   imports: [
@@ -38,6 +42,7 @@ import { EvaluationsModule } from './evaluations/evaluations.module';
     AuthModule,
     ImagesModule,
     GeoModule,
+    EntryBordersModule,
     CaravansModule,
     GroupsModule,
     SmsModule,
@@ -63,6 +68,9 @@ import { EvaluationsModule } from './evaluations/evaluations.module';
     ReservationsModule,
     ReceptionModule,
     EvaluationsModule,
+    ProvincialMonitoringModule,
+    NationalMonitoringModule,
+    SupportRequestsModule,
   ],
   controllers: [AppController],
 })

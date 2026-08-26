@@ -3,6 +3,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CheckIdentityDto } from './dto/check-identity.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { UsersService } from './users.service';
 
 type RequestUser = { id: string };
@@ -28,6 +29,14 @@ export class AccountController {
       username: dto.username,
       excludeId: user.id,
     });
+  }
+
+  @Patch('location')
+  updateLocation(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: UpdateUserLocationDto,
+  ) {
+    return this.users.updateLocation(user.id, dto);
   }
 
   @Patch()

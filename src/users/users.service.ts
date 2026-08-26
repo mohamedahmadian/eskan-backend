@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { isAdmin } from '../auth/roles.util';
-import { normalizeNationalId, toLatinDigits } from '../common/national-id';
+import {
+  normalizeNationalId,
+  normalizePassportNumber,
+  toLatinDigits,
+} from '../common/national-id';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear, jalaliYearRange } from '../common/jalali-year';
 import { normalizeMobile, normalizePhone, phoneLookupValues } from '../common/phone';
@@ -44,6 +48,7 @@ import {
 } from './pilgrim-excel-import.util';
 import { resolvePilgrimResetPassword } from './pilgrim-password.util';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { cleanPlates, joinFullName } from './user-profile.util';
 
 function parseDateOnly(value?: string | null) {
@@ -89,6 +94,8 @@ const publicInclude = {
   country: { select: geoSelect },
   province: { select: { ...geoSelect, countryId: true } },
   city: { select: { ...geoSelect, provinceId: true } },
+  locationProvince: { select: { ...geoSelect, countryId: true } },
+  locationCity: { select: { ...geoSelect, provinceId: true } },
   issuingOrganization: {
     select: { id: true, name: true, phone: true },
   },
@@ -154,6 +161,12 @@ type PublicUserSource = {
   countryId: string | null;
   provinceId: string | null;
   cityId: string | null;
+  locationProvinceId: string | null;
+  locationCityId: string | null;
+  latitude: Prisma.Decimal | null;
+  longitude: Prisma.Decimal | null;
+  locationNotes: string | null;
+  locationUpdatedAt: Date | null;
   issuingOrganizationId: string | null;
   photoId: string | null;
   nationalCardPhotoId: string | null;
@@ -163,6 +176,8 @@ type PublicUserSource = {
   country: { id: string; nameFa: string; nameEn: string } | null;
   province: { id: string; nameFa: string; nameEn: string; countryId: string } | null;
   city: { id: string; nameFa: string; nameEn: string; provinceId: string } | null;
+  locationProvince: { id: string; nameFa: string; nameEn: string; countryId: string } | null;
+  locationCity: { id: string; nameFa: string; nameEn: string; provinceId: string } | null;
   issuingOrganization: { id: string; name: string; phone: string | null } | null;
   userRoles: { role: { id: string; code: string; nameKey: string } }[];
   managedAccommodations: {
@@ -946,6 +961,21 @@ export class UsersService {
           });
         }
 
+        const stillOfficer = dto.roleIds
+          ? (
+              await tx.role.findMany({
+                where: { id: { in: dto.roleIds } },
+                select: { code: true },
+              })
+            ).some((role) => role.code === 'GOVERNMENT_ORG_OFFICER')
+          : current.roles.some((role) => role.code === 'GOVERNMENT_ORG_OFFICER');
+        await this.syncGovernmentOrgContact(
+          tx,
+          id,
+          stillOfficer,
+          nextOrganizationId,
+        );
+
         return tx.user.update({
           where: { id },
           data: {
@@ -972,6 +1002,35 @@ export class UsersService {
       ...safe
     } = dto;
     return this.update(id, safe);
+  }
+
+  async updateLocation(id: string, dto: UpdateUserLocationDto) {
+    await this.findOne(id);
+    if (
+      (dto.latitude == null && dto.longitude != null) ||
+      (dto.latitude != null && dto.longitude == null)
+    ) {
+      throw new BadRequestException('عرض و طول جغرافیایی باید با هم ثبت شوند');
+    }
+    const geo = await this.resolveLocationGeo({
+      provinceId: dto.provinceId ?? null,
+      cityId: dto.cityId ?? null,
+    });
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: {
+        locationProvinceId: geo.provinceId,
+        locationCityId: geo.cityId,
+        latitude:
+          dto.latitude == null ? null : new Prisma.Decimal(dto.latitude),
+        longitude:
+          dto.longitude == null ? null : new Prisma.Decimal(dto.longitude),
+        locationNotes: dto.notes?.trim() ? dto.notes.trim() : null,
+        locationUpdatedAt: new Date(),
+      },
+      include: publicInclude,
+    });
+    return this.toPublicUser(user);
   }
 
   async remove(id: string, actorId: string) {
@@ -1049,6 +1108,12 @@ export class UsersService {
         await tx.orgUnit.updateMany({
           where: { managerUserId: userId },
           data: { managerUserId: null },
+        });
+      }
+      if (roleCode === 'GOVERNMENT_ORG_OFFICER') {
+        await tx.governmentOrganization.updateMany({
+          where: { contactUserId: userId },
+          data: { contactUserId: null },
         });
       }
       await tx.userRole.deleteMany({
@@ -1165,6 +1230,9 @@ export class UsersService {
         walkingStartDate: toDateOnly(row.walkingStartDate),
         requestsAccommodation: row.requestsAccommodation,
         requestsBus: row.requestsBus,
+        requestsSimCard: row.requestsSimCard,
+        requestsBankCard: row.requestsBankCard,
+        specialServices: row.specialServices,
         requestedMaleCount: row.requestedMaleCount,
         requestedFemaleCount: row.requestedFemaleCount,
         maleCount: row.maleCount,
@@ -1258,11 +1326,17 @@ export class UsersService {
     return this.resetUserPasswordAndSms(userId, userId);
   }
 
-  /** بازیابی عمومی از صفحه ورود: کد ملی یا تلفن همراه، بدون افشای رمز در پاسخ. */
-  async forgotPasswordByIdentifier(identifier: string) {
-    const user = await this.findActiveByPhoneOrNationalId(identifier);
+  /** بازیابی عمومی: کاربر کانال پیامک یا ایمیل را انتخاب می‌کند. */
+  async forgotPasswordByIdentifier(
+    identifier: string,
+    channel: 'sms' | 'email',
+  ) {
+    const user = await this.findActiveByIdentifier(identifier);
     if (!user) {
       return { status: 'not_found' as const };
+    }
+    if (channel === 'email') {
+      return { status: 'no_email' as const };
     }
     if (!user.phone?.trim()) {
       return { status: 'no_phone' as const };
@@ -1271,75 +1345,119 @@ export class UsersService {
     return { status: 'sent' as const };
   }
 
-  /** ثبت‌نام عمومی زائر با رمز الگوی تکراری و ارسال پیامک. */
+  /** ثبت‌نام عمومی زائر؛ رمز را خودش می‌گذارد و پیامک نمی‌شود. */
   async selfRegisterPilgrim(dto: {
+    username: string;
+    password: string;
     firstName: string;
     lastName: string;
-    nationalId: string;
-    phone: string;
+    locale?: string;
+    countryId?: string;
     gender?: UserGender | null;
+    phone?: string;
+    passportNumber?: string;
+    email?: string;
   }) {
-    const nationalId = dto.nationalId.trim();
-    const phone = normalizeMobile(dto.phone);
-    if (!/^09\d{9}$/.test(phone)) {
-      throw new BadRequestException('شماره همراه معتبر نیست');
+    const username = toLatinDigits(dto.username.trim());
+    if (username.length < 3) {
+      throw new BadRequestException('نام کاربری باید حداقل ۳ کاراکتر باشد');
+    }
+    if (toLatinDigits(dto.password).length < 8) {
+      throw new BadRequestException('رمز عبور باید حداقل ۸ کاراکتر باشد');
+    }
+
+    const iran = await this.prisma.country.findFirst({
+      where: { iso2: 'IR' },
+      select: { id: true },
+    });
+    const countryId = dto.countryId ?? iran?.id ?? null;
+    if (countryId) {
+      const country = await this.prisma.country.findUnique({
+        where: { id: countryId },
+        select: { id: true, iso2: true, isActive: true },
+      });
+      if (!country || !country.isActive) {
+        throw new BadRequestException('کشور انتخاب‌شده معتبر نیست');
+      }
+    }
+    const isIranian = Boolean(iran && countryId === iran.id);
+
+    let nationalId: string | null = null;
+    let phone: string | null = null;
+    let email: string | null = null;
+
+    if (isIranian) {
+      phone = normalizeMobile(dto.phone ?? '');
+      if (!/^09\d{9}$/.test(phone)) {
+        throw new BadRequestException('شماره همراه معتبر نیست');
+      }
+    } else {
+      const passport = normalizePassportNumber(dto.passportNumber ?? '');
+      if (passport.length < 5) {
+        throw new BadRequestException('شماره گذرنامه معتبر نیست');
+      }
+      nationalId = passport;
+      email = dto.email?.trim().toLowerCase() || null;
+      if (!email || !email.includes('@')) {
+        throw new BadRequestException('ایمیل معتبر نیست');
+      }
     }
 
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     await this.assertUniqueIdentity({
-      username: nationalId,
+      username,
       nationalId,
       phone,
+      email,
     });
 
     const role = await this.ensureExistingRole('PILGRIM');
-    await this.sms.assertConfigured();
-    const password = resolvePilgrimResetPassword();
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(toLatinDigits(dto.password), 10);
 
-    const created = await this.prisma.user.create({
+    await this.prisma.user.create({
       data: {
-        username: nationalId,
+        username,
         passwordHash,
         firstName,
         lastName,
         fullName: joinFullName(firstName, lastName),
+        locale: dto.locale ?? 'fa',
         nationalId,
         phone,
-        gender: dto.gender ?? null,
+        email,
+        gender: dto.gender ?? UserGender.MALE,
+        countryId,
         status: UserStatus.ACTIVE,
         userRoles: { create: [{ roleId: role.id }] },
       },
-      select: { id: true, fullName: true, phone: true },
-    });
-
-    await this.sms.send({
-      phone: created.phone!,
-      body: [
-        `زائر گرامی ${created.fullName}`,
-        'رمز عبور سامانه اسکان:',
-        password,
-        'ورود با کد ملی یا شماره همراه',
-      ].join('\n'),
-      sentById: created.id,
+      select: { id: true },
     });
 
     return { status: 'registered' as const };
   }
 
-  private async findActiveByPhoneOrNationalId(identifier: string) {
-    const nationalId = normalizeNationalId(identifier);
-    const phones = phoneLookupValues(identifier);
-    const or: Prisma.UserWhereInput[] = [];
+  private async findActiveByIdentifier(identifier: string) {
+    const raw = toLatinDigits(identifier.trim());
+    if (!raw) {
+      return null;
+    }
+    const nationalId = normalizeNationalId(raw);
+    const passport = normalizePassportNumber(raw);
+    const phones = phoneLookupValues(raw);
+    const email = raw.includes('@') ? raw.toLowerCase() : '';
+    const or: Prisma.UserWhereInput[] = [{ username: raw }];
     if (nationalId) {
       or.push({ nationalId });
+    }
+    if (passport && passport !== nationalId) {
+      or.push({ nationalId: passport });
     }
     for (const phone of phones) {
       or.push({ phone });
     }
-    if (!or.length) {
-      return null;
+    if (email) {
+      or.push({ email });
     }
     return this.prisma.user.findFirst({
       where: {
@@ -1767,10 +1885,18 @@ export class UsersService {
       countryId: user.countryId,
       provinceId: user.provinceId,
       cityId: user.cityId,
+      locationProvinceId: user.locationProvinceId,
+      locationCityId: user.locationCityId,
+      latitude: user.latitude == null ? null : Number(user.latitude),
+      longitude: user.longitude == null ? null : Number(user.longitude),
+      locationNotes: user.locationNotes,
+      locationUpdatedAt: user.locationUpdatedAt,
       issuingOrganizationId: user.issuingOrganizationId,
       country: user.country,
       province: user.province,
       city: user.city,
+      locationProvince: user.locationProvince,
+      locationCity: user.locationCity,
       issuingOrganization: user.issuingOrganization,
       photoId: user.photoId,
       nationalCardPhotoId: user.nationalCardPhotoId,
@@ -1855,6 +1981,34 @@ export class UsersService {
     };
   }
 
+  private async resolveLocationGeo(dto: {
+    provinceId?: string | null;
+    cityId?: string | null;
+  }) {
+    if (dto.cityId) {
+      const city = await this.prisma.city.findUnique({
+        where: { id: dto.cityId },
+      });
+      if (!city) {
+        throw new BadRequestException('شهر انتخاب‌شده معتبر نیست');
+      }
+      if (dto.provinceId && dto.provinceId !== city.provinceId) {
+        throw new BadRequestException('شهر با استان انتخاب‌شده هم‌خوان نیست');
+      }
+      return { cityId: city.id, provinceId: city.provinceId };
+    }
+    if (dto.provinceId) {
+      const province = await this.prisma.province.findUnique({
+        where: { id: dto.provinceId },
+      });
+      if (!province) {
+        throw new BadRequestException('استان انتخاب‌شده معتبر نیست');
+      }
+      return { cityId: null, provinceId: province.id };
+    }
+    return { cityId: null, provinceId: null };
+  }
+
   private async resolveIranCountryId() {
     const iran = await this.prisma.country.findUnique({
       where: { iso2: 'IR' },
@@ -1894,6 +2048,28 @@ export class UsersService {
     return uniqueIds;
   }
 
+  private async syncGovernmentOrgContact(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    stillOfficer: boolean,
+    nextOrganizationId: string | null,
+  ) {
+    if (!stillOfficer) {
+      await tx.governmentOrganization.updateMany({
+        where: { contactUserId: userId },
+        data: { contactUserId: null },
+      });
+      return;
+    }
+    await tx.governmentOrganization.updateMany({
+      where: {
+        contactUserId: userId,
+        ...(nextOrganizationId ? { id: { not: nextOrganizationId } } : {}),
+      },
+      data: { contactUserId: null },
+    });
+  }
+
   private async assertLicenseIssuerOrganization(
     roleIds: string[],
     organizationId?: string | null,
@@ -1902,9 +2078,13 @@ export class UsersService {
       where: { id: { in: roleIds } },
       select: { code: true },
     });
-    const isIssuer = roles.some((role) => role.code === 'LICENSE_ISSUER');
-    if (isIssuer && !organizationId) {
-      throw new BadRequestException('سازمان صادرکننده مجوز را انتخاب کنید');
+    const needsOrganization = roles.some(
+      (role) =>
+        role.code === 'LICENSE_ISSUER' ||
+        role.code === 'GOVERNMENT_ORG_OFFICER',
+    );
+    if (needsOrganization && !organizationId) {
+      throw new BadRequestException('سازمان مربوطه را انتخاب کنید');
     }
     if (!organizationId) {
       return;

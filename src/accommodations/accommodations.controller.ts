@@ -221,7 +221,16 @@ export class AccommodationsController {
     @Body() dto: AssignAccommodationManagerDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.accommodations.assignManager(id, dto.userId ?? null, dto.year, actor);
+    return this.accommodations.assignManager(
+      id,
+      dto.userId ?? null,
+      dto.year,
+      actor,
+      {
+        maleCapacity: dto.maleCapacity,
+        femaleCapacity: dto.femaleCapacity,
+      },
+    );
   }
 
   @Delete(':id/managers/:assignmentId')

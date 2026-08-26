@@ -22,6 +22,11 @@ export class FindWalkingRoutesQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
+  entryBorderId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsUUID()
   provinceId?: string;
 
   @IsOptional()

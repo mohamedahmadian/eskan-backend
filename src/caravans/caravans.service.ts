@@ -15,7 +15,7 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
-import { Prisma, UserStatus } from '../generated/prisma/client';
+import { CaravanContactRole, Prisma, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName } from '../users/user-profile.util';
 import { UsersService } from '../users/users.service';
@@ -36,6 +36,21 @@ import { TransferCaravansYearDto } from './dto/transfer-caravans-year.dto';
 import { UpdateCaravanDto } from './dto/update-caravan.dto';
 
 type Actor = RoleBearer & { id: string };
+
+const caravanGenderKinds = ['FEMALE', 'MALE', 'MIXED', 'UNSPECIFIED'] as const;
+type CaravanGenderKind = (typeof caravanGenderKinds)[number];
+
+const caravanOrigins = ['IRANIAN', 'INTERNATIONAL'] as const;
+type CaravanOrigin = (typeof caravanOrigins)[number];
+
+const caravanContactRoleCount = Object.keys(CaravanContactRole).length;
+
+function caravanGenderKind(male: number, female: number): CaravanGenderKind {
+  if (male > 0 && female > 0) return 'MIXED';
+  if (male > 0) return 'MALE';
+  if (female > 0) return 'FEMALE';
+  return 'UNSPECIFIED';
+}
 
 const caravanInclude = {
   city: {
@@ -105,6 +120,8 @@ const caravanInclude = {
       id: true,
       year: true,
       managerUserId: true,
+      maleCount: true,
+      femaleCount: true,
       manager: {
         select: {
           id: true,
@@ -285,6 +302,9 @@ export class CaravansService {
         walkingStartDate: toDateOnly(row.walkingStartDate),
         requestsAccommodation: row.requestsAccommodation,
         requestsBus: row.requestsBus,
+        requestsSimCard: row.requestsSimCard,
+        requestsBankCard: row.requestsBankCard,
+        specialServices: row.specialServices,
         requestedMaleCount: row.requestedMaleCount,
         requestedFemaleCount: row.requestedFemaleCount,
         maleCount: row.maleCount,
@@ -369,6 +389,23 @@ export class CaravansService {
     });
   }
 
+  private async syncCurrentYearCounts(
+    caravanId: string,
+    maleCount: number,
+    femaleCount: number,
+  ) {
+    const year = currentJalaliYear();
+    const existing = await this.prisma.caravanYear.findUnique({
+      where: { caravanId_year: { caravanId, year } },
+      select: { id: true },
+    });
+    if (!existing) return;
+    await this.prisma.caravanYear.update({
+      where: { id: existing.id },
+      data: { maleCount, femaleCount },
+    });
+  }
+
   private async validYearManagerId(userId: string | null | undefined) {
     if (!userId) return null;
     const user = await this.prisma.user.findUnique({
@@ -396,11 +433,17 @@ export class CaravansService {
     }
 
     if (!copyManagers) {
+      const caravan = await this.prisma.caravan.findUnique({
+        where: { id: caravanId },
+        select: { maleCount: true, femaleCount: true },
+      });
       await this.prisma.caravanYear.create({
         data: {
           caravanId,
           year: targetYear,
           managerUserId: null,
+          maleCount: caravan?.maleCount ?? 0,
+          femaleCount: caravan?.femaleCount ?? 0,
         },
       });
       return 'ok';
@@ -408,11 +451,11 @@ export class CaravansService {
 
     const source = await this.prisma.caravanYear.findUnique({
       where: { caravanId_year: { caravanId, year: sourceYear } },
-      select: { managerUserId: true },
+      select: { managerUserId: true, maleCount: true, femaleCount: true },
     });
     const caravan = await this.prisma.caravan.findUnique({
       where: { id: caravanId },
-      select: { managerUserId: true },
+      select: { managerUserId: true, maleCount: true, femaleCount: true },
     });
     const managerUserId = await this.validYearManagerId(
       source?.managerUserId ?? caravan?.managerUserId,
@@ -423,6 +466,8 @@ export class CaravansService {
         caravanId,
         year: targetYear,
         managerUserId,
+        maleCount: source?.maleCount ?? caravan?.maleCount ?? 0,
+        femaleCount: source?.femaleCount ?? caravan?.femaleCount ?? 0,
       },
     });
 
@@ -470,6 +515,8 @@ export class CaravansService {
           create: {
             year: dto.year ?? currentJalaliYear(),
             managerUserId: resolved.managerUserId,
+            maleCount: dto.maleCount ?? 0,
+            femaleCount: dto.femaleCount ?? 0,
           },
         },
       },
@@ -563,6 +610,9 @@ export class CaravansService {
     if (resolved) {
       await this.syncCurrentYearManager(id, resolved.managerUserId);
     }
+    if (countsChanged) {
+      await this.syncCurrentYearCounts(id, maleCount, femaleCount);
+    }
 
     if (dto.contacts !== undefined) {
       await this.syncContacts(id, dto.contacts);
@@ -596,6 +646,146 @@ export class CaravansService {
       }),
     ]);
     return { year: selectedYear, total, active, inactive };
+  }
+
+  async report(actor: Actor, year?: number) {
+    this.assertAdmin(actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const items = await this.prisma.caravan.findMany({
+      select: {
+        maleCount: true,
+        femaleCount: true,
+        walkingRouteId: true,
+        walkingRoute: { select: { id: true, name: true } },
+        city: {
+          select: {
+            province: {
+              select: {
+                id: true,
+                nameFa: true,
+                country: { select: { iso2: true, nameFa: true } },
+              },
+            },
+          },
+        },
+        years: {
+          where: { year: selectedYear },
+          select: { managerUserId: true, maleCount: true, femaleCount: true },
+        },
+        _count: { select: { contacts: true } },
+      },
+    });
+
+    const total = items.length;
+    let withManager = 0;
+    let withoutManager = 0;
+    let activeInYear = 0;
+    let inactiveInYear = 0;
+    let capacityMale = 0;
+    let capacityFemale = 0;
+    let iranian = 0;
+    let international = 0;
+    let contactsComplete = 0;
+    let contactsPartial = 0;
+    let contactsNone = 0;
+
+    const genderCount = new Map<CaravanGenderKind, number>(
+      caravanGenderKinds.map((kind) => [kind, 0]),
+    );
+    const comboCount = new Map<string, number>();
+    const routeCount = new Map<string, { id: string | null; name: string; count: number }>();
+    const provinceCount = new Map<string, { id: string; name: string; count: number }>();
+
+    for (const item of items) {
+      const yearRow = item.years[0];
+      if (yearRow) {
+        activeInYear += 1;
+        capacityMale += yearRow.maleCount;
+        capacityFemale += yearRow.femaleCount;
+        if (yearRow.managerUserId) withManager += 1;
+        else withoutManager += 1;
+      } else {
+        inactiveInYear += 1;
+        withoutManager += 1;
+      }
+
+      const male = yearRow ? yearRow.maleCount : item.maleCount;
+      const female = yearRow ? yearRow.femaleCount : item.femaleCount;
+      const genderType = caravanGenderKind(male, female);
+      genderCount.set(genderType, (genderCount.get(genderType) ?? 0) + 1);
+
+      const origin: CaravanOrigin =
+        item.city.province.country.iso2 === 'IR' ? 'IRANIAN' : 'INTERNATIONAL';
+      if (origin === 'IRANIAN') iranian += 1;
+      else international += 1;
+
+      const comboKey = `${genderType}:${origin}`;
+      comboCount.set(comboKey, (comboCount.get(comboKey) ?? 0) + 1);
+
+      const routeId = item.walkingRouteId ?? '';
+      const routeName = item.walkingRoute?.name ?? '';
+      const routeRow = routeCount.get(routeId) ?? {
+        id: item.walkingRouteId,
+        name: routeName,
+        count: 0,
+      };
+      routeRow.count += 1;
+      routeCount.set(routeId, routeRow);
+
+      const province = item.city.province;
+      const provinceRow = provinceCount.get(province.id) ?? {
+        id: province.id,
+        name: province.nameFa,
+        count: 0,
+      };
+      provinceRow.count += 1;
+      provinceCount.set(province.id, provinceRow);
+
+      const contactCount = item._count.contacts;
+      if (contactCount <= 0) contactsNone += 1;
+      else if (contactCount >= caravanContactRoleCount) contactsComplete += 1;
+      else contactsPartial += 1;
+    }
+
+    const byWalkingRoute = [...routeCount.values()].sort((a, b) => {
+      if (!a.id && b.id) return 1;
+      if (a.id && !b.id) return -1;
+      return b.count - a.count || a.name.localeCompare(b.name, 'fa');
+    });
+    const byProvince = [...provinceCount.values()].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'fa'),
+    );
+
+    return {
+      year: selectedYear,
+      total,
+      capacity: {
+        male: capacityMale,
+        female: capacityFemale,
+        total: capacityMale + capacityFemale,
+      },
+      byManagerStatus: { withManager, withoutManager },
+      byYearActivity: { active: activeInYear, inactive: inactiveInYear },
+      byOrigin: { iranian, international },
+      byContactStatus: {
+        complete: contactsComplete,
+        partial: contactsPartial,
+        none: contactsNone,
+      },
+      byGenderType: caravanGenderKinds.map((genderType) => ({
+        genderType,
+        count: genderCount.get(genderType) ?? 0,
+      })),
+      byWalkingRoute,
+      byProvince,
+      byCombination: caravanGenderKinds.flatMap((genderType) =>
+        caravanOrigins.map((origin) => ({
+          genderType,
+          origin,
+          count: comboCount.get(`${genderType}:${origin}`) ?? 0,
+        })),
+      ),
+    };
   }
 
   async findActiveInYear(query: FindYearManagementQueryDto, actor: Actor) {
@@ -671,7 +861,7 @@ export class CaravansService {
       where: this.andWhere(scope, {
         years: { none: { year: selectedYear } },
       }),
-      select: { id: true },
+      select: { id: true, maleCount: true, femaleCount: true },
     });
     if (!inactive.length) {
       return { year: selectedYear, activated: 0 };
@@ -682,6 +872,8 @@ export class CaravansService {
         caravanId: item.id,
         year: selectedYear,
         managerUserId: null,
+        maleCount: item.maleCount,
+        femaleCount: item.femaleCount,
       })),
     });
 
@@ -838,6 +1030,8 @@ export class CaravansService {
           caravanId: id,
           year: selectedYear,
           managerUserId,
+          maleCount: previous?.maleCount ?? caravan.maleCount,
+          femaleCount: previous?.femaleCount ?? caravan.femaleCount,
         },
       });
       if (selectedYear === currentJalaliYear()) {
@@ -854,6 +1048,8 @@ export class CaravansService {
         caravanId: id,
         year: selectedYear,
         managerUserId: null,
+        maleCount: caravan.maleCount,
+        femaleCount: caravan.femaleCount,
       },
     });
     return this.findOne(id);
@@ -864,12 +1060,15 @@ export class CaravansService {
     year: number,
     managerUserId: string | null,
     actor: Actor,
+    counts?: { maleCount?: number; femaleCount?: number },
   ) {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
-    await this.findOne(id);
+    const caravan = await this.findOne(id);
     const resolved = await this.resolveManager(managerUserId);
+    const maleCount = counts?.maleCount ?? caravan.maleCount;
+    const femaleCount = counts?.femaleCount ?? caravan.femaleCount;
     const existing = await this.prisma.caravanYear.findUnique({
       where: { caravanId_year: { caravanId: id, year } },
       select: { id: true },
@@ -878,7 +1077,11 @@ export class CaravansService {
     if (existing) {
       await this.prisma.caravanYear.update({
         where: { id: existing.id },
-        data: { managerUserId: resolved.managerUserId },
+        data: {
+          managerUserId: resolved.managerUserId,
+          maleCount,
+          femaleCount,
+        },
       });
     } else {
       await this.prisma.caravanYear.create({
@@ -886,6 +1089,8 @@ export class CaravansService {
           caravanId: id,
           year,
           managerUserId: resolved.managerUserId,
+          maleCount,
+          femaleCount,
         },
       });
     }
@@ -893,7 +1098,12 @@ export class CaravansService {
     if (year === currentJalaliYear()) {
       await this.prisma.caravan.update({
         where: { id },
-        data: { managerUserId: resolved.managerUserId },
+        data: {
+          managerUserId: resolved.managerUserId,
+          maleCount,
+          femaleCount,
+          totalCount: maleCount + femaleCount,
+        },
       });
     }
 
@@ -975,7 +1185,7 @@ export class CaravansService {
     const currentYear = currentJalaliYear();
 
     const existingCaravans = await this.prisma.caravan.findMany({
-      select: { id: true, name: true, managerUserId: true },
+      select: { id: true, name: true, managerUserId: true, maleCount: true, femaleCount: true },
     });
     const caravanByName = new Map(
       existingCaravans.map((item) => [normalizeCaravanNameKey(item.name), item]),
@@ -1023,7 +1233,7 @@ export class CaravansService {
             managerUserId: manager.id,
             isActive: true,
           },
-          select: { id: true, name: true, managerUserId: true },
+          select: { id: true, name: true, managerUserId: true, maleCount: true, femaleCount: true },
         });
         caravan = created;
         caravanByName.set(nameKey, created);
@@ -1034,8 +1244,13 @@ export class CaravansService {
 
       if (!row.years.length) continue;
 
-      const toCreate: { caravanId: string; year: number; managerUserId: string }[] =
-        [];
+      const toCreate: {
+        caravanId: string
+        year: number
+        managerUserId: string
+        maleCount: number
+        femaleCount: number
+      }[] = [];
       for (const year of row.years) {
         const key = `${caravan.id}:${year}`;
         if (yearKeys.has(key)) {
@@ -1046,6 +1261,8 @@ export class CaravansService {
           caravanId: caravan.id,
           year,
           managerUserId: manager.id,
+          maleCount: caravan.maleCount ?? 0,
+          femaleCount: caravan.femaleCount ?? 0,
         });
         yearKeys.add(key);
       }
