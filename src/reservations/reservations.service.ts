@@ -3128,7 +3128,7 @@ export class ReservationsService {
         status: true,
         stayStartDate: true,
         stayEndDate: true,
-        originCity: { select: { nameFa: true } },
+        originCity: { select: { nameFa: true, nameEn: true } },
         members: {
           select: {
             userId: true,

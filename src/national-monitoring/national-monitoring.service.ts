@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
+import { localizedGeoName } from '../common/request-locale';
 import {
   AccommodationStatus,
   ReservationStatus,
@@ -11,6 +12,7 @@ import type { NationalMonitoringExportSection } from './dto/find-national-monito
 type PlaceRow = {
   id: string;
   nameFa: string;
+  nameEn: string;
   pilgrims: number;
   pilgrimMale: number;
   pilgrimFemale: number;
@@ -38,10 +40,11 @@ const inactiveReservation = new Set<ReservationStatus>([
   ReservationStatus.REJECTED,
 ]);
 
-function emptyPlace(id: string, nameFa: string): PlaceRow {
+function emptyPlace(id: string, nameFa: string, nameEn: string): PlaceRow {
   return {
     id,
     nameFa,
+    nameEn,
     pilgrims: 0,
     pilgrimMale: 0,
     pilgrimFemale: 0,
@@ -72,6 +75,7 @@ function serializePlace(row: PlaceRow) {
   return {
     id: row.id,
     nameFa: row.nameFa,
+    nameEn: row.nameEn,
     pilgrims: row.pilgrims,
     pilgrimMale: row.pilgrimMale,
     pilgrimFemale: row.pilgrimFemale,
@@ -110,6 +114,7 @@ function highlightPlace(row: PlaceRow | undefined) {
   return {
     id: row.id,
     nameFa: row.nameFa,
+    nameEn: row.nameEn,
     pilgrims: row.pilgrims,
   };
 }
@@ -176,6 +181,7 @@ export class NationalMonitoringService {
           ? {
               id: tightest.id,
               nameFa: tightest.nameFa,
+              nameEn: tightest.nameEn,
               pilgrims: tightest.pilgrims,
               lodgingCapacity: tightest.lodgingMale + tightest.lodgingFemale,
               lodgingGap:
@@ -188,6 +194,7 @@ export class NationalMonitoringService {
         ...serializePlace(row),
         provinceId: data.cityProvince.get(row.id) ?? '',
         provinceNameFa: data.cityProvinceName.get(row.id) ?? '',
+        provinceNameEn: data.cityProvinceNameEn.get(row.id) ?? '',
       })),
       byWalkingRoute: routes.map(serializeRoute),
     };
@@ -211,7 +218,7 @@ export class NationalMonitoringService {
           { header: 'مازاد/کسری ظرفیت', key: 'lodgingGap', width: 18 },
         ],
         rows: data.byProvince.map((row) => ({
-          nameFa: row.nameFa,
+          nameFa: localizedGeoName(row),
           pilgrims: row.pilgrims,
           pilgrimMale: row.pilgrimMale,
           pilgrimFemale: row.pilgrimFemale,
@@ -240,8 +247,11 @@ export class NationalMonitoringService {
           { header: 'مازاد/کسری ظرفیت', key: 'lodgingGap', width: 18 },
         ],
         rows: data.byCity.map((row) => ({
-          nameFa: row.nameFa,
-          provinceNameFa: row.provinceNameFa,
+          nameFa: localizedGeoName(row),
+          provinceNameFa: localizedGeoName({
+            nameFa: row.provinceNameFa,
+            nameEn: row.provinceNameEn,
+          }),
           pilgrims: row.pilgrims,
           pilgrimMale: row.pilgrimMale,
           pilgrimFemale: row.pilgrimFemale,
@@ -295,7 +305,7 @@ export class NationalMonitoringService {
     ] = await Promise.all([
       this.prisma.province.findMany({
         where: iran,
-        select: { id: true, nameFa: true },
+        select: { id: true, nameFa: true, nameEn: true },
         orderBy: { nameFa: 'asc' },
       }),
       this.prisma.city.findMany({
@@ -303,8 +313,9 @@ export class NationalMonitoringService {
         select: {
           id: true,
           nameFa: true,
+          nameEn: true,
           provinceId: true,
-          province: { select: { nameFa: true } },
+          province: { select: { nameFa: true, nameEn: true } },
         },
       }),
       this.prisma.walkingRoute.findMany({
@@ -369,16 +380,25 @@ export class NationalMonitoringService {
     ]);
 
     const provinces = new Map(
-      provincesRaw.map((item) => [item.id, emptyPlace(item.id, item.nameFa)]),
+      provincesRaw.map((item) => [
+        item.id,
+        emptyPlace(item.id, item.nameFa, item.nameEn),
+      ]),
     );
     const cities = new Map(
-      citiesRaw.map((item) => [item.id, emptyPlace(item.id, item.nameFa)]),
+      citiesRaw.map((item) => [
+        item.id,
+        emptyPlace(item.id, item.nameFa, item.nameEn),
+      ]),
     );
     const cityProvince = new Map(
       citiesRaw.map((item) => [item.id, item.provinceId]),
     );
     const cityProvinceName = new Map(
       citiesRaw.map((item) => [item.id, item.province.nameFa]),
+    );
+    const cityProvinceNameEn = new Map(
+      citiesRaw.map((item) => [item.id, item.province.nameEn]),
     );
     const routes = new Map(
       routesRaw.map((item) => [item.id, emptyRoute(item.id, item.name)]),
@@ -500,6 +520,7 @@ export class NationalMonitoringService {
       routes,
       cityProvince,
       cityProvinceName,
+      cityProvinceNameEn,
       totals,
     };
   }

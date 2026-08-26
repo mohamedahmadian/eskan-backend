@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
+import { localizedGeoName } from '../common/request-locale';
 import { ReservationStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -150,6 +151,7 @@ export class ProvincialMonitoringService {
         ...this.serializePlace(city, snapshot.cityCounts.get(city.id)!),
         provinceId: city.provinceId,
         provinceNameFa: snapshot.provinceById.get(city.provinceId)?.nameFa ?? '',
+        provinceNameEn: snapshot.provinceById.get(city.provinceId)?.nameEn ?? '',
         isProvinceCapital: city.isProvinceCapital,
       }))
       .sort(
@@ -179,6 +181,7 @@ export class ProvincialMonitoringService {
             code: item.code,
             provinceId: item.provinceId,
             provinceNameFa: snapshot.provinceById.get(item.provinceId)?.nameFa ?? '',
+            provinceNameEn: snapshot.provinceById.get(item.provinceId)?.nameEn ?? '',
           }))
           .sort((a, b) => compareFaName(a.nameFa, b.nameFa)),
       },
@@ -302,7 +305,7 @@ export class ProvincialMonitoringService {
         { header: 'زائر ساکن', key: 'residentPilgrims', width: 14 },
       ],
       rows: data.provinces.map((item) => ({
-        nameFa: item.nameFa,
+        nameFa: localizedGeoName(item),
         code: item.code,
         caravanCount: item.caravanCount,
         activeCaravanCount: item.activeCaravanCount,
@@ -321,7 +324,7 @@ export class ProvincialMonitoringService {
   async exportProvince(id: string, year?: number) {
     const data = await this.province(id, year);
     const buffer = await buildStyledExcelExport({
-      sheetName: data.province.nameFa,
+      sheetName: localizedGeoName(data.province),
       columns: [
         { header: 'شهر', key: 'nameFa', width: 24 },
         { header: 'کاروان', key: 'caravanCount', width: 12 },
@@ -335,7 +338,7 @@ export class ProvincialMonitoringService {
         { header: 'زائر ساکن', key: 'residentPilgrims', width: 14 },
       ],
       rows: data.cities.map((item) => ({
-        nameFa: item.nameFa,
+        nameFa: localizedGeoName(item),
         caravanCount: item.caravanCount,
         activeCaravanCount: item.activeCaravanCount,
         groupCount: item.groupCount,

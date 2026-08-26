@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { getRequestLocale, isLtrLocale, type AppLocale } from './request-locale';
 
 /** Brand teal-500 — matches frontend `--color-teal-500`. */
 export const EXCEL_HEADER_FILL_ARGB = 'FF2EBDB6';
@@ -6,6 +7,14 @@ export const EXCEL_ROW_HEIGHT = 30;
 export const EXCEL_FONT_SIZE = 12;
 export const EXCEL_ROW_NO_KEY = 'rowNo';
 export const EXCEL_ROW_NO_HEADER = 'ردیف';
+
+const EXCEL_ROW_NO_HEADERS: Record<AppLocale, string> = {
+  fa: 'ردیف',
+  ar: 'ردیف',
+  ur: 'ردیف',
+  en: 'No.',
+  hi: 'क्रम',
+};
 
 export type ExcelExportColumn = {
   header: string;
@@ -50,17 +59,22 @@ export async function buildStyledExcelExport(options: {
   columns: ExcelExportColumn[];
   rows: Array<Record<string, ExcelJS.CellValue>>;
 }): Promise<Buffer> {
+  const locale = getRequestLocale();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'اسکان';
   const sheet = workbook.addWorksheet(options.sheetName, {
-    views: [{ rightToLeft: true }],
+    views: [{ rightToLeft: !isLtrLocale(locale) }],
   });
 
   const dataColumns = options.columns;
   const columnCount = dataColumns.length + 1;
 
   sheet.columns = [
-    { header: EXCEL_ROW_NO_HEADER, key: EXCEL_ROW_NO_KEY, width: 8 },
+    {
+      header: EXCEL_ROW_NO_HEADERS[locale],
+      key: EXCEL_ROW_NO_KEY,
+      width: 8,
+    },
     ...dataColumns,
   ];
 
