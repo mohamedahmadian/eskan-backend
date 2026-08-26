@@ -33,13 +33,7 @@ jobs:
             echo "🔧 Generating Prisma Client..."
             npx prisma generate
 
-            echo "🗄️ Running migrations..."
-            npx prisma migrate deploy
-
-            echo "🏗️ Building application..."
-            npm run build
-
-            echo "♻️ Restarting PM2..."
+            echo "♻️ Restarting application..."
             pm2 restart eskan-backend-2
 
             echo "✅ Deployment completed successfully!"
