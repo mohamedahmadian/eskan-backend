@@ -92,6 +92,7 @@ export const evaluationSortFields = [
   'startedAt',
   'completedAt',
   'status',
+  'performanceRank',
   'createdAt',
 ] as const;
 

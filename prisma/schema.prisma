@@ -1343,6 +1343,8 @@ model Evaluation {
   submittedById String
   submittedBy   User                     @relation("EvaluationSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
   submittedAt   DateTime?
+  /// میانگین نمرات پنج‌گزینه‌ای (۱ خیلی خوب … ۵ خیلی ضعیف)
+  performanceRank Float?
   answers       EvaluationAnswer[]
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
@@ -1352,6 +1354,7 @@ model Evaluation {
   @@index([evaluatorId, evaluatorType])
   @@index([targetId, targetType])
   @@index([status])
+  @@index([performanceRank])
   @@index([createdAt])
   @@map("evaluations")
 }

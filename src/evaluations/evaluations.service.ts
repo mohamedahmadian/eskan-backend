@@ -27,6 +27,7 @@ import {
 import {
   EVALUATION_EVALUATOR_TYPES,
   EVALUATION_PAIRS,
+  computePerformanceRank,
   isPairAllowed,
   normalizeEvaluationAnswer,
   resolveTargetKey,
@@ -95,6 +96,9 @@ export class EvaluationsService {
         startedAt: (dir) => ({ startedAt: dir }),
         completedAt: (dir) => ({ completedAt: dir }),
         status: (dir) => ({ status: dir }),
+        performanceRank: (dir) => ({
+          performanceRank: { sort: dir, nulls: 'last' },
+        }),
         createdAt: (dir) => ({ createdAt: dir }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -356,11 +360,17 @@ export class EvaluationsService {
         });
       }
 
+      const scaleAnswers = await tx.evaluationAnswer.findMany({
+        where: { evaluationId: id, score: { not: null } },
+        select: { score: true },
+      });
+
       await tx.evaluation.update({
         where: { id },
         data: {
           submittedById: actor.id,
           submittedAt: new Date(),
+          performanceRank: computePerformanceRank(scaleAnswers.map((item) => item.score)),
           ...(complete
             ? { status: 'COMPLETED', completedAt: new Date() }
             : { status: 'IN_PROGRESS', completedAt: null }),

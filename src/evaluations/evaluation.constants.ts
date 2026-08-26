@@ -116,6 +116,23 @@ export function normalizeEvaluationAnswer(
   }
 }
 
+export function computePerformanceRank(
+  scores: Array<number | null | undefined>,
+): number | null {
+  const values = scores.filter(
+    (score): score is number =>
+      score != null &&
+      Number.isFinite(score) &&
+      score >= SCORE_MIN &&
+      score <= SCORE_MAX,
+  );
+  if (!values.length) {
+    return null;
+  }
+  const average = values.reduce((sum, score) => sum + score, 0) / values.length;
+  return Math.round(average * 100) / 100;
+}
+
 export function isPairAllowed(
   evaluatorType: EvaluationEvaluatorType,
   targetType: EvaluationTargetType,
