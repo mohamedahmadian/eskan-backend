@@ -4,7 +4,8 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { APP_LOCALES } from '../users/dto/create-user.dto';
+import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 class UpdateSettingsDto {
   @IsOptional()
@@ -13,7 +14,7 @@ class UpdateSettingsDto {
   fullName?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn([...APP_LOCALES])
   locale?: string;
 }
 

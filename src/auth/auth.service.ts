@@ -78,14 +78,23 @@ export class AuthService {
       throw new UnauthorizedException('نام کاربری یا رمز عبور نادرست است');
     }
 
+    let profileUser: AuthUserRecord = user;
+    if (dto.locale && dto.locale !== user.locale) {
+      profileUser = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { locale: dto.locale },
+        include: userWithRoles,
+      });
+    }
+
     const token = await this.jwt.signAsync({
-      sub: user.id,
-      roles: user.userRoles.map((item) => item.role.code),
+      sub: profileUser.id,
+      roles: profileUser.userRoles.map((item) => item.role.code),
     });
 
     return {
       token,
-      user: await this.toProfile(user),
+      user: await this.toProfile(profileUser),
     };
   }
 
