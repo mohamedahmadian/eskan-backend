@@ -141,7 +141,7 @@ function issueFromRow(
     caravanName: row.caravanName,
     firstName: row.firstName,
     lastName: row.lastName,
-    nationalId: row.nationalId,
+    nationalId: row.nationalId ?? '',
     phone: row.phone,
     city: row.cityName ?? '',
     birthDate: row.birthDate ?? '',
@@ -988,7 +988,7 @@ export class CaravansService {
       existingYears.map((item) => `${item.caravanId}:${item.year}`),
     );
 
-    const passwordByNationalId = new Map<string, string>();
+    const passwordBySecret = new Map<string, string>();
     const conflictRows: CaravanImportIssueRow[] = [];
     let managersCreated = 0;
     let managersReused = 0;
@@ -1003,7 +1003,7 @@ export class CaravansService {
         managerRoleId: managerRole.id,
         cityGeo,
         iranCountryId,
-        passwordByNationalId,
+        passwordBySecret,
       });
       if ('error' in manager) {
         conflictRows.push(issueFromRow(row, [manager.error]));
@@ -1099,20 +1099,33 @@ export class CaravansService {
     );
     if (!missingName.length) return parsed;
 
-    const nationalIds = [...new Set(missingName.map((row) => row.nationalId))];
+    const phones = [...new Set(missingName.map((row) => row.phone))];
+    const nationalIds = [
+      ...new Set(missingName.map((row) => row.nationalId).filter((id): id is string => Boolean(id))),
+    ];
     const existing = await this.prisma.user.findMany({
-      where: { nationalId: { in: nationalIds } },
-      select: { nationalId: true },
+      where: {
+        OR: [
+          ...(nationalIds.length ? [{ nationalId: { in: nationalIds } }] : []),
+          ...(phones.length ? [{ phone: { in: phones } }] : []),
+        ],
+      },
+      select: { nationalId: true, phone: true },
     });
-    const known = new Set(existing.map((item) => item.nationalId).filter(Boolean));
+    const knownNationalIds = new Set(
+      existing.map((item) => item.nationalId).filter((id): id is string => Boolean(id)),
+    );
+    const knownPhones = new Set(
+      existing.map((item) => item.phone).filter((id): id is string => Boolean(id)),
+    );
 
     const rows: CaravanImportRow[] = [];
     const invalidRows = [...parsed.invalidRows];
     for (const row of parsed.rows) {
-      if (
-        (!row.firstName.trim() || !row.lastName.trim()) &&
-        !known.has(row.nationalId)
-      ) {
+      const known =
+        (row.nationalId ? knownNationalIds.has(row.nationalId) : false) ||
+        knownPhones.has(row.phone);
+      if ((!row.firstName.trim() || !row.lastName.trim()) && !known) {
         invalidRows.push(issueFromRow(row, ['missingManagerName']));
         continue;
       }
@@ -1248,20 +1261,46 @@ export class CaravansService {
       managerRoleId: string;
       cityGeo: Map<string, { provinceId: string; countryId: string }>;
       iranCountryId: string | null;
-      passwordByNationalId: Map<string, string>;
+      passwordBySecret: Map<string, string>;
     },
   ): Promise<{ id: string; created: boolean } | { error: string }> {
-    const existing = await this.prisma.user.findUnique({
-      where: { nationalId: row.nationalId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        birthDate: true,
-        cityId: true,
-      },
-    });
+    let existing = row.nationalId
+      ? await this.prisma.user.findUnique({
+          where: { nationalId: row.nationalId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            nationalId: true,
+            birthDate: true,
+            cityId: true,
+          },
+        })
+      : null;
+
+    if (!existing) {
+      existing = await this.prisma.user.findUnique({
+        where: { phone: row.phone },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          nationalId: true,
+          birthDate: true,
+          cityId: true,
+        },
+      });
+      if (
+        existing &&
+        row.nationalId &&
+        existing.nationalId &&
+        existing.nationalId !== row.nationalId
+      ) {
+        return { error: 'phoneTaken' };
+      }
+    }
 
     if (existing) {
       if (row.phone && existing.phone && existing.phone !== row.phone) {
@@ -1282,6 +1321,7 @@ export class CaravansService {
         patch.fullName = joinFullName(row.firstName, row.lastName);
       }
       if (row.phone && !existing.phone) patch.phone = row.phone;
+      if (row.nationalId && !existing.nationalId) patch.nationalId = row.nationalId;
       if (row.birthDate && !existing.birthDate) {
         patch.birthDate = parseDateOnly(row.birthDate);
       }
@@ -1297,7 +1337,7 @@ export class CaravansService {
         try {
           await this.prisma.user.update({ where: { id: existing.id }, data: patch });
         } catch {
-          // uniqueness on phone should not block granting the manager role
+          // uniqueness on phone/nationalId should not block granting the manager role
         }
       }
       return { id: existing.id, created: false };
@@ -1307,27 +1347,20 @@ export class CaravansService {
       return { error: 'missingManagerName' };
     }
 
-    const phoneOwner = await this.prisma.user.findUnique({
-      where: { phone: row.phone },
-      select: { id: true },
-    });
-    if (phoneOwner) {
-      return { error: 'phoneTaken' };
-    }
-
-    let passwordHash = ctx.passwordByNationalId.get(row.nationalId);
+    const secret = row.nationalId || row.phone;
+    let passwordHash = ctx.passwordBySecret.get(secret);
     if (!passwordHash) {
-      passwordHash = await bcrypt.hash(row.nationalId, 8);
-      ctx.passwordByNationalId.set(row.nationalId, passwordHash);
+      passwordHash = await bcrypt.hash(secret, 8);
+      ctx.passwordBySecret.set(secret, passwordHash);
     }
 
-    let username = row.nationalId;
+    let username = secret;
     const usernameTaken = await this.prisma.user.findUnique({
       where: { username },
       select: { id: true },
     });
     if (usernameTaken) {
-      username = `${row.nationalId}_${Date.now().toString(36)}`;
+      username = `${secret}_${Date.now().toString(36)}`;
     }
 
     const geo = row.cityId ? ctx.cityGeo.get(row.cityId) : undefined;

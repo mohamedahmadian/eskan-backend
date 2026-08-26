@@ -12,7 +12,7 @@ export type CaravanImportRow = {
   caravanName: string;
   firstName: string;
   lastName: string;
-  nationalId: string;
+  nationalId: string | null;
   phone: string;
   cityName: string | null;
   cityId?: string | null;
@@ -362,7 +362,6 @@ function toDedicatedRow(
 
   const hardErrors: string[] = [];
   if (!caravanName || caravanName.length < 2) hardErrors.push('missingCaravanName');
-  if (!nationalId) hardErrors.push('missingNationalId');
   if (!phone) hardErrors.push('missingPhone');
   if (hardErrors.length) {
     return { ok: false, display, reasons: hardErrors };
@@ -383,7 +382,7 @@ function toDedicatedRow(
       caravanName,
       firstName,
       lastName,
-      nationalId,
+      nationalId: nationalId || null,
       phone,
       cityName: cityText || null,
       birthDate,
@@ -396,7 +395,7 @@ function toDedicatedRow(
 type ReportIdentity = {
   firstName: string;
   lastName: string;
-  nationalId: string;
+  nationalId: string | null;
   phone: string;
   cityName: string | null;
   birthDate: string | null;
@@ -445,20 +444,19 @@ function parseReportSheet(
     if (!caravanName && !managerFull && !nationalId && !phone) return;
 
     const clearedBirthDate = hasCellInput(birthRaw) && !parsedBirthDate;
-    const identity: ReportIdentity | null =
-      nationalId && phone
-        ? {
-            firstName,
-            lastName,
-            nationalId,
-            phone,
-            cityName: cityText || null,
-            birthDate: parsedBirthDate,
-            birthDateText,
-            yearText,
-            clearedBirthDate,
-          }
-        : null;
+    const identity: ReportIdentity | null = phone
+      ? {
+          firstName,
+          lastName,
+          nationalId: nationalId || null,
+          phone,
+          cityName: cityText || null,
+          birthDate: parsedBirthDate,
+          birthDateText,
+          yearText,
+          clearedBirthDate,
+        }
+      : null;
 
     const personKey = normalizePersonName(`${firstName} ${lastName}`);
     if (identity && personKey && !byPersonName.has(personKey)) {
@@ -513,7 +511,6 @@ function parseReportSheet(
     });
 
     const reasons: string[] = [];
-    if (!identity?.nationalId) reasons.push('missingNationalId');
     if (!identity?.phone) reasons.push('missingPhone');
     if (!names.firstName || !names.lastName) reasons.push('missingManagerName');
     if (reasons.length) {
