@@ -33,6 +33,8 @@ jobs:
             echo "🔧 Generating Prisma Client..."
             npx prisma generate
 
+            npm run prisma:seed
+
             echo "♻️ Restarting application..."
             pm2 restart eskan-backend-2
 
