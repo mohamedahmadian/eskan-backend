@@ -24,17 +24,30 @@ jobs:
 
             cd /var/www/eskan-backend
 
+            # Commit فعلی قبل از pull
+            OLD_COMMIT=$(git rev-parse HEAD)
+
             echo "📥 Pulling latest code..."
-            git fetch origin main 
+            git fetch origin main
             git reset --hard origin/main
             git clean -fd
 
-            echo "📦 Installing dependencies..."
-            npm ci
+            # Commit جدید
+            NEW_COMMIT=$(git rev-parse HEAD)
+
+            echo "🔍 Checking dependency changes..."
+
+            if git diff --name-only "$OLD_COMMIT" "$NEW_COMMIT" | grep -qE '^(package.json|package-lock.json)$'; then
+              echo "📦 Dependencies changed. Running npm ci..."
+              npm ci
+            else
+              echo "✅ Dependencies unchanged. Skipping npm ci."
+            fi
 
             echo "🔧 Generating Prisma Client..."
             npx prisma generate
 
+            echo "🌱 Running seed..."
             npm run prisma:seed
 
             echo "♻️ Restarting application..."
