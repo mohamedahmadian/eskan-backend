@@ -28,6 +28,7 @@ import {
   FindPilgrimReportProvinceTimelineQueryDto,
   FindPilgrimReportQueryDto,
 } from './dto/find-pilgrim-report-query.dto';
+import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { AssignAccommodationDto } from './dto/assign-accommodation.dto';
 import { AssignHeadquartersCityDto, AssignHeadquartersProvinceDto } from './dto/assign-headquarters-area.dto';
@@ -82,6 +83,11 @@ abstract class RoleScopedUsersController {
   async updateLocation(id: string, dto: UpdateUserLocationDto) {
     await this.users.assertHasRole(id, this.roleCode, this.notFoundMessage);
     return this.users.updateLocation(id, dto);
+  }
+
+  async findLocationHistory(id: string, query: FindLocationHistoryQueryDto) {
+    await this.users.assertHasRole(id, this.roleCode, this.notFoundMessage);
+    return this.users.findLocationHistory(id, query);
   }
 
   async remove(id: string, actor: RequestUser) {
@@ -266,6 +272,14 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
     return this.users.setPilgrimPassword(id, dto, actor.id);
   }
 
+  @Get(':id/location-history')
+  locationHistory(
+    @Param('id') id: string,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return super.findLocationHistory(id, query);
+  }
+
   @Patch(':id/location')
   updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
     return super.updateLocation(id, dto);
@@ -313,6 +327,14 @@ export class CaravanManagersController extends RoleScopedUsersController {
     return super.create(dto);
   }
 
+  @Get(':id/location-history')
+  locationHistory(
+    @Param('id') id: string,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return super.findLocationHistory(id, query);
+  }
+
   @Patch(':id/location')
   updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
     return super.updateLocation(id, dto);
@@ -358,6 +380,14 @@ export class AccommodationManagersController extends RoleScopedUsersController {
   @Post()
   override create(@Body() dto: CreateUserDto) {
     return super.create(dto);
+  }
+
+  @Get(':id/location-history')
+  locationHistory(
+    @Param('id') id: string,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return super.findLocationHistory(id, query);
   }
 
   @Patch(':id/location')
@@ -418,6 +448,14 @@ export class HeadquartersRepresentativesController extends RoleScopedUsersContro
   @Post()
   override create(@Body() dto: CreateUserDto) {
     return super.create(dto);
+  }
+
+  @Get(':id/location-history')
+  locationHistory(
+    @Param('id') id: string,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return super.findLocationHistory(id, query);
   }
 
   @Patch(':id/location')

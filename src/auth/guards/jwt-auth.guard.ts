@@ -36,7 +36,11 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwt.verifyAsync<{ sub: string }>(token);
+      const payload = await this.jwt.verifyAsync<{
+        sub: string;
+        act?: string;
+        impersonating?: boolean;
+      }>(token);
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         include: { userRoles: { include: { role: true } } },
@@ -47,6 +51,11 @@ export class JwtAuthGuard implements CanActivate {
       }
 
       request.user = user;
+      request.impersonating = payload.impersonating === true;
+      request.impersonatedById =
+        payload.impersonating === true && typeof payload.act === 'string'
+          ? payload.act
+          : null;
       return true;
     } catch {
       throw new UnauthorizedException();

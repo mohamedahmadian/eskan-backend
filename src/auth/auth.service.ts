@@ -1,4 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { normalizeNationalId, normalizePassportNumber, toLatinDigits } from '../common/national-id';
@@ -14,6 +21,8 @@ import {
 } from './roles.util';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+
+const IMPERSONATE_TOKEN_TTL = '2h';
 
 const userWithRoles = {
   userRoles: { include: { role: true } },
@@ -38,8 +47,15 @@ type AuthUserRecord = {
   }[];
 };
 
+type ProfileExtras = {
+  impersonating?: boolean;
+  impersonatedBy?: { id: string; fullName: string } | null;
+};
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -98,7 +114,7 @@ export class AuthService {
     };
   }
 
-  async profile(userId: string) {
+  async profile(userId: string, impersonatedById?: string | null) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: userWithRoles,
@@ -108,10 +124,61 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    return this.toProfile(user);
+    return this.toProfile(user, await this.impersonationExtras(impersonatedById));
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async impersonate(actorId: string, targetUserId: string, alreadyImpersonating: boolean) {
+    if (alreadyImpersonating) {
+      throw new ForbiddenException('در حالت مشاهده پنل کاربر نمی‌توان دوباره وارد شد');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: userWithRoles,
+    });
+
+    if (!target) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    if (target.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('ورود به پنل کاربر غیرفعال ممکن نیست');
+    }
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, fullName: true },
+    });
+
+    this.logger.log(`Admin ${actorId} opened user panel as ${target.id}`);
+
+    const token = await this.jwt.signAsync(
+      {
+        sub: target.id,
+        roles: target.userRoles.map((item) => item.role.code),
+        act: actorId,
+        impersonating: true,
+      },
+      { expiresIn: IMPERSONATE_TOKEN_TTL },
+    );
+
+    return {
+      token,
+      user: await this.toProfile(target, {
+        impersonating: true,
+        impersonatedBy: actor,
+      }),
+    };
+  }
+
+  assertNotImpersonating(impersonating: boolean) {
+    if (impersonating) {
+      throw new ForbiddenException('این عملیات در حالت مشاهده پنل کاربر مجاز نیست');
+    }
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto, impersonating = false) {
+    this.assertNotImpersonating(impersonating);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException();
@@ -131,7 +198,13 @@ export class AuthService {
     return { ok: true };
   }
 
-  async updateSettings(userId: string, fullName?: string, locale?: string) {
+  async updateSettings(
+    userId: string,
+    fullName?: string,
+    locale?: string,
+    impersonating = false,
+  ) {
+    this.assertNotImpersonating(impersonating);
     const names = fullName ? splitFullName(fullName) : undefined;
     const user = await this.prisma.user.update({
       where: { id: userId },
@@ -151,7 +224,21 @@ export class AuthService {
     return this.toProfile(user);
   }
 
-  private async toProfile(user: AuthUserRecord) {
+  private async impersonationExtras(
+    impersonatedById?: string | null,
+  ): Promise<ProfileExtras | undefined> {
+    if (!impersonatedById) return undefined;
+    const actor = await this.prisma.user.findUnique({
+      where: { id: impersonatedById },
+      select: { id: true, fullName: true },
+    });
+    return {
+      impersonating: true,
+      impersonatedBy: actor,
+    };
+  }
+
+  private async toProfile(user: AuthUserRecord, extras?: ProfileExtras) {
     const roleIds = user.userRoles.map((item) => item.role.id);
     const roleMenus = roleIds.length
       ? await this.prisma.roleMenu.findMany({
@@ -236,6 +323,8 @@ export class AuthService {
         nameKey: item.role.nameKey,
       })),
       modules,
+      impersonating: extras?.impersonating ?? false,
+      impersonatedBy: extras?.impersonatedBy ?? null,
     };
   }
 }

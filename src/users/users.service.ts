@@ -48,6 +48,7 @@ import {
 } from './pilgrim-excel-import.util';
 import { resolvePilgrimResetPassword } from './pilgrim-password.util';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { cleanPlates, joinFullName } from './user-profile.util';
 
@@ -1016,21 +1017,111 @@ export class UsersService {
       provinceId: dto.provinceId ?? null,
       cityId: dto.cityId ?? null,
     });
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: {
-        locationProvinceId: geo.provinceId,
-        locationCityId: geo.cityId,
-        latitude:
-          dto.latitude == null ? null : new Prisma.Decimal(dto.latitude),
-        longitude:
-          dto.longitude == null ? null : new Prisma.Decimal(dto.longitude),
-        locationNotes: dto.notes?.trim() ? dto.notes.trim() : null,
-        locationUpdatedAt: new Date(),
-      },
-      include: publicInclude,
+    const notes = dto.notes?.trim() ? dto.notes.trim() : null;
+    const latitude =
+      dto.latitude == null ? null : new Prisma.Decimal(dto.latitude);
+    const longitude =
+      dto.longitude == null ? null : new Prisma.Decimal(dto.longitude);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: {
+          locationProvinceId: geo.provinceId,
+          locationCityId: geo.cityId,
+          latitude,
+          longitude,
+          locationNotes: notes,
+          locationUpdatedAt: new Date(),
+        },
+        include: publicInclude,
+      });
+      await tx.userLocationHistory.create({
+        data: {
+          userId: id,
+          provinceId: geo.provinceId,
+          cityId: geo.cityId,
+          latitude,
+          longitude,
+          notes,
+        },
+      });
+      return updated;
     });
     return this.toPublicUser(user);
+  }
+
+  async findLocationHistory(userId: string, query: FindLocationHistoryQueryDto) {
+    await this.findOne(userId);
+    const { page, pageSize, skip, take } = paginationArgs(query);
+    const q = query.q?.trim();
+    const where: Prisma.UserLocationHistoryWhereInput = {
+      userId,
+      ...(q
+        ? {
+            OR: [
+              { notes: containsInsensitive(q) },
+              { province: { nameFa: containsInsensitive(q) } },
+              { province: { nameEn: containsInsensitive(q) } },
+              { city: { nameFa: containsInsensitive(q) } },
+              { city: { nameEn: containsInsensitive(q) } },
+            ],
+          }
+        : {}),
+    };
+    const orderBy =
+      resolveSortOrder<Prisma.UserLocationHistoryOrderByWithRelationInput>(
+        query.sortBy === 'seq' ? 'createdAt' : query.sortBy,
+        query.sortDir,
+        {
+          createdAt: (dir) => ({ createdAt: dir }),
+          province: (dir) => ({ province: { nameFa: dir } }),
+          city: (dir) => ({ city: { nameFa: dir } }),
+          notes: (dir) => ({ notes: dir }),
+        },
+        [{ createdAt: 'desc' }, { id: 'desc' }],
+      );
+    const include = {
+      province: { select: { ...geoSelect, countryId: true } },
+      city: { select: { ...geoSelect, provinceId: true } },
+    } as const;
+    const [items, total, ranked] = await Promise.all([
+      this.prisma.userLocationHistory.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        include,
+      }),
+      this.prisma.userLocationHistory.count({ where }),
+      this.prisma.userLocationHistory.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        include,
+      }),
+    ]);
+    const seqById = new Map(ranked.map((item, index) => [item.id, index + 1]));
+    const mapPoints = ranked
+      .filter(
+        (item) =>
+          item.latitude != null &&
+          item.longitude != null &&
+          Number.isFinite(Number(item.latitude)) &&
+          Number.isFinite(Number(item.longitude)),
+      )
+      .map((item) =>
+        this.serializeLocationHistory(item, seqById.get(item.id) ?? 0),
+      );
+    return {
+      ...paginatedResult(
+        items.map((item) =>
+          this.serializeLocationHistory(item, seqById.get(item.id) ?? 0),
+        ),
+        total,
+        page,
+        pageSize,
+      ),
+      mapPoints,
+    };
   }
 
   async remove(id: string, actorId: string) {
@@ -1979,6 +2070,44 @@ export class UsersService {
       cityId: null,
       provinceId: null,
       countryId: iranId,
+    };
+  }
+
+  private serializeLocationHistory(
+    item: {
+      id: string;
+      provinceId: string | null;
+      cityId: string | null;
+      latitude: Prisma.Decimal | null;
+      longitude: Prisma.Decimal | null;
+      notes: string | null;
+      createdAt: Date;
+      province: {
+        id: string;
+        nameFa: string;
+        nameEn: string;
+        countryId: string;
+      } | null;
+      city: {
+        id: string;
+        nameFa: string;
+        nameEn: string;
+        provinceId: string;
+      } | null;
+    },
+    seq: number,
+  ) {
+    return {
+      id: item.id,
+      seq,
+      provinceId: item.provinceId,
+      cityId: item.cityId,
+      latitude: item.latitude == null ? null : Number(item.latitude),
+      longitude: item.longitude == null ? null : Number(item.longitude),
+      notes: item.notes,
+      createdAt: item.createdAt,
+      province: item.province,
+      city: item.city,
     };
   }
 

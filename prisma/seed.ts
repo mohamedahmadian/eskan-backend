@@ -130,6 +130,21 @@ async function main() {
     },
   });
 
+  const location = await prisma.navModule.upsert({
+    where: { code: 'location' },
+    update: {
+      nameKey: 'modules.location',
+      icon: 'map-pin',
+      sortOrder: 4,
+    },
+    create: {
+      code: 'location',
+      nameKey: 'modules.location',
+      icon: 'map-pin',
+      sortOrder: 4,
+    },
+  });
+
   const caravanManagement = await prisma.navModule.upsert({
     where: { code: 'caravan-management' },
     update: {
@@ -439,11 +454,19 @@ async function main() {
     },
     {
       code: 'location.mine',
-      moduleId: caravans.id,
+      moduleId: location.id,
       nameKey: 'menus.myLocation',
       path: '/my-location',
       icon: 'map-pin',
-      sortOrder: 10,
+      sortOrder: 1,
+    },
+    {
+      code: 'location.history',
+      moduleId: location.id,
+      nameKey: 'menus.myLocationHistory',
+      path: '/my-location/history',
+      icon: 'history',
+      sortOrder: 2,
     },
     {
       code: 'sms.settings',
@@ -833,7 +856,8 @@ async function main() {
       item.code === 'groups.mine' ||
       item.code === 'evaluations.mine' ||
       item.code === 'accommodation.mine' ||
-      item.code === 'location.mine',
+      item.code === 'location.mine' ||
+      item.code === 'location.history',
   );
   if (adminForbiddenMineMenus.length) {
     await prisma.roleMenu.deleteMany({
@@ -909,6 +933,7 @@ async function main() {
     'accommodation.mine',
     'evaluations.mine',
     'location.mine',
+    'location.history',
   ]);
   const caravanListMenu = menuRecords.find(
     (item) => item.code === 'caravans.list',
@@ -965,6 +990,7 @@ async function main() {
     'accommodation.mine',
     'evaluations.mine',
     'location.mine',
+    'location.history',
   ]);
   for (const menu of menuRecords.filter((item) =>
     pilgrimMenuCodes.has(item.code),

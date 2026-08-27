@@ -158,6 +158,7 @@ model User {
   revokedLicenses       IssuedLicense[] @relation("LicenseRevoker")
   reservationPermitReviews Reservation[] @relation("ReservationPermitReviewer")
   managedOrgUnits       OrgUnit[] @relation("OrgUnitManager")
+  locationHistories     UserLocationHistory[]
   evaluationsAsEvaluator Evaluation[] @relation("EvaluationEvaluator")
   evaluationsAsTarget    Evaluation[] @relation("EvaluationTarget")
   evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
@@ -177,6 +178,25 @@ model User {
   @@index([locationCityId])
   @@index([issuingOrganizationId])
   @@map("users")
+}
+
+model UserLocationHistory {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provinceId String?
+  province   Province? @relation("UserLocationHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
+  cityId     String?
+  city       City?     @relation("UserLocationHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
+  latitude   Decimal?  @db.Decimal(10, 7)
+  longitude  Decimal?  @db.Decimal(10, 7)
+  notes      String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("user_location_histories")
 }
 
 model GovernmentOrganization {
@@ -851,8 +871,9 @@ model Province {
   medicalCenters  MedicalCenter[]
   redCrescents    RedCrescent[]
   benefactors      Benefactor[]
-  users            User[]          @relation("UserHomeProvince")
-  locatedUsers     User[]          @relation("UserLocationProvince")
+  users             User[]                 @relation("UserHomeProvince")
+  locatedUsers      User[]                 @relation("UserLocationProvince")
+  locationHistories UserLocationHistory[]  @relation("UserLocationHistoryProvince")
   representativeId String?
   representative   User?           @relation("ProvinceHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
   entryBorders     EntryBorder[]
@@ -890,6 +911,7 @@ model City {
   reservationOrigins         Reservation[]             @relation("ReservationOriginCity")
   users                      User[]                    @relation("UserHomeCity")
   locatedUsers               User[]                    @relation("UserLocationCity")
+  locationHistories          UserLocationHistory[]     @relation("UserLocationHistoryCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
   walkingRouteStages         WalkingRouteStage[]

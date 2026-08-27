@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CheckIdentityDto } from './dto/check-identity.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { SetUserPasswordDto } from './dto/set-user-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -61,6 +62,14 @@ export class UsersController {
   @Post()
   create(@Body() dto: CreateUserDto) {
     return this.users.create(dto);
+  }
+
+  @Get(':id/location-history')
+  locationHistory(
+    @Param('id') id: string,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return this.users.findLocationHistory(id, query);
   }
 
   @Patch(':id/location')

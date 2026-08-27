@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CheckIdentityDto } from './dto/check-identity.dto';
+import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserLocationDto } from './dto/update-user-location.dto';
 import { UsersService } from './users.service';
@@ -29,6 +30,14 @@ export class AccountController {
       username: dto.username,
       excludeId: user.id,
     });
+  }
+
+  @Get('location-history')
+  locationHistory(
+    @CurrentUser() user: RequestUser,
+    @Query() query: FindLocationHistoryQueryDto,
+  ) {
+    return this.users.findLocationHistory(user.id, query);
   }
 
   @Patch('location')
