@@ -5,6 +5,10 @@ import {
   normalizeSearchDigits,
   startsWithInsensitive,
 } from '../common/pagination';
+import {
+  isReservationCodeQuery,
+  normalizeReservationCode,
+} from '../common/reservation-code';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -35,6 +39,12 @@ export class ReceptionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async search(q: string) {
+    const codeQuery = isReservationCodeQuery(q)
+      ? normalizeReservationCode(q)
+      : '';
+    if (codeQuery) {
+      return this.searchByReservationCode(q, codeQuery);
+    }
     const where = this.searchWhere(q);
     const digits = normalizeSearchDigits(q);
     const [total, users] = await Promise.all([
@@ -73,6 +83,55 @@ export class ReceptionService {
     const profile = matches.length === 1 ? await this.profile(matches[0].id) : null;
 
     return { q, total, matches, profile };
+  }
+
+  private async searchByReservationCode(q: string, codeQuery: string) {
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        OR: [{ code: codeQuery }, { code: { startsWith: codeQuery } }],
+      },
+      take: MATCH_LIMIT,
+      orderBy: [{ year: 'desc' }, { codeSeq: 'asc' }],
+      select: { createdById: true, code: true },
+    });
+    const exact = reservations.find((item) => item.code === codeQuery);
+    const userIds = [
+      ...new Set(
+        (exact ? [exact] : reservations).map((item) => item.createdById),
+      ),
+    ];
+    if (!userIds.length) {
+      return { q, total: 0, matches: [], profile: null };
+    }
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      take: MATCH_LIMIT,
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        fullName: true,
+        firstName: true,
+        lastName: true,
+        nationalId: true,
+        phone: true,
+        photoId: true,
+        gender: true,
+        status: true,
+        city: { select: citySelect },
+        userRoles: { select: { role: { select: roleSelect } } },
+        _count: {
+          select: {
+            reservationMembers: true,
+            createdReservations: true,
+            managedCaravans: true,
+            managedAccommodations: true,
+          },
+        },
+      },
+    });
+    const matches = users.map((user) => this.toMatch(user));
+    const profile = matches.length === 1 ? await this.profile(matches[0].id) : null;
+    return { q, total: matches.length, matches, profile };
   }
 
   async profile(id: string) {
@@ -128,6 +187,7 @@ export class ReceptionService {
             reservation: {
               select: {
                 id: true,
+                code: true,
                 year: true,
                 type: true,
                 status: true,
@@ -172,6 +232,7 @@ export class ReceptionService {
           orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
           select: {
             id: true,
+            code: true,
             year: true,
             type: true,
             status: true,
@@ -395,6 +456,7 @@ export class ReceptionService {
 
   private toVisit(reservation: {
     id: string;
+    code: string;
     year: number;
     type: string;
     status: string;
@@ -418,6 +480,7 @@ export class ReceptionService {
   }) {
     return {
       id: reservation.id,
+      code: reservation.code,
       year: reservation.year,
       type: reservation.type,
       status: reservation.status,

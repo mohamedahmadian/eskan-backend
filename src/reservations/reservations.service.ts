@@ -23,10 +23,19 @@ import {
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import {
+  isReservationCodeQuery,
+  nextSequentialReservationCode,
+  normalizeReservationCode,
+} from '../common/reservation-code';
 import { resolveSortOrder } from '../common/sort-query';
 import {
+  AllocationStatus,
   CaravanContactRole,
   IssuedLicenseStatus,
+  PlacementGenderPolicy,
+  PlacementMode,
+  PlacementStatus,
   Prisma,
   ReceptionSettings,
   ReservationMemberInsurancePaidMethod,
@@ -41,12 +50,15 @@ import { buildStyledExcelExport } from '../common/excel-export';
 import { jalaliYearRange } from '../common/jalali-year';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { PlacementsService } from '../placements/placements.service';
+import { placementStatusFromCounts } from '../placements/placement-capacity';
 import { AddReservationMemberDto } from './dto/add-reservation-member.dto';
 import { UpdateReservationMemberDto } from './dto/update-reservation-member.dto';
 import {
   parseReservationMemberExcel,
   type ParsedMemberImportRow,
 } from './reservation-member-excel';
+import { AdjustReservationCapacityDto } from './dto/adjust-reservation-capacity.dto';
 import { ApproveReservationDto } from './dto/approve-reservation.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
@@ -66,12 +78,14 @@ import {
   CARAVAN_CONTACT_ROLES,
   IN_PROGRESS_FILTER,
   IN_PROGRESS_STATUSES,
+  canAdjustApprovedCapacity,
   companionEditStatuses,
   contactEditStatuses,
   isOccupyingStatus,
   nextAfterBasicInfo,
   nextAfterCompanions,
   nextAfterManagement,
+  placementModeFromSettings,
   settingsAutoApproveKey,
   settingsCapacityKeys,
   settingsEnabledKey,
@@ -160,6 +174,7 @@ const reservationInclude = {
   caravanContactsCompletedBy: { select: userSelect },
   insuranceCompletedBy: { select: userSelect },
   completedBy: { select: userSelect },
+  placementCompletedBy: { select: userSelect },
   rejectedBy: { select: userSelect },
   cancelledBy: { select: userSelect },
   permitReviewedBy: { select: userSelect },
@@ -188,6 +203,39 @@ const reservationInclude = {
     orderBy: { role: 'asc' as const },
     include: { user: { select: userSelect } },
   },
+  allocations: {
+    where: { status: AllocationStatus.ACTIVE },
+    orderBy: { placedAt: 'asc' as const },
+    include: {
+      accommodation: {
+        select: {
+          id: true,
+          name: true,
+          genderType: true,
+          phone: true,
+          address: true,
+          neshanAddress: true,
+          latitude: true,
+          longitude: true,
+          distanceToShrineKm: true,
+          eitaa: true,
+          bale: true,
+          otherSocial: true,
+          managers: {
+            orderBy: [
+              { year: 'desc' as const },
+              { isPrimary: 'desc' as const },
+              { createdAt: 'asc' as const },
+            ],
+            include: {
+              user: { select: { id: true, fullName: true, phone: true } },
+            },
+          },
+        },
+      },
+      placedBy: { select: userSelect },
+    },
+  },
 } satisfies Prisma.ReservationInclude;
 
 type ReservationRecord = Prisma.ReservationGetPayload<{
@@ -215,12 +263,14 @@ const emptySettings = (year: number) => ({
   individualMaleCapacity: 0,
   individualFemaleCapacity: 0,
   individualAutoApprove: false,
+  individualPlacementMode: PlacementMode.MANUAL,
   individualIntro: '',
   individualRules: '',
   groupEnabled: false,
   groupMaleCapacity: 0,
   groupFemaleCapacity: 0,
   groupAutoApprove: false,
+  groupPlacementMode: PlacementMode.MANUAL,
   groupIntro: '',
   groupRules: '',
   caravanEnabled: false,
@@ -228,8 +278,10 @@ const emptySettings = (year: number) => ({
   caravanFemaleCapacity: 0,
   caravanAutoApprove: false,
   caravanAutoApproveLicenses: false,
+  caravanPlacementMode: PlacementMode.MANUAL,
   caravanIntro: '',
   caravanRules: '',
+  placementGenderPolicy: PlacementGenderPolicy.SINGLE_GENDER,
   insuranceOrganization: '',
   insurancePlans: [],
   imamRezaMartyrdomDate: null,
@@ -254,12 +306,14 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     individualMaleCapacity: row.individualMaleCapacity,
     individualFemaleCapacity: row.individualFemaleCapacity,
     individualAutoApprove: row.individualAutoApprove,
+    individualPlacementMode: row.individualPlacementMode,
     individualIntro: row.individualIntro ?? '',
     individualRules: row.individualRules ?? '',
     groupEnabled: row.groupEnabled,
     groupMaleCapacity: row.groupMaleCapacity,
     groupFemaleCapacity: row.groupFemaleCapacity,
     groupAutoApprove: row.groupAutoApprove,
+    groupPlacementMode: row.groupPlacementMode,
     groupIntro: row.groupIntro ?? '',
     groupRules: row.groupRules ?? '',
     caravanEnabled: row.caravanEnabled,
@@ -267,8 +321,10 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     caravanFemaleCapacity: row.caravanFemaleCapacity,
     caravanAutoApprove: row.caravanAutoApprove,
     caravanAutoApproveLicenses: row.caravanAutoApproveLicenses,
+    caravanPlacementMode: row.caravanPlacementMode,
     caravanIntro: row.caravanIntro ?? '',
     caravanRules: row.caravanRules ?? '',
+    placementGenderPolicy: row.placementGenderPolicy,
     insuranceOrganization: row.insuranceOrganization ?? '',
     insurancePlans: (row.insurancePlans ?? []).map((plan) => ({
       id: plan.id,
@@ -295,6 +351,7 @@ export class ReservationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly placements: PlacementsService,
   ) {}
 
   async getSettings(year: number) {
@@ -517,7 +574,7 @@ export class ReservationsService {
       dto.stayStartDate,
       dto.stayEndDate,
     );
-    await this.assertTypeEnabled(dto.year, dto.type);
+    const settings = await this.requireEnabledSettings(dto.year, dto.type);
     if (dto.originCityId) await this.assertOriginCity(dto.originCityId);
     await this.assertWalkingRoute(dto.walkingRouteId);
 
@@ -546,51 +603,57 @@ export class ReservationsService {
           )
         : emptyPermitData();
 
-    return this.prisma.$transaction(async (tx) => {
-      const created = await tx.reservation.create({
-        data: {
-          createdById,
-          year: dto.year,
-          type: dto.type,
-          status: ReservationStatus.DRAFT,
-          originCityId: dto.originCityId ?? null,
-          walkingRouteId: dto.walkingRouteId ?? null,
-          stayStartDate: parseOptionalIsoDate(dto.stayStartDate) ?? null,
-          stayEndDate: parseOptionalIsoDate(dto.stayEndDate) ?? null,
-          walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate) ?? null,
-          requestsAccommodation: dto.requestsAccommodation ?? true,
-          requestsBus: dto.requestsBus ?? true,
-          requestsSimCard: dto.requestsSimCard ?? false,
-          requestsBankCard: dto.requestsBankCard ?? false,
-          specialServices: dto.specialServices?.trim() || null,
-          requestedMaleCount: maleCount,
-          requestedFemaleCount: femaleCount,
-          maleCount,
-          femaleCount,
-          totalCount: maleCount + femaleCount,
-          caravanId: caravan?.id ?? null,
-          groupId: group?.id ?? null,
-          caravanManagerId: caravan?.managerUserId ?? null,
-          createWizardStep: dto.createWizardStep?.trim() || null,
-          ...permit,
-        },
-        include: reservationInclude,
-      });
-      if (maleCount + femaleCount > 0) {
-        await this.syncPartyCapacity(tx, {
-          type: dto.type,
-          groupId: group?.id ?? null,
-          caravanId: caravan?.id ?? null,
-          maleCount,
-          femaleCount,
-          year: dto.year,
+    return this.withCodeConflictRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const { code, codeSeq } = await this.nextReservationCode(tx, dto.year);
+        const created = await tx.reservation.create({
+          data: {
+            createdById,
+            year: dto.year,
+            code,
+            codeSeq,
+            type: dto.type,
+            status: ReservationStatus.DRAFT,
+            placementMode: placementModeFromSettings(settings, dto.type),
+            originCityId: dto.originCityId ?? null,
+            walkingRouteId: dto.walkingRouteId ?? null,
+            stayStartDate: parseOptionalIsoDate(dto.stayStartDate) ?? null,
+            stayEndDate: parseOptionalIsoDate(dto.stayEndDate) ?? null,
+            walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate) ?? null,
+            requestsAccommodation: dto.requestsAccommodation ?? true,
+            requestsBus: dto.requestsBus ?? true,
+            requestsSimCard: dto.requestsSimCard ?? false,
+            requestsBankCard: dto.requestsBankCard ?? false,
+            specialServices: dto.specialServices?.trim() || null,
+            requestedMaleCount: maleCount,
+            requestedFemaleCount: femaleCount,
+            maleCount,
+            femaleCount,
+            totalCount: maleCount + femaleCount,
+            caravanId: caravan?.id ?? null,
+            groupId: group?.id ?? null,
+            caravanManagerId: caravan?.managerUserId ?? null,
+            createWizardStep: dto.createWizardStep?.trim() || null,
+            ...permit,
+          },
+          include: reservationInclude,
         });
-      }
-      if (asDraft) {
-        return this.serialize(created, actor);
-      }
-      return this.submitDraft(tx, created, actor);
-    });
+        if (maleCount + femaleCount > 0) {
+          await this.syncPartyCapacity(tx, {
+            type: dto.type,
+            groupId: group?.id ?? null,
+            caravanId: caravan?.id ?? null,
+            maleCount,
+            femaleCount,
+            year: dto.year,
+          });
+        }
+        if (asDraft) {
+          return this.serialize(created, actor);
+        }
+        return this.submitDraft(tx, created, actor);
+      }),
+    );
   }
 
   async update(id: string, dto: UpdateReservationDto, actor: Actor) {
@@ -677,8 +740,12 @@ export class ReservationsService {
       stayEnd,
     );
 
+    let placementMode: PlacementMode | undefined;
     if (dto.type || dto.year) {
-      await this.assertTypeEnabled(year, type);
+      const settings = await this.requireEnabledSettings(year, type);
+      if (type !== current.type || year !== current.year) {
+        placementMode = placementModeFromSettings(settings, type);
+      }
     }
     if (dto.originCityId) await this.assertOriginCity(dto.originCityId);
     if (dto.walkingRouteId !== undefined) {
@@ -786,6 +853,7 @@ export class ReservationsService {
         dto.createWizardStep === undefined
           ? undefined
           : dto.createWizardStep?.trim() || null,
+      ...(placementMode ? { placementMode } : {}),
       ...permitPatch,
       ...(isAdmin(actor) ? issuedServicesPatch(dto) : {}),
     };
@@ -801,38 +869,48 @@ export class ReservationsService {
     const partySyncFemale =
       pendingReview || draftSoft ? requestedFemaleCount : femaleCount;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (needsCapacity) {
-        const settings = await this.requireSettings(year, tx);
-        await assertCapacity(
-          tx,
-          settings,
-          type,
-          year,
-          maleCount,
-          femaleCount,
-          current.id,
-        );
-      }
-      const row = await tx.reservation.update({
-        where: { id },
-        data,
-        include: reservationInclude,
-      });
-      if (partySyncMale + partySyncFemale > 0) {
-        await this.syncPartyCapacity(tx, {
-          type,
-          groupId: type === ReservationType.GROUP ? (group?.id ?? null) : null,
-          caravanId:
-            type === ReservationType.CARAVAN ? (caravan?.id ?? null) : null,
-          maleCount: partySyncMale,
-          femaleCount: partySyncFemale,
-          year,
-          updateYear: isOccupyingStatus(current.status),
+    const yearChanged = year !== current.year;
+    const runUpdate = () =>
+      this.prisma.$transaction(async (tx) => {
+        if (yearChanged) {
+          const allocated = await this.nextReservationCode(tx, year);
+          data.code = allocated.code;
+          data.codeSeq = allocated.codeSeq;
+        }
+        if (needsCapacity) {
+          const settings = await this.requireSettings(year, tx);
+          await assertCapacity(
+            tx,
+            settings,
+            type,
+            year,
+            maleCount,
+            femaleCount,
+            current.id,
+          );
+        }
+        const row = await tx.reservation.update({
+          where: { id },
+          data,
+          include: reservationInclude,
         });
-      }
-      return row;
-    });
+        if (partySyncMale + partySyncFemale > 0) {
+          await this.syncPartyCapacity(tx, {
+            type,
+            groupId: type === ReservationType.GROUP ? (group?.id ?? null) : null,
+            caravanId:
+              type === ReservationType.CARAVAN ? (caravan?.id ?? null) : null,
+            maleCount: partySyncMale,
+            femaleCount: partySyncFemale,
+            year,
+            updateYear: isOccupyingStatus(current.status),
+          });
+        }
+        return row;
+      });
+    const updated = yearChanged
+      ? await this.withCodeConflictRetry(runUpdate)
+      : await runUpdate();
     return this.serialize(updated, actor);
   }
 
@@ -884,6 +962,102 @@ export class ReservationsService {
           managementNotes: trimmedNotes
             ? trimmedNotes
             : current.managementNotes,
+        },
+        include: reservationInclude,
+      });
+      await this.syncPartyCapacity(tx, {
+        type: current.type,
+        groupId: current.groupId,
+        caravanId: current.caravanId,
+        maleCount: counts.maleCount,
+        femaleCount: counts.femaleCount,
+        year: current.year,
+        updateYear: true,
+      });
+      return this.serialize(updated, actor);
+    });
+  }
+
+  async adjustCapacity(
+    id: string,
+    dto: AdjustReservationCapacityDto,
+    actor: Actor,
+  ) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const current = await this.requireReservation(id, tx);
+      if (
+        !current.managementReviewedAt ||
+        !canAdjustApprovedCapacity(current.type, current.status)
+      ) {
+        throw new BadRequestException('پرونده در وضعیت مناسب این عملیات نیست');
+      }
+
+      const counts = this.resolveApprovedCounts(current, dto);
+      this.assertCountsCoverMembers(
+        current,
+        counts.maleCount,
+        counts.femaleCount,
+      );
+
+      const allocated = current.allocations.reduce(
+        (sum, item) => {
+          if (item.gender === UserGender.MALE) sum.male += item.headcount;
+          if (item.gender === UserGender.FEMALE) sum.female += item.headcount;
+          return sum;
+        },
+        { male: 0, female: 0 },
+      );
+      if (
+        allocated.male > counts.maleCount ||
+        allocated.female > counts.femaleCount
+      ) {
+        throw new BadRequestException(
+          'ظرفیت نمی‌تواند کمتر از تعداد اسکان‌داده‌شده باشد',
+        );
+      }
+
+      const settings = await this.requireSettings(current.year, tx);
+      await assertCapacity(
+        tx,
+        settings,
+        current.type,
+        current.year,
+        counts.maleCount,
+        counts.femaleCount,
+        current.id,
+      );
+
+      const nextPlacement =
+        current.placementStatus === PlacementStatus.NOT_REQUIRED
+          ? null
+          : placementStatusFromCounts({
+              requestsAccommodation: current.requestsAccommodation,
+              maleCount: counts.maleCount,
+              femaleCount: counts.femaleCount,
+              allocatedMale: allocated.male,
+              allocatedFemale: allocated.female,
+            });
+
+      const updated = await tx.reservation.update({
+        where: { id },
+        data: {
+          maleCount: counts.maleCount,
+          femaleCount: counts.femaleCount,
+          totalCount: counts.maleCount + counts.femaleCount,
+          ...(nextPlacement
+            ? {
+                placementStatus: nextPlacement,
+                ...(nextPlacement === PlacementStatus.PLACED
+                  ? {}
+                  : {
+                      placementCompletedAt: null,
+                      placementCompletedById: null,
+                    }),
+              }
+            : {}),
         },
         include: reservationInclude,
       });
@@ -1001,6 +1175,7 @@ export class ReservationsService {
         });
       }
       this.emitWorkflowEvent('return', id, actor.id);
+      await this.placements.vacateActiveForReservation(tx, id, actor.id);
       return this.serialize(updated, actor);
     });
   }
@@ -1024,6 +1199,11 @@ export class ReservationsService {
       },
       include: reservationInclude,
     });
+    await this.placements.vacateActiveForReservation(
+      this.prisma,
+      id,
+      actor.id,
+    );
     this.emitWorkflowEvent('cancel', id, actor.id);
     return this.serialize(updated, actor);
   }
@@ -1259,6 +1439,7 @@ export class ReservationsService {
     }
     await this.users.updatePilgrimIdentity(member.userId, {
       nationalId: dto.nationalId,
+      passportNumber: dto.passportNumber,
       firstName: dto.firstName,
       lastName: dto.lastName,
       gender: dto.gender,
@@ -1305,6 +1486,7 @@ export class ReservationsService {
         ).length;
         return {
           id: item.id,
+          code: item.code,
           year: item.year,
           status: item.status,
           stayStartDate: toDateOnly(item.stayStartDate),
@@ -2087,7 +2269,9 @@ export class ReservationsService {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const filters: Prisma.ReservationWhereInput[] = [];
     if (extraWhere) filters.push(extraWhere);
-    if (query.year) filters.push({ year: query.year });
+    const codeQuery = query.q ? normalizeReservationCode(query.q) : '';
+    const searchingByCode = Boolean(query.q && isReservationCodeQuery(query.q));
+    if (query.year && !searchingByCode) filters.push({ year: query.year });
     if (query.type) filters.push({ type: query.type });
     if (query.status === IN_PROGRESS_FILTER) {
       filters.push({ status: { in: IN_PROGRESS_STATUSES } });
@@ -2119,12 +2303,19 @@ export class ReservationsService {
     }
     if (query.q) {
       const search: Prisma.ReservationWhereInput[] = [
+        { code: containsInsensitive(codeQuery || query.q) },
         { createdBy: { fullName: containsInsensitive(query.q) } },
         { createdBy: { nationalId: containsInsensitive(query.q) } },
         { originCity: { nameFa: containsInsensitive(query.q) } },
         { caravan: { name: containsInsensitive(query.q) } },
         { group: { name: containsInsensitive(query.q) } },
       ];
+      if (codeQuery) {
+        search.unshift({ code: codeQuery });
+        if (codeQuery !== query.q.trim()) {
+          search.unshift({ code: containsInsensitive(codeQuery) });
+        }
+      }
       if (isReservationId(query.q)) search.unshift({ id: query.q.trim() });
       const searchYear = parseSearchYear(query.q);
       if (searchYear) search.push({ year: searchYear });
@@ -2138,6 +2329,7 @@ export class ReservationsService {
         query.sortBy,
         query.sortDir,
         {
+          code: (dir) => [{ year: dir }, { codeSeq: dir }],
           year: (dir) => ({ year: dir }),
           type: (dir) => ({ type: dir }),
           status: (dir) => ({ status: dir }),
@@ -2193,13 +2385,14 @@ export class ReservationsService {
     return settings;
   }
 
-  private async assertTypeEnabled(year: number, type: ReservationType) {
+  private async requireEnabledSettings(year: number, type: ReservationType) {
     const settings = await this.prisma.receptionSettings.findUnique({
       where: { year },
     });
     if (!settings || !settings[settingsEnabledKey(type)]) {
       throw new BadRequestException('پذیرش این نوع در این سال فعال نیست');
     }
+    return settings;
   }
 
   private async assertOriginCity(cityId: string) {
@@ -2440,11 +2633,19 @@ export class ReservationsService {
     dto: AddReservationMemberDto,
     options?: { requireGender?: boolean },
   ) {
-    const existing = await this.users.findByIdentity({
-      nationalId: dto.nationalId,
-    });
-    if (existing.found) {
-      return { user: existing.user };
+    const nationalId = dto.nationalId?.trim() || '';
+    const passport = dto.passportNumber?.trim() || '';
+    if (nationalId) {
+      const existing = await this.users.findByIdentity({ nationalId });
+      if (existing.found) {
+        return { user: existing.user };
+      }
+    }
+    if (passport) {
+      const existing = await this.users.findByIdentity({ nationalId: passport });
+      if (existing.found) {
+        return { user: existing.user };
+      }
     }
     if (!dto.firstName?.trim() || !dto.lastName?.trim()) {
       throw new BadRequestException('نام و نام خانوادگی همراه لازم است');
@@ -2453,7 +2654,7 @@ export class ReservationsService {
       throw new BadRequestException('جنسیت همراه لازم است');
     }
     return this.users.findOrCreatePilgrim({
-      nationalId: dto.nationalId,
+      nationalId: nationalId || passport || null,
       firstName: dto.firstName,
       lastName: dto.lastName,
       gender: dto.gender,
@@ -2767,6 +2968,11 @@ export class ReservationsService {
         insuranceCompletedById: current.insuranceCompletedById ?? actor.id,
         completedAt: now,
         completedById: actor.id,
+        placementStatus: current.requestsAccommodation
+          ? PlacementStatus.PENDING
+          : PlacementStatus.NOT_REQUIRED,
+        placementCompletedAt: null,
+        placementCompletedById: null,
       },
       include: reservationInclude,
     });
@@ -3124,6 +3330,7 @@ export class ReservationsService {
       ],
       select: {
         id: true,
+        code: true,
         year: true,
         status: true,
         stayStartDate: true,
@@ -3300,6 +3507,9 @@ export class ReservationsService {
       insuranceCompletedById: null,
       completedAt: null,
       completedById: null,
+      placementStatus: PlacementStatus.NOT_REQUIRED,
+      placementCompletedAt: null,
+      placementCompletedById: null,
     };
     if (status === ReservationStatus.DRAFT) {
       return {
@@ -3346,12 +3556,42 @@ export class ReservationsService {
     return base;
   }
 
+  private async nextReservationCode(tx: Tx, year: number) {
+    const items = await tx.reservation.findMany({
+      where: { year },
+      select: { code: true },
+    });
+    return nextSequentialReservationCode(
+      year,
+      items.map((item) => item.code),
+    );
+  }
+
+  private async withCodeConflictRetry<T>(run: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        return await run();
+      } catch (error) {
+        const conflict =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002';
+        if (!conflict || attempt === 7) {
+          throw error;
+        }
+      }
+    }
+    throw new BadRequestException('امکان صدور کد یکتای پرونده نبود');
+  }
+
   private serializeListItem(row: ReservationRecord) {
     return {
       id: row.id,
+      code: row.code,
       year: row.year,
       type: row.type,
       status: row.status,
+      placementMode: row.placementMode,
+      placementStatus: row.placementStatus,
       originCity: row.originCity,
       stayStartDate: toDateOnly(row.stayStartDate),
       stayEndDate: toDateOnly(row.stayEndDate),
@@ -3389,9 +3629,13 @@ export class ReservationsService {
     return {
       id: row.id,
       createdBy: row.createdBy,
+      code: row.code,
       year: row.year,
       type: row.type,
       status: row.status,
+      placementMode: row.placementMode,
+      placementStatus: row.placementStatus,
+      placementCompletedAt: row.placementCompletedAt?.toISOString() ?? null,
       createWizardStep: row.createWizardStep,
       originCity: row.originCity,
       walkingRoute: row.walkingRoute,
@@ -3457,6 +3701,7 @@ export class ReservationsService {
       caravanContactsCompletedBy: row.caravanContactsCompletedBy,
       insuranceCompletedBy: row.insuranceCompletedBy,
       completedBy: row.completedBy,
+      placementCompletedBy: row.placementCompletedBy,
       rejectedBy: row.rejectedBy,
       cancelledBy: row.cancelledBy,
       createdAt: row.createdAt.toISOString(),
@@ -3467,6 +3712,40 @@ export class ReservationsService {
       caravanContacts: seeMembers
         ? row.caravanContacts.map((item) => this.serializeContact(item))
         : undefined,
+      allocations: row.allocations.map((item) => ({
+        id: item.id,
+        accommodationId: item.accommodationId,
+        accommodation: this.serializeStayAccommodation(item.accommodation),
+        gender: item.gender,
+        headcount: item.headcount,
+        source: item.source,
+        genderOverride: item.genderOverride,
+        overrideNote: item.overrideNote,
+        placedAt: item.placedAt.toISOString(),
+        placedBy: item.placedBy,
+      })),
+    };
+  }
+
+  private serializeStayAccommodation(
+    item: ReservationRecord['allocations'][number]['accommodation'],
+  ) {
+    const num = (value: Prisma.Decimal | null) =>
+      value == null ? null : Number(value);
+    return {
+      id: item.id,
+      name: item.name,
+      genderType: item.genderType,
+      phone: item.phone,
+      address: item.address,
+      neshanAddress: item.neshanAddress,
+      latitude: num(item.latitude),
+      longitude: num(item.longitude),
+      distanceToShrineKm: num(item.distanceToShrineKm),
+      eitaa: item.eitaa,
+      bale: item.bale,
+      otherSocial: item.otherSocial,
+      managers: item.managers,
     };
   }
 

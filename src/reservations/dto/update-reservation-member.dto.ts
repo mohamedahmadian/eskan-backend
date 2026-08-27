@@ -8,17 +8,34 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
-import { IsIranianNationalId, normalizeNationalId } from '../../common/national-id';
+import {
+  IsIranianNationalId,
+  normalizeNationalId,
+  normalizePassportNumber,
+} from '../../common/national-id';
 import { normalizePhone } from '../../common/phone';
 import { UserGender } from '../../generated/prisma/client';
 
 export class UpdateReservationMemberDto {
-  @Transform(({ value }) =>
-    typeof value === 'string' ? normalizeNationalId(value) : value,
-  )
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value == null || value === '') return null;
+    return typeof value === 'string' ? normalizeNationalId(value) : value;
+  })
+  @ValidateIf((_, value) => value != null && value !== '')
   @IsString()
   @IsIranianNationalId({ message: 'کد ملی معتبر نیست' })
-  nationalId: string;
+  nationalId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value == null || value === '') return null;
+    return typeof value === 'string' ? normalizePassportNumber(value) : value;
+  })
+  @ValidateIf((_, value) => value != null && value !== '')
+  @IsString()
+  @MinLength(5, { message: 'شماره گذرنامه معتبر نیست' })
+  passportNumber?: string | null;
 
   @IsString()
   @MinLength(1)

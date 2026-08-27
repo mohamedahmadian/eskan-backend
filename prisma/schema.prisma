@@ -143,6 +143,9 @@ model User {
   reservationCaravanContactsCompletions Reservation[] @relation("ReservationCaravanContactsCompleter")
   reservationInsuranceCompletions Reservation[] @relation("ReservationInsuranceCompleter")
   reservationFinalCompletions Reservation[] @relation("ReservationFinalCompleter")
+  reservationPlacementCompletions Reservation[] @relation("ReservationPlacementCompleter")
+  placedAllocations   ReservationAllocation[] @relation("AllocationPlacedBy")
+  vacatedAllocations  ReservationAllocation[] @relation("AllocationVacatedBy")
   representedProvinces  Province[] @relation("ProvinceHeadquartersRep")
   representedCities     City[]     @relation("CityHeadquartersRep")
   accommodationLoans    AccommodationLoan[]
@@ -437,6 +440,34 @@ enum ReservationType {
   CARAVAN
 }
 
+enum PlacementMode {
+  MANUAL
+  SYSTEM
+}
+
+enum PlacementGenderPolicy {
+  SINGLE_GENDER
+  MIXED
+}
+
+enum PlacementStatus {
+  NOT_REQUIRED
+  PENDING
+  PARTIAL
+  PLACED
+}
+
+enum AllocationStatus {
+  ACTIVE
+  VACATED
+}
+
+enum AllocationSource {
+  SYSTEM
+  MANUAL
+  HYBRID
+}
+
 enum ReservationStatus {
   DRAFT
   PENDING_MANAGEMENT_REVIEW
@@ -477,8 +508,17 @@ model Reservation {
   createdById String
   createdBy   User              @relation("ReservationCreator", fields: [createdById], references: [id], onDelete: Restrict)
   year        Int
+  /// Human-readable file code: `{year}-{seq}` e.g. 1405-1
+  code        String            @unique
+  codeSeq     Int
   type        ReservationType
   status      ReservationStatus @default(DRAFT)
+  /// Snapshot of reception-settings placement mode for this type at create (or when type/year changes).
+  placementMode PlacementMode @default(MANUAL)
+  placementStatus PlacementStatus @default(NOT_REQUIRED)
+  placementCompletedAt   DateTime?
+  placementCompletedById String?
+  placementCompletedBy   User? @relation("ReservationPlacementCompleter", fields: [placementCompletedById], references: [id], onDelete: Restrict)
 
   /// Last step of the owner create wizard while status is DRAFT (type|party|count|dates|services|license).
   createWizardStep String?
@@ -574,10 +614,12 @@ model Reservation {
 
   members         ReservationMember[]
   caravanContacts ReservationCaravanContact[]
+  allocations     ReservationAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([year, codeSeq])
   @@index([createdById])
   @@index([year])
   @@index([type])
@@ -591,7 +633,40 @@ model Reservation {
   @@index([hasPermit])
   @@index([permitStatus])
   @@index([issuedLicenseId])
+  @@index([placementStatus])
+  @@index([year, placementStatus])
   @@map("reservations")
+}
+
+model ReservationAllocation {
+  id              String            @id @default(uuid())
+  reservationId   String
+  reservation     Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  accommodationId String
+  accommodation   Accommodation     @relation(fields: [accommodationId], references: [id], onDelete: Restrict)
+  gender          UserGender
+  headcount       Int
+  status          AllocationStatus  @default(ACTIVE)
+  source          AllocationSource
+  genderOverride  Boolean           @default(false)
+  overrideNote    String?
+  notes           String?
+  placedAt        DateTime          @default(now())
+  placedById      String
+  placedBy        User              @relation("AllocationPlacedBy", fields: [placedById], references: [id], onDelete: Restrict)
+  vacatedAt       DateTime?
+  vacatedById     String?
+  vacatedBy       User?             @relation("AllocationVacatedBy", fields: [vacatedById], references: [id], onDelete: Restrict)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([reservationId])
+  @@index([accommodationId])
+  @@index([status])
+  @@index([placedAt])
+  @@index([reservationId, status])
+  @@index([accommodationId, status, gender])
+  @@map("reservation_allocations")
 }
 
 model ReservationMember {
@@ -647,27 +722,34 @@ model ReservationCaravanContact {
 model ReceptionSettings {
   year Int @id
 
-  individualEnabled        Boolean @default(false)
-  individualMaleCapacity   Int     @default(0)
-  individualFemaleCapacity Int     @default(0)
-  individualAutoApprove    Boolean @default(false)
-  individualIntro          String  @default("")
-  individualRules          String  @default("")
+  individualEnabled        Boolean       @default(false)
+  individualMaleCapacity   Int           @default(0)
+  individualFemaleCapacity Int           @default(0)
+  individualAutoApprove    Boolean       @default(false)
+  individualPlacementMode  PlacementMode @default(MANUAL)
+  individualIntro          String        @default("")
+  individualRules          String        @default("")
 
-  groupEnabled        Boolean @default(false)
-  groupMaleCapacity   Int     @default(0)
-  groupFemaleCapacity Int     @default(0)
-  groupAutoApprove    Boolean @default(false)
-  groupIntro          String  @default("")
-  groupRules          String  @default("")
+  groupEnabled        Boolean       @default(false)
+  groupMaleCapacity   Int           @default(0)
+  groupFemaleCapacity Int           @default(0)
+  groupAutoApprove    Boolean       @default(false)
+  groupPlacementMode  PlacementMode @default(MANUAL)
+  groupIntro          String        @default("")
+  groupRules          String        @default("")
 
-  caravanEnabled              Boolean @default(false)
-  caravanMaleCapacity         Int     @default(0)
-  caravanFemaleCapacity       Int     @default(0)
-  caravanAutoApprove          Boolean @default(false)
-  caravanAutoApproveLicenses  Boolean @default(false)
-  caravanIntro                String  @default("")
-  caravanRules                String  @default("")
+  caravanEnabled              Boolean       @default(false)
+  caravanMaleCapacity         Int           @default(0)
+  caravanFemaleCapacity       Int           @default(0)
+  caravanAutoApprove          Boolean       @default(false)
+  caravanAutoApproveLicenses  Boolean       @default(false)
+  caravanPlacementMode        PlacementMode @default(MANUAL)
+  caravanIntro                String        @default("")
+  caravanRules                String        @default("")
+
+  /// When SINGLE_GENDER, male and female pilgrims are not assigned to the same place.
+  /// MIXED allows both genders in one accommodation only if it has capacity for each.
+  placementGenderPolicy PlacementGenderPolicy @default(SINGLE_GENDER)
 
   insuranceOrganization String @default("")
   insurancePlans        ReceptionInsurancePlan[]
@@ -898,6 +980,7 @@ model Accommodation {
   managementType        ManagementType       @default(SELF_SUFFICIENT)
   maleCapacity          Int                  @default(0)
   femaleCapacity        Int                  @default(0)
+  overflowPercent       Int                  @default(10)
   assignedMaleCapacity  Int                  @default(0)
   assignedFemaleCapacity Int                 @default(0)
   phone                 String?
@@ -930,6 +1013,7 @@ model Accommodation {
   contacts              AccommodationContact[]
   yearContacts          AccommodationYearContact[]
   iceVouchers           IceVoucher[]
+  allocations           ReservationAllocation[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 

@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -12,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
+import { PlacementGenderPolicy, PlacementMode } from '../../generated/prisma/client';
 
 export class ReceptionInsurancePlanDto {
   @IsOptional()
@@ -52,6 +54,9 @@ export class UpdateReceptionSettingsDto {
   @IsBoolean()
   individualAutoApprove: boolean;
 
+  @IsEnum(PlacementMode)
+  individualPlacementMode: PlacementMode;
+
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(4000)
@@ -77,6 +82,9 @@ export class UpdateReceptionSettingsDto {
 
   @IsBoolean()
   groupAutoApprove: boolean;
+
+  @IsEnum(PlacementMode)
+  groupPlacementMode: PlacementMode;
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
@@ -107,6 +115,9 @@ export class UpdateReceptionSettingsDto {
   @IsBoolean()
   caravanAutoApproveLicenses: boolean;
 
+  @IsEnum(PlacementMode)
+  caravanPlacementMode: PlacementMode;
+
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(4000)
@@ -116,6 +127,9 @@ export class UpdateReceptionSettingsDto {
   @IsString()
   @MaxLength(4000)
   caravanRules: string;
+
+  @IsEnum(PlacementGenderPolicy)
+  placementGenderPolicy: PlacementGenderPolicy;
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

@@ -382,12 +382,20 @@ async function main() {
       sortOrder: 5,
     },
     {
+      code: 'accommodation.placement',
+      moduleId: caravans.id,
+      nameKey: 'menus.placement',
+      path: '/placements',
+      icon: 'map-pin',
+      sortOrder: 6,
+    },
+    {
       code: 'reservations.stats',
       moduleId: caravans.id,
       nameKey: 'menus.reservationsReport',
       path: '/reservation-stats',
       icon: 'chart-column',
-      sortOrder: 6,
+      sortOrder: 7,
     },
     {
       code: 'caravans.provincial-monitoring',
@@ -395,7 +403,7 @@ async function main() {
       nameKey: 'menus.provincialMonitoring',
       path: '/provincial-monitoring',
       icon: 'map',
-      sortOrder: 7,
+      sortOrder: 8,
     },
     {
       code: 'caravans.national-monitoring',
@@ -403,7 +411,7 @@ async function main() {
       nameKey: 'menus.nationalMonitoring',
       path: '/national-monitoring',
       icon: 'chart-column',
-      sortOrder: 8,
+      sortOrder: 9,
     },
     {
       code: 'reception.settings',
@@ -411,7 +419,7 @@ async function main() {
       nameKey: 'menus.receptionSettings',
       path: '/reception-settings',
       icon: 'settings',
-      sortOrder: 9,
+      sortOrder: 10,
     },
     {
       code: 'caravans.support-requests',
@@ -419,7 +427,7 @@ async function main() {
       nameKey: 'menus.supportRequests',
       path: '/support-requests',
       icon: 'hand-heart',
-      sortOrder: 10,
+      sortOrder: 11,
     },
     {
       code: 'caravans.support-request-report',
@@ -427,7 +435,7 @@ async function main() {
       nameKey: 'menus.supportRequestReport',
       path: '/support-request-report',
       icon: 'chart-column',
-      sortOrder: 11,
+      sortOrder: 12,
     },
     {
       code: 'location.mine',

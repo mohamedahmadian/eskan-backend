@@ -24,6 +24,7 @@ export const reservationStatusFilters = [
 ] as const;
 
 export const reservationSortFields = [
+  'code',
   'year',
   'type',
   'status',

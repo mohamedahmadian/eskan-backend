@@ -292,6 +292,7 @@ export class CaravansService {
     return paginatedResult(
       items.map((row) => ({
         id: row.id,
+        code: row.code,
         year: row.year,
         type: row.type,
         status: row.status,

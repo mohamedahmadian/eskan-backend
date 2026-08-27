@@ -24,6 +24,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AddReservationMemberDto } from './dto/add-reservation-member.dto';
 import { UpdateReservationMemberDto } from './dto/update-reservation-member.dto';
+import { AdjustReservationCapacityDto } from './dto/adjust-reservation-capacity.dto';
 import { ApproveReservationDto } from './dto/approve-reservation.dto';
 import { CopyPreviousMembersDto } from './dto/copy-previous-members.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -192,6 +193,15 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.reject(id, dto.reason, actor);
+  }
+
+  @Patch(':id/capacity')
+  adjustCapacity(
+    @Param('id') id: string,
+    @Body() dto: AdjustReservationCapacityDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.adjustCapacity(id, dto, actor);
   }
 
   @Post(':id/return')

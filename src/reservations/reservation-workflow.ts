@@ -1,4 +1,6 @@
 import {
+  PlacementGenderPolicy,
+  PlacementMode,
   ReservationStatus,
   ReservationType,
 } from '../generated/prisma/client';
@@ -75,6 +77,19 @@ export function contactEditStatuses(type: ReservationType): ReservationStatus[] 
   return [ReservationStatus.CARAVAN_CONTACTS, ReservationStatus.INSURANCE];
 }
 
+/** After management approval, capacity can be corrected without changing stage. */
+export function canAdjustApprovedCapacity(
+  type: ReservationType,
+  status: ReservationStatus,
+) {
+  if (type === ReservationType.INDIVIDUAL) return false;
+  return (
+    status === ReservationStatus.COMPANIONS ||
+    status === ReservationStatus.CARAVAN_CONTACTS ||
+    status === ReservationStatus.INSURANCE
+  );
+}
+
 export function validReturnStatuses(type: ReservationType): ReservationStatus[] {
   if (type === ReservationType.INDIVIDUAL) {
     return [ReservationStatus.DRAFT, ReservationStatus.INSURANCE];
@@ -139,6 +154,35 @@ export function settingsAutoApproveKey(type: ReservationType) {
   if (type === ReservationType.INDIVIDUAL) return 'individualAutoApprove' as const;
   if (type === ReservationType.GROUP) return 'groupAutoApprove' as const;
   return 'caravanAutoApprove' as const;
+}
+
+export function settingsPlacementModeKey(type: ReservationType) {
+  if (type === ReservationType.INDIVIDUAL) return 'individualPlacementMode' as const;
+  if (type === ReservationType.GROUP) return 'groupPlacementMode' as const;
+  return 'caravanPlacementMode' as const;
+}
+
+export function placementModeFromSettings(
+  settings: {
+    individualPlacementMode: PlacementMode;
+    groupPlacementMode: PlacementMode;
+    caravanPlacementMode: PlacementMode;
+  },
+  type: ReservationType,
+) {
+  return settings[settingsPlacementModeKey(type)];
+}
+
+/** Male and female may share a place only when policy is MIXED and the place has both capacities. */
+export function canAssignBothGendersTogether(
+  policy: PlacementGenderPolicy,
+  place: { maleCapacity: number; femaleCapacity: number },
+) {
+  return (
+    policy === PlacementGenderPolicy.MIXED &&
+    place.maleCapacity > 0 &&
+    place.femaleCapacity > 0
+  );
 }
 
 export function settingsCapacityKeys(type: ReservationType) {

@@ -63,6 +63,13 @@ export class CreateAccommodationDto {
   femaleCapacity?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  overflowPercent?: number;
+
+  @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsString()

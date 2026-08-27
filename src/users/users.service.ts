@@ -1220,6 +1220,7 @@ export class UsersService {
     return paginatedResult(
       items.map((row) => ({
         id: row.id,
+        code: row.code,
         year: row.year,
         type: row.type,
         status: row.status,
@@ -2668,34 +2669,36 @@ export class UsersService {
   async findOrCreatePilgrim(dto: {
     firstName: string;
     lastName: string;
-    nationalId: string;
+    nationalId?: string | null;
     phone?: string | null;
     birthDate?: string | null;
     gender?: UserGender | null;
   }) {
-    const nationalId = dto.nationalId.trim();
+    const identity = (dto.nationalId ?? '').trim();
     const phone = dto.phone ? normalizePhone(dto.phone) : '';
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     const birthDate = parseDateOnly(dto.birthDate);
 
-    const byNationalId = await this.prisma.user.findUnique({
-      where: { nationalId },
-      include: publicInclude,
-    });
-    if (byNationalId) {
-      await this.ensureRole(byNationalId.id, 'PILGRIM');
-      const patch: Prisma.UserUpdateInput = {};
-      if (birthDate && !byNationalId.birthDate) patch.birthDate = birthDate;
-      if (dto.gender && !byNationalId.gender) patch.gender = dto.gender;
-      if (Object.keys(patch).length) {
-        await this.prisma.user.update({
-          where: { id: byNationalId.id },
-          data: patch,
-        });
+    if (identity) {
+      const byNationalId = await this.prisma.user.findUnique({
+        where: { nationalId: identity },
+        include: publicInclude,
+      });
+      if (byNationalId) {
+        await this.ensureRole(byNationalId.id, 'PILGRIM');
+        const patch: Prisma.UserUpdateInput = {};
+        if (birthDate && !byNationalId.birthDate) patch.birthDate = birthDate;
+        if (dto.gender && !byNationalId.gender) patch.gender = dto.gender;
+        if (Object.keys(patch).length) {
+          await this.prisma.user.update({
+            where: { id: byNationalId.id },
+            data: patch,
+          });
+        }
+        const user = await this.findOne(byNationalId.id);
+        return { user, reused: true };
       }
-      const user = await this.findOne(byNationalId.id);
-      return { user, reused: true };
     }
 
     if (phone) {
@@ -2720,16 +2723,16 @@ export class UsersService {
     }
 
     const role = await this.ensureExistingRole('PILGRIM');
-    let username = nationalId;
+    let username = identity || `p${Date.now().toString(36)}`;
     const usernameTaken = await this.prisma.user.findUnique({
       where: { username },
       select: { id: true },
     });
     if (usernameTaken) {
-      username = `${nationalId}_${Date.now().toString(36)}`;
+      username = `${username}_${Date.now().toString(36)}`;
     }
 
-    const passwordHash = await bcrypt.hash(nationalId, 10);
+    const passwordHash = await bcrypt.hash(identity || username, 10);
     const created = await this.prisma.user.create({
       data: {
         username,
@@ -2737,7 +2740,7 @@ export class UsersService {
         firstName,
         lastName,
         fullName: joinFullName(firstName, lastName),
-        nationalId,
+        nationalId: identity || null,
         phone: phone || null,
         gender: dto.gender ?? null,
         birthDate,
@@ -2755,7 +2758,8 @@ export class UsersService {
     dto: {
       firstName: string;
       lastName: string;
-      nationalId: string;
+      nationalId?: string | null;
+      passportNumber?: string | null;
       phone?: string | null;
       birthDate?: string | null;
       gender: UserGender;
@@ -2766,18 +2770,22 @@ export class UsersService {
       throw new NotFoundException('کاربر یافت نشد');
     }
 
-    const nationalId = dto.nationalId.trim();
+    const nationalId =
+      (dto.nationalId ?? '').trim() ||
+      (dto.passportNumber ?? '').trim() ||
+      null;
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     const phone = dto.phone ? normalizePhone(dto.phone) || null : null;
     const birthDate = parseDateOnly(dto.birthDate);
-    const syncUsername = Boolean(current.nationalId) && current.username === current.nationalId;
+    const syncUsername =
+      Boolean(current.nationalId) && current.username === current.nationalId;
 
     await this.assertUniqueIdentity(
       {
         nationalId,
         phone,
-        username: syncUsername ? nationalId : undefined,
+        username: syncUsername && nationalId ? nationalId : undefined,
       },
       id,
     );
@@ -2794,7 +2802,7 @@ export class UsersService {
           phone,
           gender: dto.gender,
           birthDate,
-          ...(syncUsername ? { username: nationalId } : {}),
+          ...(syncUsername && nationalId ? { username: nationalId } : {}),
         },
       });
     } catch (error) {

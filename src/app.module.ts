@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CaravansModule } from './caravans/caravans.module';
@@ -34,10 +35,12 @@ import { EvaluationsModule } from './evaluations/evaluations.module';
 import { ProvincialMonitoringModule } from './provincial-monitoring/provincial-monitoring.module';
 import { NationalMonitoringModule } from './national-monitoring/national-monitoring.module';
 import { SupportRequestsModule } from './support-requests/support-requests.module';
+import { PlacementsModule } from './placements/placements.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     ImagesModule,
@@ -71,6 +74,7 @@ import { SupportRequestsModule } from './support-requests/support-requests.modul
     ProvincialMonitoringModule,
     NationalMonitoringModule,
     SupportRequestsModule,
+    PlacementsModule,
   ],
   controllers: [AppController],
 })

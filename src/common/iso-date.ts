@@ -36,3 +36,20 @@ export function addDaysIso(value: string, days: number) {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+export function toIsoDateOnly(value?: Date | string | null) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
+export function eachIsoDateInclusive(start: string, end: string) {
+  if (start > end) return [];
+  const dates: string[] = [];
+  let current = start;
+  while (current <= end) {
+    dates.push(current);
+    current = addDaysIso(current, 1);
+  }
+  return dates;
+}

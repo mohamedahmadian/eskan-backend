@@ -34,6 +34,7 @@ import {
 import { TransferAccommodationsYearDto } from './dto/transfer-accommodations-year.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
 import { resolveSortOrder } from '../common/sort-query';
+import { effectiveCapacity } from '../placements/placement-capacity';
 import type { AccommodationContactInputDto } from './dto/accommodation-contact-input.dto';
 
 const geoSelect = { id: true, nameFa: true, nameEn: true };
@@ -280,6 +281,7 @@ export class AccommodationsService {
     this.assertCapacity({
       maleCapacity: dto.maleCapacity,
       femaleCapacity: dto.femaleCapacity,
+      overflowPercent: dto.overflowPercent,
       assignedMaleCapacity: 0,
       assignedFemaleCapacity: 0,
     });
@@ -340,6 +342,7 @@ export class AccommodationsService {
     this.assertCapacity({
       maleCapacity: nextMale,
       femaleCapacity: nextFemale,
+      overflowPercent: dto.overflowPercent ?? current.overflowPercent,
       assignedMaleCapacity: current.assignedMaleCapacity,
       assignedFemaleCapacity: current.assignedFemaleCapacity,
     });
@@ -577,6 +580,7 @@ export class AccommodationsService {
         this.assertCapacity({
           maleCapacity: nextCaps.maleCapacity,
           femaleCapacity: nextCaps.femaleCapacity,
+          overflowPercent: current.overflowPercent,
           assignedMaleCapacity: current.assignedMaleCapacity,
           assignedFemaleCapacity: current.assignedFemaleCapacity,
         });
@@ -1109,16 +1113,21 @@ export class AccommodationsService {
   private assertCapacity(dto: {
     maleCapacity?: number;
     femaleCapacity?: number;
+    overflowPercent?: number;
     assignedMaleCapacity?: number;
     assignedFemaleCapacity?: number;
   }) {
     const male = dto.maleCapacity ?? 0;
     const female = dto.femaleCapacity ?? 0;
+    const overflow = dto.overflowPercent ?? 10;
     const assignedMale = dto.assignedMaleCapacity ?? 0;
     const assignedFemale = dto.assignedFemaleCapacity ?? 0;
-    if (assignedMale > male || assignedFemale > female) {
+    if (
+      assignedMale > effectiveCapacity(male, overflow) ||
+      assignedFemale > effectiveCapacity(female, overflow)
+    ) {
       throw new BadRequestException(
-        'ظرفیت اختصاص‌داده‌شده نمی‌تواند از ظرفیت کل بیشتر باشد',
+        'ظرفیت اختصاص‌داده‌شده نمی‌تواند از گنجایش مؤثر بیشتر باشد',
       );
     }
   }
@@ -1198,6 +1207,7 @@ export class AccommodationsService {
     set('managementType', dto.managementType as ManagementType | undefined);
     set('maleCapacity', dto.maleCapacity);
     set('femaleCapacity', dto.femaleCapacity);
+    set('overflowPercent', dto.overflowPercent);
     set('phone', dto.phone);
     set('address', dto.address);
     set('neshanAddress', dto.neshanAddress);
@@ -1563,6 +1573,7 @@ export class AccommodationsService {
         { header: 'آدرس', key: 'address', width: 36 },
         { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
         { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
+        { header: 'درصد مازاد', key: 'overflowPercent', width: 12 },
         {
           header: 'ظرفیت اختصاص‌شده مرد',
           key: 'assignedMaleCapacity',
@@ -1604,6 +1615,7 @@ export class AccommodationsService {
         address: item.address ?? '',
         maleCapacity: item.maleCapacity,
         femaleCapacity: item.femaleCapacity,
+        overflowPercent: item.overflowPercent,
         assignedMaleCapacity: item.assignedMaleCapacity,
         assignedFemaleCapacity: item.assignedFemaleCapacity,
         distanceToShrineKm: item.distanceToShrineKm,
