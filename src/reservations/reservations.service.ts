@@ -82,6 +82,7 @@ import {
   companionEditStatuses,
   contactEditStatuses,
   isOccupyingStatus,
+  isOwnerCreateDraft,
   nextAfterBasicInfo,
   nextAfterCompanions,
   nextAfterManagement,
@@ -1206,6 +1207,42 @@ export class ReservationsService {
     );
     this.emitWorkflowEvent('cancel', id, actor.id);
     return this.serialize(updated, actor);
+  }
+
+  /** Hard-delete an owner create-wizard draft (پیش‌نویس / اطلاعات اولیه). */
+  async remove(id: string, actor: Actor) {
+    const current = await this.requireReservation(id);
+    this.assertOwnerOrAdmin(current, actor);
+    if (!isOwnerCreateDraft(current)) {
+      throw new BadRequestException(
+        'فقط پرونده پیش‌نویس یا اطلاعات اولیه قابل حذف است',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const permitImageId = current.permitImageId;
+      const partyMale = current.requestedMaleCount || current.maleCount;
+      const partyFemale = current.requestedFemaleCount || current.femaleCount;
+
+      await tx.reservation.delete({ where: { id } });
+
+      if (permitImageId) {
+        await tx.storedImage.deleteMany({ where: { id: permitImageId } });
+      }
+      if (partyMale + partyFemale > 0) {
+        await this.syncPartyCapacity(tx, {
+          type: current.type,
+          groupId: current.groupId,
+          caravanId: current.caravanId,
+          maleCount: 0,
+          femaleCount: 0,
+          year: current.year,
+        });
+      }
+
+      this.logger.log(`reservation.remove ${id} by=${actor.id}`);
+      return { ok: true };
+    });
   }
 
   async findAll(query: FindReservationsQueryDto, actor: Actor) {

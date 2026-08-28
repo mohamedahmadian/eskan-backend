@@ -7,6 +7,7 @@ import {
 import {
   canAdjustApprovedCapacity,
   canAssignBothGendersTogether,
+  isOwnerCreateDraft,
   placementModeFromSettings,
   validRewindStatuses,
   unapprovedCounts,
@@ -41,6 +42,32 @@ describe('validRewindStatuses', () => {
   it('has no rewind target from draft or cancelled', () => {
     expect(validRewindStatuses(ReservationType.GROUP, ReservationStatus.DRAFT)).toEqual([]);
     expect(validRewindStatuses(ReservationType.GROUP, ReservationStatus.CANCELLED)).toEqual([]);
+  });
+});
+
+describe('isOwnerCreateDraft', () => {
+  it('allows a never-submitted draft in basic info', () => {
+    expect(
+      isOwnerCreateDraft({ status: ReservationStatus.DRAFT, returnedToStatus: null }),
+    ).toBe(true);
+  });
+
+  it('blocks files returned to draft and later workflow stages', () => {
+    expect(
+      isOwnerCreateDraft({
+        status: ReservationStatus.DRAFT,
+        returnedToStatus: ReservationStatus.INSURANCE,
+      }),
+    ).toBe(false);
+    expect(
+      isOwnerCreateDraft({
+        status: ReservationStatus.PENDING_MANAGEMENT_REVIEW,
+        returnedToStatus: null,
+      }),
+    ).toBe(false);
+    expect(
+      isOwnerCreateDraft({ status: ReservationStatus.INSURANCE, returnedToStatus: null }),
+    ).toBe(false);
   });
 });
 
