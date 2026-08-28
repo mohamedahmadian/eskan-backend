@@ -177,6 +177,12 @@ export class ReservationsController {
     return this.reservations.cancel(id, actor);
   }
 
+  @Delete(':id')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  remove(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.reservations.remove(id, actor);
+  }
+
   @Post(':id/approve')
   approve(
     @Param('id') id: string,

@@ -139,6 +139,17 @@ export function isOccupyingStatus(status: ReservationStatus) {
   return !NON_OCCUPYING_STATUSES.includes(status);
 }
 
+/** Owner create-wizard draft (never submitted / not admin-returned). */
+export function isOwnerCreateDraft(reservation: {
+  status: ReservationStatus;
+  returnedToStatus?: ReservationStatus | null;
+}) {
+  return (
+    reservation.status === ReservationStatus.DRAFT &&
+    !reservation.returnedToStatus
+  );
+}
+
 /** Approved headcount is unset until management reviews the file. */
 export function unapprovedCounts() {
   return { maleCount: 0, femaleCount: 0, totalCount: 0 };
