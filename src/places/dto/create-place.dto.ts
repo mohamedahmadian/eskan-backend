@@ -10,10 +10,13 @@ import {
 } from 'class-validator';
 import { emptyToNull, toOptionalNumber } from '../../common/dto-transform';
 
-export class CreateMedicalCenterDto {
+export class CreatePlaceDto {
   @IsString()
   @MinLength(2)
   name: string;
+
+  @IsUUID()
+  placeTypeId: string;
 
   @IsUUID()
   provinceId: string;

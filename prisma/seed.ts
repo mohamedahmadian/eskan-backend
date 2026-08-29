@@ -541,28 +541,12 @@ async function main() {
       sortOrder: 6,
     },
     {
-      code: 'base-info.medical-centers',
-      moduleId: baseInfo.id,
-      nameKey: 'menus.medicalCenters',
-      path: '/base-info/medical-centers',
-      icon: 'hospital',
-      sortOrder: 7,
-    },
-    {
-      code: 'base-info.red-crescents',
-      moduleId: baseInfo.id,
-      nameKey: 'menus.redCrescents',
-      path: '/base-info/red-crescents',
-      icon: 'heart-handshake',
-      sortOrder: 8,
-    },
-    {
       code: 'base-info.benefactors',
       moduleId: baseInfo.id,
       nameKey: 'menus.benefactors',
       path: '/base-info/benefactors',
       icon: 'hand-heart',
-      sortOrder: 9,
+      sortOrder: 7,
     },
     {
       code: 'base-info.government-organizations',
@@ -571,6 +555,14 @@ async function main() {
       path: '/base-info/government-organizations',
       icon: 'building',
       sortOrder: 10,
+    },
+    {
+      code: 'base-info.places',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.places',
+      path: '/base-info/places',
+      icon: 'landmark',
+      sortOrder: 11,
     },
     {
       code: 'licenses.issue',
@@ -1006,6 +998,17 @@ async function main() {
       create: { roleId: pilgrimRole.id, menuId: menu.id },
     });
   }
+  const pilgrimForbiddenMenus = menuRecords.filter(
+    (item) => !pilgrimMenuCodes.has(item.code),
+  );
+  if (pilgrimForbiddenMenus.length) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: pilgrimRole.id,
+        menuId: { in: pilgrimForbiddenMenus.map((item) => item.id) },
+      },
+    });
+  }
 
   const licenseIssuerMenuCodes = new Set([
     'dashboard.overview',
@@ -1115,6 +1118,7 @@ async function main() {
   });
 
   await seedGeo();
+  await seedPlaceTypes();
 
   const systemPasswordHash = await bcrypt.hash(
     `system-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
@@ -1452,6 +1456,31 @@ async function seedGeo() {
     if (!iranNames.has(extra.provinceFa)) {
       throw new Error(`Extra city province not in geo seed: ${extra.provinceFa}`);
     }
+  }
+}
+
+const placeTypeSeed = [
+  { code: 'hospital', nameFa: 'بیمارستان', nameEn: 'Hospital', icon: 'hospital', sortOrder: 1 },
+  { code: 'pharmacy', nameFa: 'داروخانه', nameEn: 'Pharmacy', icon: 'pill', sortOrder: 2 },
+  { code: 'mosque', nameFa: 'مسجد', nameEn: 'Mosque', icon: 'landmark', sortOrder: 3 },
+  { code: 'gas-station', nameFa: 'پمپ بنزین', nameEn: 'Gas station', icon: 'fuel', sortOrder: 4 },
+  { code: 'restaurant', nameFa: 'رستوران', nameEn: 'Restaurant', icon: 'utensils-crossed', sortOrder: 5 },
+  { code: 'police', nameFa: 'پاسگاه پلیس', nameEn: 'Police station', icon: 'shield', sortOrder: 6 },
+  { code: 'red-crescent', nameFa: 'هلال احمر', nameEn: 'Red Crescent', icon: 'heart-handshake', sortOrder: 7 },
+];
+
+async function seedPlaceTypes() {
+  for (const item of placeTypeSeed) {
+    await prisma.placeType.upsert({
+      where: { code: item.code },
+      update: {
+        nameFa: item.nameFa,
+        nameEn: item.nameEn,
+        icon: item.icon,
+        sortOrder: item.sortOrder,
+      },
+      create: item,
+    });
   }
 }
 

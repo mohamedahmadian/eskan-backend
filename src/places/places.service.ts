@@ -7,78 +7,88 @@ import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
+  wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateRedCrescentDto } from './dto/create-red-crescent.dto';
-import { FindRedCrescentsQueryDto } from './dto/find-red-crescents-query.dto';
-import { UpdateRedCrescentDto } from './dto/update-red-crescent.dto';
+import { CreatePlaceDto } from './dto/create-place.dto';
+import { FindPlacesQueryDto } from './dto/find-places-query.dto';
+import { UpdatePlaceDto } from './dto/update-place.dto';
 
 const geoSelect = { id: true, nameFa: true, nameEn: true };
 
-const redCrescentInclude = {
+const placeInclude = {
+  placeType: {
+    select: {
+      id: true,
+      code: true,
+      nameFa: true,
+      nameEn: true,
+      icon: true,
+      isActive: true,
+    },
+  },
   province: { select: { ...geoSelect, countryId: true } },
   city: { select: { ...geoSelect, provinceId: true } },
-} satisfies Prisma.RedCrescentInclude;
+} satisfies Prisma.PlaceInclude;
 
-type RedCrescentRecord = Prisma.RedCrescentGetPayload<{
-  include: typeof redCrescentInclude;
+type PlaceRecord = Prisma.PlaceGetPayload<{
+  include: typeof placeInclude;
 }>;
 
 @Injectable()
-export class RedCrescentsService {
+export class PlacesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: FindRedCrescentsQueryDto) {
-    const { page, pageSize, skip, take } = paginationArgs(query);
+  async findAll(query: FindPlacesQueryDto) {
     const where = this.listWhere(query);
     const orderBy = this.listOrderBy(query);
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.place.findMany({
+        where,
+        orderBy,
+        include: placeInclude,
+      });
+      return items.map((item) => this.serialize(item));
+    }
+    const { page, pageSize, skip, take } = paginationArgs(query);
     const [items, total] = await Promise.all([
-      this.prisma.redCrescent.findMany({
+      this.prisma.place.findMany({
         where,
         orderBy,
         skip,
         take,
-        include: redCrescentInclude,
+        include: placeInclude,
       }),
-      this.prisma.redCrescent.count({ where }),
+      this.prisma.place.count({ where }),
     ]);
-    return paginatedResult(items.map((item) => this.serialize(item)), total, page, pageSize);
-  }
-
-  private listOrderBy(
-    query: FindRedCrescentsQueryDto,
-  ): Prisma.RedCrescentOrderByWithRelationInput[] {
-    return resolveSortOrder<Prisma.RedCrescentOrderByWithRelationInput>(
-      query.sortBy,
-      query.sortDir,
-      {
-        name: (dir) => ({ name: dir }),
-        phone: (dir) => ({ phone: dir }),
-        province: (dir) => ({ province: { nameFa: dir } }),
-        city: (dir) => ({ city: { nameFa: dir } }),
-      },
-      [{ createdAt: 'desc' }, { id: 'asc' }],
+    return paginatedResult(
+      items.map((item) => this.serialize(item)),
+      total,
+      page,
+      pageSize,
     );
   }
 
   async findOne(id: string) {
-    const item = await this.prisma.redCrescent.findUnique({
+    const item = await this.prisma.place.findUnique({
       where: { id },
-      include: redCrescentInclude,
+      include: placeInclude,
     });
     if (!item) {
-      throw new NotFoundException('شعبه هلال احمر یافت نشد');
+      throw new NotFoundException('مکان مهم یافت نشد');
     }
     return this.serialize(item);
   }
 
-  async create(dto: CreateRedCrescentDto) {
+  async create(dto: CreatePlaceDto) {
     const geo = await this.resolveGeo(dto.provinceId, dto.cityId);
-    const item = await this.prisma.redCrescent.create({
+    await this.assertPlaceType(dto.placeTypeId);
+    const item = await this.prisma.place.create({
       data: {
         name: dto.name.trim(),
+        placeTypeId: dto.placeTypeId,
         phone: dto.phone?.trim() || null,
         address: dto.address?.trim() || null,
         neshanAddress: dto.neshanAddress?.trim() || null,
@@ -88,20 +98,24 @@ export class RedCrescentsService {
         provinceId: geo.provinceId,
         cityId: geo.cityId,
       },
-      include: redCrescentInclude,
+      include: placeInclude,
     });
     return this.serialize(item);
   }
 
-  async update(id: string, dto: UpdateRedCrescentDto) {
+  async update(id: string, dto: UpdatePlaceDto) {
     const current = await this.findOne(id);
     const provinceId = dto.provinceId ?? current.provinceId;
     const cityId = dto.cityId ?? current.cityId;
     const geo = await this.resolveGeo(provinceId, cityId);
-    const item = await this.prisma.redCrescent.update({
+    if (dto.placeTypeId) {
+      await this.assertPlaceType(dto.placeTypeId);
+    }
+    const item = await this.prisma.place.update({
       where: { id },
       data: {
         name: dto.name?.trim(),
+        placeTypeId: dto.placeTypeId,
         phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
         address:
           dto.address === undefined ? undefined : dto.address?.trim() || null,
@@ -118,21 +132,22 @@ export class RedCrescentsService {
         provinceId: geo.provinceId,
         cityId: geo.cityId,
       },
-      include: redCrescentInclude,
+      include: placeInclude,
     });
     return this.serialize(item);
   }
 
   async remove(id: string) {
     await this.findOne(id);
-    await this.prisma.redCrescent.delete({ where: { id } });
+    await this.prisma.place.delete({ where: { id } });
     return { ok: true };
   }
 
-  private listWhere(
-    query: FindRedCrescentsQueryDto,
-  ): Prisma.RedCrescentWhereInput {
-    const filters: Prisma.RedCrescentWhereInput[] = [];
+  private listWhere(query: FindPlacesQueryDto): Prisma.PlaceWhereInput {
+    const filters: Prisma.PlaceWhereInput[] = [];
+    if (query.placeTypeId) {
+      filters.push({ placeTypeId: query.placeTypeId });
+    }
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
     } else if (query.provinceId) {
@@ -146,6 +161,8 @@ export class RedCrescentsService {
           { address: containsInsensitive(query.q) },
           { neshanAddress: containsInsensitive(query.q) },
           { description: containsInsensitive(query.q) },
+          { placeType: { nameFa: containsInsensitive(query.q) } },
+          { placeType: { nameEn: containsInsensitive(query.q) } },
         ],
       });
     }
@@ -153,6 +170,23 @@ export class RedCrescentsService {
       return {};
     }
     return filters.length === 1 ? filters[0] : { AND: filters };
+  }
+
+  private listOrderBy(
+    query: FindPlacesQueryDto,
+  ): Prisma.PlaceOrderByWithRelationInput[] {
+    return resolveSortOrder<Prisma.PlaceOrderByWithRelationInput>(
+      query.sortBy,
+      query.sortDir,
+      {
+        name: (dir) => ({ name: dir }),
+        phone: (dir) => ({ phone: dir }),
+        placeType: (dir) => ({ placeType: { nameFa: dir } }),
+        province: (dir) => ({ province: { nameFa: dir } }),
+        city: (dir) => ({ city: { nameFa: dir } }),
+      },
+      [{ createdAt: 'desc' }, { id: 'asc' }],
+    );
   }
 
   private async resolveGeo(provinceId: string, cityId: string) {
@@ -169,7 +203,17 @@ export class RedCrescentsService {
     return { provinceId: city.provinceId, cityId: city.id };
   }
 
-  private serialize(item: RedCrescentRecord) {
+  private async assertPlaceType(placeTypeId: string) {
+    const type = await this.prisma.placeType.findUnique({
+      where: { id: placeTypeId },
+      select: { id: true },
+    });
+    if (!type) {
+      throw new BadRequestException('نوع مکان معتبر نیست');
+    }
+  }
+
+  private serialize(item: PlaceRecord) {
     return {
       ...item,
       latitude: toCoord(item.latitude),

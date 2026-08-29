@@ -868,9 +868,8 @@ model Province {
   cities          City[]
   accommodations  Accommodation[]
   foodSuppliers   FoodSupplier[]
-  medicalCenters  MedicalCenter[]
-  redCrescents    RedCrescent[]
   benefactors      Benefactor[]
+  places          Place[]
   users             User[]                 @relation("UserHomeProvince")
   locatedUsers      User[]                 @relation("UserLocationProvince")
   locationHistories UserLocationHistory[]  @relation("UserLocationHistoryProvince")
@@ -903,9 +902,8 @@ model City {
   sortOrder          Int             @default(0)
   accommodations             Accommodation[]
   foodSuppliers              FoodSupplier[]
-  medicalCenters             MedicalCenter[]
-  redCrescents               RedCrescent[]
   benefactors                Benefactor[]
+  places                     Place[]
   caravans                   Caravan[]
   groups                     Group[]
   reservationOrigins         Reservation[]             @relation("ReservationOriginCity")
@@ -1117,50 +1115,6 @@ model FoodSupplier {
   @@map("food_suppliers")
 }
 
-model MedicalCenter {
-  id            String   @id @default(uuid())
-  name          String
-  phone         String?
-  address       String?
-  neshanAddress String?
-  latitude      Decimal? @db.Decimal(10, 7)
-  longitude     Decimal? @db.Decimal(10, 7)
-  description   String?
-  provinceId    String
-  province      Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
-  cityId        String
-  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([name])
-  @@index([provinceId])
-  @@index([cityId])
-  @@map("medical_centers")
-}
-
-model RedCrescent {
-  id            String   @id @default(uuid())
-  name          String
-  phone         String?
-  address       String?
-  neshanAddress String?
-  latitude      Decimal? @db.Decimal(10, 7)
-  longitude     Decimal? @db.Decimal(10, 7)
-  description   String?
-  provinceId    String
-  province      Province @relation(fields: [provinceId], references: [id], onDelete: Restrict)
-  cityId        String
-  city          City     @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@index([name])
-  @@index([provinceId])
-  @@index([cityId])
-  @@map("red_crescents")
-}
-
 model Benefactor {
   id            String   @id @default(uuid())
   name          String
@@ -1181,6 +1135,47 @@ model Benefactor {
   @@index([provinceId])
   @@index([cityId])
   @@map("benefactors")
+}
+
+model PlaceType {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  nameFa    String
+  nameEn    String
+  icon      String   @default("landmark")
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  places    Place[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("place_types")
+}
+
+model Place {
+  id            String    @id @default(uuid())
+  name          String
+  placeTypeId   String
+  placeType     PlaceType @relation(fields: [placeTypeId], references: [id], onDelete: Restrict)
+  provinceId    String
+  province      Province  @relation(fields: [provinceId], references: [id], onDelete: Restrict)
+  cityId        String
+  city          City      @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  phone         String?
+  address       String?
+  neshanAddress String?
+  latitude      Decimal?  @db.Decimal(10, 7)
+  longitude     Decimal?  @db.Decimal(10, 7)
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([name])
+  @@index([placeTypeId])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("places")
 }
 
 model WalkingRoute {
@@ -1220,6 +1215,14 @@ model WalkingRouteStage {
   cityId               String
   city                 City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
   stageNumber          Int
+  name                 String?
+  latitude             Decimal?     @db.Decimal(10, 7)
+  longitude            Decimal?     @db.Decimal(10, 7)
+  managerName          String?
+  managerPhone         String?
+  managerTelegram      String?
+  managerWhatsapp      String?
+  managerEitaa         String?
   distanceToNextKm     Decimal?     @db.Decimal(8, 2)
   distanceToPreviousKm Decimal?     @db.Decimal(8, 2)
   distanceToMashhadKm  Decimal?     @db.Decimal(8, 2)

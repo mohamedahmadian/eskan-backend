@@ -4,16 +4,17 @@ import { emptyToUndefined } from '../../common/dto-transform';
 import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
 
-export const redCrescentSortFields = [
+export const placeSortFields = [
   'name',
-  'phone',
+  'placeType',
   'province',
   'city',
+  'phone',
 ] as const;
 
-export type RedCrescentSortField = (typeof redCrescentSortFields)[number];
+export type PlaceSortField = (typeof placeSortFields)[number];
 
-export class FindRedCrescentsQueryDto extends PaginationQueryDto {
+export class FindPlacesQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
@@ -26,8 +27,13 @@ export class FindRedCrescentsQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
-  @IsIn([...redCrescentSortFields])
-  sortBy?: RedCrescentSortField;
+  @IsUUID()
+  placeTypeId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...placeSortFields])
+  sortBy?: PlaceSortField;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))

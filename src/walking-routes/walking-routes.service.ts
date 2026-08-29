@@ -245,7 +245,14 @@ export class WalkingRoutesService {
           { entryBorder: { name: containsInsensitive(query.q) } },
           {
             stages: {
-              some: { description: containsInsensitive(query.q) },
+              some: {
+                OR: [
+                  { name: containsInsensitive(query.q) },
+                  { description: containsInsensitive(query.q) },
+                  { managerName: containsInsensitive(query.q) },
+                  { managerPhone: containsInsensitive(query.q) },
+                ],
+              },
             },
           },
         ],
@@ -273,7 +280,7 @@ export class WalkingRoutesService {
         throw new BadRequestException('حداقل یک کشور مبدأ را انتخاب کنید');
       }
       if (!stages?.length) {
-        throw new BadRequestException('حداقل یک مرحله برای مسیر لازم است');
+        throw new BadRequestException('حداقل یک ایستگاه برای مسیر لازم است');
       }
     }
 
@@ -303,11 +310,11 @@ export class WalkingRoutesService {
 
     if (stages) {
       if (!stages.length) {
-        throw new BadRequestException('حداقل یک مرحله برای مسیر لازم است');
+        throw new BadRequestException('حداقل یک ایستگاه برای مسیر لازم است');
       }
       const numbers = stages.map((stage) => stage.stageNumber);
       if (new Set(numbers).size !== numbers.length) {
-        throw new BadRequestException('شماره مرحله در مسیر تکراری است');
+        throw new BadRequestException('شماره ایستگاه در مسیر تکراری است');
       }
       const cityIds = [...new Set(stages.map((stage) => stage.cityId))];
       const cities = await this.prisma.city.findMany({
@@ -320,8 +327,15 @@ export class WalkingRoutesService {
       for (const city of cities) {
         if (city.province.country.iso2 !== 'IR') {
           throw new BadRequestException(
-            'مراحل مسیر فقط می‌توانند شهرهای ایران باشند',
+            'ایستگاه‌های مسیر فقط می‌توانند شهرهای ایران باشند',
           );
+        }
+      }
+      for (const stage of stages) {
+        const hasLat = stage.latitude != null;
+        const hasLng = stage.longitude != null;
+        if (hasLat !== hasLng) {
+          throw new BadRequestException('موقعیت مکانی ایستگاه ناقص است');
         }
       }
     }
@@ -339,6 +353,14 @@ export class WalkingRoutesService {
     return {
       cityId: stage.cityId,
       stageNumber: stage.stageNumber,
+      name: stage.name?.trim() || null,
+      latitude: decimal(stage.latitude),
+      longitude: decimal(stage.longitude),
+      managerName: stage.managerName?.trim() || null,
+      managerPhone: stage.managerPhone?.trim() || null,
+      managerTelegram: stage.managerTelegram?.trim() || null,
+      managerWhatsapp: stage.managerWhatsapp?.trim() || null,
+      managerEitaa: stage.managerEitaa?.trim() || null,
       distanceToNextKm: decimal(stage.distanceToNextKm),
       distanceToPreviousKm: decimal(stage.distanceToPreviousKm),
       distanceToMashhadKm: decimal(stage.distanceToMashhadKm),
@@ -365,6 +387,14 @@ export class WalkingRoutesService {
           longitude: num(stage.city.longitude),
         },
         stageNumber: stage.stageNumber,
+        name: stage.name,
+        latitude: num(stage.latitude),
+        longitude: num(stage.longitude),
+        managerName: stage.managerName,
+        managerPhone: stage.managerPhone,
+        managerTelegram: stage.managerTelegram,
+        managerWhatsapp: stage.managerWhatsapp,
+        managerEitaa: stage.managerEitaa,
         distanceToNextKm: num(stage.distanceToNextKm),
         distanceToPreviousKm: num(stage.distanceToPreviousKm),
         distanceToMashhadKm: num(stage.distanceToMashhadKm),

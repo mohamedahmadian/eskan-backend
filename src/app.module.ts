@@ -13,10 +13,10 @@ import { SmsModule } from './sms/sms.module';
 import { AccommodationsModule } from './accommodations/accommodations.module';
 import { UsersModule } from './users/users.module';
 import { FoodSuppliersModule } from './food-suppliers/food-suppliers.module';
-import { MedicalCentersModule } from './medical-centers/medical-centers.module';
-import { RedCrescentsModule } from './red-crescents/red-crescents.module';
 import { BenefactorsModule } from './benefactors/benefactors.module';
 import { GovernmentOrganizationsModule } from './government-organizations/government-organizations.module';
+import { PlaceTypesModule } from './place-types/place-types.module';
+import { PlacesModule } from './places/places.module';
 import { OrgUnitsModule } from './org-units/org-units.module';
 import { HeadquartersInfoModule } from './headquarters-info/headquarters-info.module';
 import { HeadquartersPhonesModule } from './headquarters-phones/headquarters-phones.module';
@@ -53,10 +53,10 @@ import { PlacementsModule } from './placements/placements.module';
     UsersModule,
     WalkingRoutesModule,
     FoodSuppliersModule,
-    MedicalCentersModule,
-    RedCrescentsModule,
     BenefactorsModule,
     GovernmentOrganizationsModule,
+    PlaceTypesModule,
+    PlacesModule,
     OrgUnitsModule,
     HeadquartersInfoModule,
     HeadquartersPhonesModule,
