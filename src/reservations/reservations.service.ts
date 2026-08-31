@@ -1413,6 +1413,43 @@ export class ReservationsService {
     return this.serialize(current, actor);
   }
 
+  async findTravelHistory(id: string, actor: Actor) {
+    const current = await this.requireReservation(id);
+    this.assertCanView(current, actor);
+    const items = await this.prisma.reservationTravelHistory.findMany({
+      where: { reservationId: id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      include: {
+        province: {
+          select: { id: true, nameFa: true, nameEn: true, countryId: true },
+        },
+        city: {
+          select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+        },
+        walkingRouteStage: {
+          select: { id: true, name: true, stageNumber: true },
+        },
+      },
+    });
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        reservationId: item.reservationId,
+        userId: item.userId,
+        walkingRouteStageId: item.walkingRouteStageId,
+        walkingRouteStage: item.walkingRouteStage,
+        provinceId: item.provinceId,
+        cityId: item.cityId,
+        province: item.province,
+        city: item.city,
+        latitude: item.latitude == null ? null : Number(item.latitude),
+        longitude: item.longitude == null ? null : Number(item.longitude),
+        notes: item.notes,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    };
+  }
+
   async listMembers(id: string, actor: Actor) {
     const current = await this.requireReservation(id);
     this.assertCanView(current, actor);
@@ -3657,6 +3694,7 @@ export class ReservationsService {
       permitSource: row.permitSource,
       returnedToStatus: row.returnedToStatus,
       createWizardStep: row.createWizardStep,
+      walkingRoute: row.walkingRoute,
     };
   }
 

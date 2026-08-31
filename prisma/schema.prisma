@@ -159,6 +159,7 @@ model User {
   reservationPermitReviews Reservation[] @relation("ReservationPermitReviewer")
   managedOrgUnits       OrgUnit[] @relation("OrgUnitManager")
   locationHistories     UserLocationHistory[]
+  reservationTravelHistories ReservationTravelHistory[]
   evaluationsAsEvaluator Evaluation[] @relation("EvaluationEvaluator")
   evaluationsAsTarget    Evaluation[] @relation("EvaluationTarget")
   evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
@@ -180,18 +181,25 @@ model User {
   @@map("users")
 }
 
+enum LocationSource {
+  MANUAL
+  APP
+  STATION
+}
+
 model UserLocationHistory {
-  id         String    @id @default(uuid())
+  id         String         @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   provinceId String?
-  province   Province? @relation("UserLocationHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
+  province   Province?      @relation("UserLocationHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
   cityId     String?
-  city       City?     @relation("UserLocationHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
-  latitude   Decimal?  @db.Decimal(10, 7)
-  longitude  Decimal?  @db.Decimal(10, 7)
+  city       City?          @relation("UserLocationHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
+  latitude   Decimal?       @db.Decimal(10, 7)
+  longitude  Decimal?       @db.Decimal(10, 7)
   notes      String?
-  createdAt  DateTime  @default(now())
+  source     LocationSource @default(MANUAL)
+  createdAt  DateTime       @default(now())
 
   @@index([userId, createdAt])
   @@index([provinceId])
@@ -635,6 +643,7 @@ model Reservation {
   members         ReservationMember[]
   caravanContacts ReservationCaravanContact[]
   allocations     ReservationAllocation[]
+  travelHistories ReservationTravelHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -873,6 +882,7 @@ model Province {
   users             User[]                 @relation("UserHomeProvince")
   locatedUsers      User[]                 @relation("UserLocationProvince")
   locationHistories UserLocationHistory[]  @relation("UserLocationHistoryProvince")
+  travelHistories   ReservationTravelHistory[] @relation("TravelHistoryProvince")
   representativeId String?
   representative   User?           @relation("ProvinceHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
   entryBorders     EntryBorder[]
@@ -910,6 +920,7 @@ model City {
   users                      User[]                    @relation("UserHomeCity")
   locatedUsers               User[]                    @relation("UserLocationCity")
   locationHistories          UserLocationHistory[]     @relation("UserLocationHistoryCity")
+  travelHistories            ReservationTravelHistory[] @relation("TravelHistoryCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
   walkingRouteStages         WalkingRouteStage[]
@@ -1230,9 +1241,36 @@ model WalkingRouteStage {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
+  travelHistories ReservationTravelHistory[]
+
   @@unique([walkingRouteId, stageNumber])
   @@index([cityId])
   @@map("walking_route_stages")
+}
+
+model ReservationTravelHistory {
+  id                  String            @id @default(uuid())
+  reservationId       String
+  reservation         Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walkingRouteStageId String?
+  walkingRouteStage   WalkingRouteStage? @relation(fields: [walkingRouteStageId], references: [id], onDelete: SetNull)
+  provinceId          String?
+  province            Province?         @relation("TravelHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
+  cityId              String?
+  city                City?             @relation("TravelHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
+  latitude            Decimal?          @db.Decimal(10, 7)
+  longitude           Decimal?          @db.Decimal(10, 7)
+  notes               String?
+  createdAt           DateTime          @default(now())
+
+  @@index([reservationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([walkingRouteStageId])
+  @@index([provinceId])
+  @@index([cityId])
+  @@map("reservation_travel_histories")
 }
 
 model Supplier {

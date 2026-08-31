@@ -143,6 +143,15 @@ export class ReservationsController {
     return this.reservations.listContacts(id, actor);
   }
 
+  @Get(':id/travel-history')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  findTravelHistory(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.findTravelHistory(id, actor);
+  }
+
   @Get(':id')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {

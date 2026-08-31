@@ -3,12 +3,16 @@ import { IsIn, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
 
+import { LocationSource } from '../../generated/prisma/client';
+import { locationSources } from './update-user-location.dto';
+
 export const locationHistorySortFields = [
   'seq',
   'createdAt',
   'province',
   'city',
   'notes',
+  'source',
 ] as const;
 
 export type LocationHistorySortField =
@@ -32,4 +36,9 @@ export class FindLocationHistoryQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsIn([...sortDirections])
   sortDir?: (typeof sortDirections)[number];
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsIn([...locationSources])
+  source?: LocationSource;
 }

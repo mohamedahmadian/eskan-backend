@@ -24,8 +24,10 @@ import {
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
 import {
+  LocationSource,
   Prisma,
   Religion,
+  ReservationStatus,
   ReservationType,
   UserGender,
   UserStatus,
@@ -1013,15 +1015,34 @@ export class UsersService {
     ) {
       throw new BadRequestException('عرض و طول جغرافیایی باید با هم ثبت شوند');
     }
+    const stage = dto.walkingRouteStageId
+      ? await this.prisma.walkingRouteStage.findUnique({
+          where: { id: dto.walkingRouteStageId },
+          include: { city: true },
+        })
+      : null;
+    if (dto.walkingRouteStageId && !stage) {
+      throw new BadRequestException('ایستگاه انتخاب‌شده معتبر نیست');
+    }
     const geo = await this.resolveLocationGeo({
-      provinceId: dto.provinceId ?? null,
-      cityId: dto.cityId ?? null,
+      provinceId: dto.provinceId ?? stage?.city.provinceId ?? null,
+      cityId: dto.cityId ?? stage?.cityId ?? null,
     });
     const notes = dto.notes?.trim() ? dto.notes.trim() : null;
-    const latitude =
+    const source =
+      dto.source ?? (stage ? LocationSource.STATION : LocationSource.MANUAL);
+    let latitude =
       dto.latitude == null ? null : new Prisma.Decimal(dto.latitude);
-    const longitude =
+    let longitude =
       dto.longitude == null ? null : new Prisma.Decimal(dto.longitude);
+    if (latitude == null && longitude == null && stage) {
+      const stageLat = stage.latitude ?? stage.city.latitude;
+      const stageLng = stage.longitude ?? stage.city.longitude;
+      if (stageLat != null && stageLng != null) {
+        latitude = new Prisma.Decimal(stageLat);
+        longitude = new Prisma.Decimal(stageLng);
+      }
+    }
     const user = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
         where: { id },
@@ -1030,7 +1051,7 @@ export class UsersService {
           locationCityId: geo.cityId,
           latitude,
           longitude,
-          locationNotes: notes,
+          locationNotes: source === LocationSource.APP ? undefined : notes,
           locationUpdatedAt: new Date(),
         },
         include: publicInclude,
@@ -1043,8 +1064,28 @@ export class UsersService {
           latitude,
           longitude,
           notes,
+          source,
         },
       });
+      const reservation = await this.resolveTravelReservation(
+        tx,
+        id,
+        dto.reservationId,
+      );
+      if (reservation && source !== LocationSource.APP) {
+        await tx.reservationTravelHistory.create({
+          data: {
+            reservationId: reservation.id,
+            userId: id,
+            walkingRouteStageId: stage?.id ?? null,
+            provinceId: geo.provinceId,
+            cityId: geo.cityId,
+            latitude,
+            longitude,
+            notes,
+          },
+        });
+      }
       return updated;
     });
     return this.toPublicUser(user);
@@ -1056,6 +1097,7 @@ export class UsersService {
     const q = query.q?.trim();
     const where: Prisma.UserLocationHistoryWhereInput = {
       userId,
+      ...(query.source ? { source: query.source } : {}),
       ...(q
         ? {
             OR: [
@@ -1077,6 +1119,7 @@ export class UsersService {
           province: (dir) => ({ province: { nameFa: dir } }),
           city: (dir) => ({ city: { nameFa: dir } }),
           notes: (dir) => ({ notes: dir }),
+          source: (dir) => ({ source: dir }),
         },
         [{ createdAt: 'desc' }, { id: 'desc' }],
       );
@@ -1084,7 +1127,7 @@ export class UsersService {
       province: { select: { ...geoSelect, countryId: true } },
       city: { select: { ...geoSelect, provinceId: true } },
     } as const;
-    const [items, total, ranked] = await Promise.all([
+    const [items, total, ranked, filteredMap] = await Promise.all([
       this.prisma.userLocationHistory.findMany({
         where,
         skip,
@@ -1098,9 +1141,14 @@ export class UsersService {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         include,
       }),
+      this.prisma.userLocationHistory.findMany({
+        where,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        include,
+      }),
     ]);
     const seqById = new Map(ranked.map((item, index) => [item.id, index + 1]));
-    const mapPoints = ranked
+    const mapPoints = filteredMap
       .filter(
         (item) =>
           item.latitude != null &&
@@ -2081,6 +2129,7 @@ export class UsersService {
       latitude: Prisma.Decimal | null;
       longitude: Prisma.Decimal | null;
       notes: string | null;
+      source: LocationSource;
       createdAt: Date;
       province: {
         id: string;
@@ -2105,10 +2154,47 @@ export class UsersService {
       latitude: item.latitude == null ? null : Number(item.latitude),
       longitude: item.longitude == null ? null : Number(item.longitude),
       notes: item.notes,
+      source: item.source,
       createdAt: item.createdAt,
       province: item.province,
       city: item.city,
     };
+  }
+
+  private async resolveTravelReservation(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    reservationId?: string | null,
+  ) {
+    if (reservationId) {
+      const row = await tx.reservation.findUnique({
+        where: { id: reservationId },
+        include: { members: { select: { userId: true } } },
+      });
+      if (!row) return null;
+      const allowed =
+        row.createdById === userId ||
+        row.caravanManagerId === userId ||
+        row.members.some((item) => item.userId === userId);
+      return allowed ? row : null;
+    }
+    return tx.reservation.findFirst({
+      where: {
+        status: {
+          notIn: [ReservationStatus.CANCELLED, ReservationStatus.REJECTED],
+        },
+        OR: [
+          {
+            createdById: userId,
+            type: { in: [ReservationType.INDIVIDUAL, ReservationType.GROUP] },
+          },
+          { members: { some: { userId } } },
+          { caravanManagerId: userId },
+          { createdById: userId, type: ReservationType.CARAVAN },
+        ],
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+    });
   }
 
   private async resolveLocationGeo(dto: {
