@@ -44,6 +44,9 @@ jobs:
               echo "✅ Dependencies unchanged. Skipping npm ci."
             fi
 
+            echo "🗄️ Applying database migrations..."
+            npx prisma migrate deploy
+
             echo "🔧 Generating Prisma Client..."
             npx prisma generate
 
