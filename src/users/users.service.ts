@@ -1005,6 +1005,30 @@ export class UsersService {
       password: _password,
       ...safe
     } = dto;
+    const current = await this.findOne(id);
+    const countryId =
+      safe.countryId === undefined ? current.countryId : safe.countryId;
+    const iran = await this.prisma.country.findFirst({
+      where: { iso2: 'IR' },
+      select: { id: true },
+    });
+    const isIranian = Boolean(iran && countryId === iran.id);
+    const nextPhone =
+      safe.phone === undefined ? current.phone : safe.phone;
+    if (isIranian) {
+      const phone = nextPhone ? normalizeMobile(nextPhone) : '';
+      if (!/^09\d{9}$/.test(phone)) {
+        throw new BadRequestException('شماره همراه معتبر نیست');
+      }
+      safe.phone = phone;
+    } else if (safe.phone) {
+      if (safe.phone.length < 8) {
+        throw new BadRequestException('شماره همراه معتبر نیست');
+      }
+    }
+    if (safe.email && !safe.email.includes('@')) {
+      throw new BadRequestException('ایمیل معتبر نیست');
+    }
     return this.update(id, safe);
   }
 
@@ -1171,6 +1195,40 @@ export class UsersService {
       ),
       mapPoints,
     };
+  }
+
+  async removeLocationHistory(userId: string, historyId: string) {
+    await this.findOne(userId);
+    const item = await this.prisma.userLocationHistory.findFirst({
+      where: { id: historyId, userId },
+    });
+    if (!item) {
+      throw new NotFoundException('ردپای مکانی یافت نشد');
+    }
+    const latest = await this.prisma.userLocationHistory.findFirst({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userLocationHistory.delete({ where: { id: historyId } });
+      if (latest?.id === historyId) {
+        await this.syncUserCurrentLocationFromHistory(tx, userId);
+      }
+    });
+    return { ok: true };
+  }
+
+  async removeAllLocationHistory(userId: string) {
+    await this.findOne(userId);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.userLocationHistory.deleteMany({
+        where: { userId },
+      });
+      await this.clearUserCurrentLocation(tx, userId);
+      return deleted;
+    });
+    return { ok: true, deleted: result.count };
   }
 
   async remove(id: string, actorId: string) {
@@ -1507,6 +1565,10 @@ export class UsersService {
       throw new BadRequestException('رمز عبور باید حداقل ۸ کاراکتر باشد');
     }
 
+    if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(username)) {
+      throw new BadRequestException('نام کاربری باید با حروف انگلیسی باشد');
+    }
+
     const iran = await this.prisma.country.findFirst({
       where: { iso2: 'IR' },
       select: { id: true },
@@ -1530,21 +1592,29 @@ export class UsersService {
     let phone: string | null = null;
     let email: string | null = null;
 
-    if (isIranian) {
-      phone = normalizeMobile(dto.phone ?? '');
-      if (!/^09\d{9}$/.test(phone)) {
+    if (dto.phone?.trim()) {
+      phone = isIranian ? normalizeMobile(dto.phone) : normalizePhone(dto.phone);
+      if (isIranian && !/^09\d{9}$/.test(phone)) {
         throw new BadRequestException('شماره همراه معتبر نیست');
       }
-    } else {
-      const passport = normalizePassportNumber(dto.passportNumber ?? '');
+      if (!isIranian && phone.length < 8) {
+        throw new BadRequestException('شماره همراه معتبر نیست');
+      }
+    } else if (isIranian) {
+      throw new BadRequestException('شماره همراه معتبر نیست');
+    }
+
+    const passport = normalizePassportNumber(dto.passportNumber ?? '');
+    if (passport) {
       if (passport.length < 5) {
         throw new BadRequestException('شماره گذرنامه معتبر نیست');
       }
       nationalId = passport;
-      email = dto.email?.trim().toLowerCase() || null;
-      if (!email || !email.includes('@')) {
-        throw new BadRequestException('ایمیل معتبر نیست');
-      }
+    }
+
+    email = dto.email?.trim().toLowerCase() || null;
+    if (email && !email.includes('@')) {
+      throw new BadRequestException('ایمیل معتبر نیست');
     }
 
     const firstName = dto.firstName.trim();
@@ -2125,6 +2195,49 @@ export class UsersService {
     };
   }
 
+  private async syncUserCurrentLocationFromHistory(
+    tx: Prisma.TransactionClient,
+    userId: string,
+  ) {
+    const latest = await tx.userLocationHistory.findFirst({
+      where: { userId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    if (!latest) {
+      await this.clearUserCurrentLocation(tx, userId);
+      return;
+    }
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        locationProvinceId: latest.provinceId,
+        locationCityId: latest.cityId,
+        latitude: latest.latitude,
+        longitude: latest.longitude,
+        locationNotes:
+          latest.source === LocationSource.APP ? undefined : latest.notes,
+        locationUpdatedAt: latest.createdAt,
+      },
+    });
+  }
+
+  private async clearUserCurrentLocation(
+    tx: Prisma.TransactionClient,
+    userId: string,
+  ) {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        locationProvinceId: null,
+        locationCityId: null,
+        latitude: null,
+        longitude: null,
+        locationNotes: null,
+        locationUpdatedAt: null,
+      },
+    });
+  }
+
   private serializeLocationHistory(
     item: {
       id: string;
@@ -2350,43 +2463,84 @@ export class UsersService {
     nationalId?: string;
     phone?: string;
     username?: string;
+    email?: string;
+    passportNumber?: string;
     excludeId?: string;
   }) {
     const nationalId = dto.nationalId?.trim() || undefined;
     const phone = dto.phone?.trim() || undefined;
     const username = dto.username?.trim() || undefined;
-    if (!nationalId && !phone && !username) {
+    const email = dto.email?.trim().toLowerCase() || undefined;
+    const passportNumber = dto.passportNumber?.trim() || undefined;
+    if (!nationalId && !phone && !username && !email && !passportNumber) {
       throw new BadRequestException('کد ملی، شماره تلفن یا نام کاربری لازم است');
     }
 
     const exclude = dto.excludeId ? { NOT: { id: dto.excludeId } } : {};
-    const [nationalIdHit, phoneHit, usernameHit] = await Promise.all([
-      nationalId
-        ? this.prisma.user.findFirst({
-            where: { nationalId, ...exclude },
-            select: { id: true, fullName: true },
-          })
-        : Promise.resolve(null),
-      phone
-        ? this.prisma.user.findFirst({
-            where: { phone, ...exclude },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-      username
-        ? this.prisma.user.findFirst({
-            where: { username, ...exclude },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    const [nationalIdHit, passportHit, phoneHit, usernameHit, emailHit] =
+      await Promise.all([
+        nationalId
+          ? this.prisma.user.findFirst({
+              where: { nationalId, ...exclude },
+              select: { id: true, fullName: true },
+            })
+          : Promise.resolve(null),
+        passportNumber
+          ? this.prisma.user.findFirst({
+              where: { nationalId: passportNumber, ...exclude },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        phone
+          ? this.prisma.user.findFirst({
+              where: { phone, ...exclude },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        username
+          ? this.prisma.user.findFirst({
+              where: { username, ...exclude },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        email
+          ? this.prisma.user.findFirst({
+              where: { email, ...exclude },
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+      ]);
 
     return {
-      taken: Boolean(nationalIdHit || phoneHit || usernameHit),
+      taken: Boolean(
+        nationalIdHit || passportHit || phoneHit || usernameHit || emailHit,
+      ),
       nationalIdTaken: Boolean(nationalIdHit),
       nationalIdOwnerName: nationalIdHit?.fullName?.trim() || null,
       phoneTaken: Boolean(phoneHit),
       usernameTaken: Boolean(usernameHit),
+      emailTaken: Boolean(emailHit),
+      passportTaken: Boolean(passportHit),
+    };
+  }
+
+  async checkRegisterIdentityTaken(dto: {
+    phone?: string;
+    email?: string;
+    passportNumber?: string;
+  }) {
+    if (!dto.phone && !dto.email && !dto.passportNumber) {
+      return {
+        phoneTaken: false,
+        emailTaken: false,
+        passportTaken: false,
+      };
+    }
+    const result = await this.checkIdentityTaken(dto);
+    return {
+      phoneTaken: result.phoneTaken,
+      emailTaken: result.emailTaken,
+      passportTaken: result.passportTaken,
     };
   }
 

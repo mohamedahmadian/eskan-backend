@@ -1,31 +1,18 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 import { emptyToUndefined } from '../../common/dto-transform';
-import { normalizeNationalId, normalizePassportNumber } from '../../common/national-id';
+import { normalizePassportNumber } from '../../common/national-id';
 import { normalizePhone } from '../../common/phone';
 
-export class CheckIdentityDto {
-  @IsOptional()
-  @Transform(({ value }) => {
-    const trimmed = emptyToUndefined(value);
-    return trimmed ? normalizeNationalId(trimmed) : undefined;
-  })
-  @IsString()
-  nationalId?: string;
-
+export class RegisterIdentityCheckDto {
   @IsOptional()
   @Transform(({ value }) => {
     const trimmed = emptyToUndefined(value);
     return trimmed ? normalizePhone(trimmed) : undefined;
   })
   @IsString()
+  @MinLength(8)
   phone?: string;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToUndefined(value))
-  @IsString()
-  @MinLength(3)
-  username?: string;
 
   @IsOptional()
   @Transform(({ value }) => {
@@ -43,9 +30,4 @@ export class CheckIdentityDto {
   @IsString()
   @MinLength(5)
   passportNumber?: string;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToUndefined(value))
-  @IsUUID()
-  excludeId?: string;
 }

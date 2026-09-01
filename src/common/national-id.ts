@@ -29,6 +29,18 @@ export function normalizePassportNumber(input: string) {
     .toUpperCase();
 }
 
+/** کد ملی ایرانی یا شماره گذرنامه؛ خالی یعنی پاک کردن فیلد. */
+export function normalizeIdentityNumber(input: string) {
+  const trimmed = toLatinDigits(input.trim());
+  if (!trimmed) {
+    return null;
+  }
+  if (isValidIranianNationalId(trimmed)) {
+    return normalizeNationalId(trimmed);
+  }
+  return normalizePassportNumber(trimmed) || null;
+}
+
 export function isValidIranianNationalId(input: string) {
   const id = normalizeNationalId(input);
   if (!/^\d{10}$/.test(id) || /^(\d)\1{9}$/.test(id)) {

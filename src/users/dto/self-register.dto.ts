@@ -6,13 +6,13 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MinLength,
-  ValidateIf,
 } from 'class-validator';
 import { UserGender } from '../../generated/prisma/client';
-import { emptyToNull, emptyToUndefined } from '../../common/dto-transform';
+import { emptyToUndefined } from '../../common/dto-transform';
 import { normalizePassportNumber, toLatinDigits } from '../../common/national-id';
-import { normalizeMobile } from '../../common/phone';
+import { normalizePhone } from '../../common/phone';
 import { APP_LOCALES } from './create-user.dto';
 
 export class SelfRegisterDto {
@@ -21,6 +21,9 @@ export class SelfRegisterDto {
   )
   @IsString()
   @MinLength(3)
+  @Matches(/^[A-Za-z][A-Za-z0-9._-]*$/, {
+    message: 'نام کاربری باید با حروف انگلیسی باشد',
+  })
   username: string;
 
   @Transform(({ value }) =>
@@ -55,26 +58,29 @@ export class SelfRegisterDto {
   @IsEnum(UserGender)
   gender?: UserGender;
 
-  @ValidateIf((dto: SelfRegisterDto) => !dto.email)
-  @Transform(({ value }) =>
-    typeof value === 'string' ? normalizeMobile(value) : value,
-  )
+  @IsOptional()
+  @Transform(({ value }) => {
+    const trimmed = emptyToUndefined(value);
+    return trimmed ? normalizePhone(trimmed) : undefined;
+  })
   @IsString()
-  @MinLength(11)
+  @MinLength(8)
   phone?: string;
 
-  @ValidateIf((dto: SelfRegisterDto) => Boolean(dto.email))
-  @Transform(({ value }) =>
-    typeof value === 'string' ? normalizePassportNumber(value) : value,
-  )
+  @IsOptional()
+  @Transform(({ value }) => {
+    const trimmed = emptyToUndefined(value);
+    return trimmed ? normalizePassportNumber(trimmed) : undefined;
+  })
   @IsString()
   @MinLength(5)
   passportNumber?: string;
 
-  @ValidateIf((dto: SelfRegisterDto) => Boolean(dto.passportNumber) || Boolean(dto.email))
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : emptyToNull(value),
-  )
+  @IsOptional()
+  @Transform(({ value }) => {
+    const trimmed = emptyToUndefined(value);
+    return trimmed ? trimmed.toLowerCase() : undefined;
+  })
   @IsEmail()
   email?: string;
 }

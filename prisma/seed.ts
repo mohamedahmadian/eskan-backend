@@ -357,6 +357,14 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'reservations.create',
+      moduleId: caravans.id,
+      nameKey: 'menus.tasharofMashhad',
+      path: '/my-reservations/new',
+      icon: 'landmark',
+      sortOrder: 0,
+    },
+    {
       code: 'reservations.mine',
       moduleId: caravans.id,
       nameKey: 'menus.myReservations',
@@ -843,6 +851,7 @@ async function main() {
   // مدیر منوهای «مال من» پرونده/کاروان/گروه/اسکان را ندارد (مخصوص زائر و نقش‌های مرتبط)
   const adminForbiddenMineMenus = menuRecords.filter(
     (item) =>
+      item.code === 'reservations.create' ||
       item.code === 'reservations.mine' ||
       item.code === 'caravans.mine' ||
       item.code === 'groups.mine' ||
@@ -921,6 +930,7 @@ async function main() {
     'dashboard.overview',
     'caravans.mine',
     'groups.mine',
+    'reservations.create',
     'reservations.mine',
     'accommodation.mine',
     'evaluations.mine',
@@ -956,6 +966,7 @@ async function main() {
   const groupMenuCodes = new Set([
     'dashboard.overview',
     'groups.mine',
+    'reservations.create',
     'reservations.mine',
     'accommodation.mine',
   ]);
@@ -976,6 +987,7 @@ async function main() {
 
   const pilgrimMenuCodes = new Set([
     'dashboard.overview',
+    'reservations.create',
     'reservations.mine',
     'caravans.mine',
     'groups.mine',

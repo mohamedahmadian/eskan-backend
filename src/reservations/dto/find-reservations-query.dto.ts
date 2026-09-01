@@ -71,6 +71,11 @@ export class FindReservationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
+  countryId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsUUID()
   walkingRouteId?: string;
 
   @IsOptional()

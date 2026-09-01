@@ -16,6 +16,7 @@ import { joinFullName, splitFullName } from '../users/user-profile.util';
 import {
   canAccessMyAccommodations,
   canAccessMyCaravans,
+  canAccessMyEvaluations,
   canAccessMyGroups,
   canAccessMyReservations,
 } from './roles.util';
@@ -239,15 +240,23 @@ export class AuthService {
   }
 
   private async toProfile(user: AuthUserRecord, extras?: ProfileExtras) {
-    const roleIds = user.userRoles.map((item) => item.role.id);
-    const roleMenus = roleIds.length
-      ? await this.prisma.roleMenu.findMany({
-          where: { roleId: { in: roleIds } },
-          include: {
-            menu: { include: { module: true } },
-          },
-        })
-      : [];
+    const [roleMenus, groupCount, accommodationCount] = await Promise.all([
+      user.userRoles.length
+        ? this.prisma.roleMenu.findMany({
+            where: { roleId: { in: user.userRoles.map((item) => item.role.id) } },
+            include: {
+              menu: { include: { module: true } },
+            },
+          })
+        : Promise.resolve([]),
+      this.prisma.group.count({ where: { managerUserId: user.id } }),
+      this.prisma.accommodationManager.count({ where: { userId: user.id } }),
+    ]);
+    const accessUser = {
+      ...user,
+      hasGroup: groupCount > 0,
+      managesAccommodation: accommodationCount > 0,
+    };
 
     const modulesMap = new Map<
       string,
@@ -267,16 +276,23 @@ export class AuthService {
     >();
 
     for (const item of roleMenus) {
-      if (item.menu.code === 'caravans.mine' && !canAccessMyCaravans(user)) {
+      if (item.menu.code === 'caravans.mine' && !canAccessMyCaravans(accessUser)) {
         continue;
       }
-      if (item.menu.code === 'groups.mine' && !canAccessMyGroups(user)) {
+      if (item.menu.code === 'groups.mine' && !canAccessMyGroups(accessUser)) {
         continue;
       }
-      if (item.menu.code === 'reservations.mine' && !canAccessMyReservations(user)) {
+      if (
+        (item.menu.code === 'reservations.mine' ||
+          item.menu.code === 'reservations.create') &&
+        !canAccessMyReservations(accessUser)
+      ) {
         continue;
       }
-      if (item.menu.code === 'accommodation.mine' && !canAccessMyAccommodations(user)) {
+      if (item.menu.code === 'accommodation.mine' && !canAccessMyAccommodations(accessUser)) {
+        continue;
+      }
+      if (item.menu.code === 'evaluations.mine' && !canAccessMyEvaluations(accessUser)) {
         continue;
       }
       const mod = item.menu.module;
@@ -322,6 +338,8 @@ export class AuthService {
         code: item.role.code,
         nameKey: item.role.nameKey,
       })),
+      hasGroup: accessUser.hasGroup,
+      managesAccommodation: accessUser.managesAccommodation,
       modules,
       impersonating: extras?.impersonating ?? false,
       impersonatedBy: extras?.impersonatedBy ?? null,

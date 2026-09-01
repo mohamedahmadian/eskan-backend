@@ -3,6 +3,8 @@ export type RoleRef = { code: string; nameKey?: string };
 export type RoleBearer = {
   userRoles?: { role: RoleRef }[];
   roles?: RoleRef[];
+  hasGroup?: boolean;
+  managesAccommodation?: boolean;
 };
 
 export function roleCodes(user: RoleBearer | null | undefined): string[] {
@@ -35,6 +37,22 @@ export function isGroupManager(user: RoleBearer | null | undefined) {
   return hasRole(user, 'GROUP_MANAGER');
 }
 
+export function isAccommodationManager(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'ACCOMMODATION_MANAGER');
+}
+
+/** زائر فقط با گروه یا مدیریت اسکان منوهای گروه/اسکان/ارزیابی را می‌بیند */
+export function pilgrimHasGroupOrHousingAccess(
+  user: RoleBearer | null | undefined,
+) {
+  return (
+    isGroupManager(user) ||
+    isAccommodationManager(user) ||
+    Boolean(user?.hasGroup) ||
+    Boolean(user?.managesAccommodation)
+  );
+}
+
 export function isLicenseIssuer(user: RoleBearer | null | undefined) {
   return hasRole(user, 'LICENSE_ISSUER');
 }
@@ -59,14 +77,28 @@ export function canAccessMyReservations(user: RoleBearer | null | undefined) {
 }
 
 export function canAccessMyGroups(user: RoleBearer | null | undefined) {
-  return (
-    isAdmin(user) ||
-    isGroupManager(user) ||
-    isCaravanManager(user) ||
-    isPilgrim(user)
-  );
+  if (isAdmin(user) || isGroupManager(user) || isCaravanManager(user)) {
+    return true;
+  }
+  return isPilgrim(user) && pilgrimHasGroupOrHousingAccess(user);
 }
 
 export function canAccessMyAccommodations(user: RoleBearer | null | undefined) {
-  return Boolean(user) && !isAdmin(user);
+  if (!user || isAdmin(user)) {
+    return false;
+  }
+  if (isPilgrim(user) && !isCaravanManager(user) && !pilgrimHasGroupOrHousingAccess(user)) {
+    return false;
+  }
+  return true;
+}
+
+export function canAccessMyEvaluations(user: RoleBearer | null | undefined) {
+  if (!user || isAdmin(user)) {
+    return false;
+  }
+  if (isPilgrim(user) && !isCaravanManager(user) && !pilgrimHasGroupOrHousingAccess(user)) {
+    return false;
+  }
+  return true;
 }

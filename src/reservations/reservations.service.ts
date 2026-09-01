@@ -584,6 +584,7 @@ export class ReservationsService {
     await this.assertWalkingRoute(dto.walkingRouteId);
 
     const createdById = await this.resolveCreatedById(dto.createdById, actor);
+    await this.assertInternationalCaravanOnly(createdById, dto.type);
     const caravan = await this.resolveCaravan(dto, actor);
     const group = await this.resolveGroup(dto, actor);
     if (!asDraft) {
@@ -677,6 +678,7 @@ export class ReservationsService {
     }
 
     const type = dto.type ?? current.type;
+    await this.assertInternationalCaravanOnly(current.createdById, type);
     const year = dto.year ?? current.year;
     const draftSoft = current.status === ReservationStatus.DRAFT;
     const pendingReview =
@@ -2411,6 +2413,15 @@ export class ReservationsService {
     } else if (query.status) {
       filters.push({ status: query.status });
     }
+    if (query.countryId) {
+      filters.push({
+        OR: [
+          { createdBy: { countryId: query.countryId } },
+          { caravanManager: { countryId: query.countryId } },
+          { originCity: { province: { countryId: query.countryId } } },
+        ],
+      });
+    }
     if (query.walkingRouteId)
       filters.push({ walkingRouteId: query.walkingRouteId });
     if (query.originCityId) filters.push({ originCityId: query.originCityId });
@@ -3003,6 +3014,22 @@ export class ReservationsService {
     }
     if (!asDraft || maleCount + femaleCount > 0) {
       this.assertCounts(maleCount, femaleCount);
+    }
+  }
+
+  private async assertInternationalCaravanOnly(
+    userId: string,
+    type: ReservationType,
+  ) {
+    if (type === ReservationType.CARAVAN) return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { country: { select: { iso2: true } } },
+    });
+    if (user?.country?.iso2 && user.country.iso2 !== 'IR') {
+      throw new BadRequestException(
+        'زائران غیر ایرانی فقط به‌صورت کاروانی پذیرش می‌شوند',
+      );
     }
   }
 
