@@ -22,6 +22,6 @@ export class PublicAuthController {
 
   @Post('register')
   register(@Body() dto: SelfRegisterDto) {
-    return this.users.selfRegisterPilgrim(dto);
+    return this.users.selfRegister(dto);
   }
 }

@@ -202,7 +202,7 @@ export class PilgrimsUsersController extends RoleScopedUsersController {
   }
 
   @Post('identity-lookup')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('AUTHENTICATED')
   lookupIdentity(@Body() dto: CheckIdentityDto) {
     return this.users.findByIdentity(dto);
   }

@@ -131,6 +131,8 @@ model User {
   caravanContacts       CaravanContact[]
   createdReservations   Reservation[] @relation("ReservationCreator")
   managedReservations   Reservation[] @relation("ReservationCaravanManager")
+  honoraryAssignments   ReservationHonoraryAssignment[] @relation("ReservationHonoraryAssignee")
+  honoraryAssignmentsGiven ReservationHonoraryAssignment[] @relation("ReservationHonoraryAssigner")
   reservationMembers    ReservationMember[]
   reservationCaravanContacts ReservationCaravanContact[] @relation("ReservationCaravanContactPerson")
   reservationMemberInsuranceVerifications ReservationMember[] @relation("ReservationMemberInsuranceVerifier")
@@ -165,6 +167,7 @@ model User {
   evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
   requestedSupportRequests SupportRequest[] @relation("SupportRequestRequester")
   handledSupportRequests   SupportRequest[] @relation("SupportRequestHandler")
+  honoraryServiceAnnouncements HonoraryServiceAnnouncement[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -640,10 +643,11 @@ model Reservation {
   completedById String?
   completedBy   User? @relation("ReservationFinalCompleter", fields: [completedById], references: [id], onDelete: Restrict)
 
-  members         ReservationMember[]
-  caravanContacts ReservationCaravanContact[]
-  allocations     ReservationAllocation[]
-  travelHistories ReservationTravelHistory[]
+  members              ReservationMember[]
+  caravanContacts      ReservationCaravanContact[]
+  honoraryAssignments  ReservationHonoraryAssignment[]
+  allocations          ReservationAllocation[]
+  travelHistories      ReservationTravelHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1193,8 +1197,8 @@ model WalkingRoute {
   id                  String                      @id @default(uuid())
   name                String
   distanceToMashhadKm Decimal                     @db.Decimal(8, 2)
-  entryBorderId       String
-  entryBorder         EntryBorder                 @relation(fields: [entryBorderId], references: [id], onDelete: Restrict)
+  entryBorderId       String?
+  entryBorder         EntryBorder?                @relation(fields: [entryBorderId], references: [id], onDelete: Restrict)
   originCountries     WalkingRouteOriginCountry[]
   stages              WalkingRouteStage[]
   reservations        Reservation[]
@@ -1640,4 +1644,77 @@ model EvaluationAnswer {
   @@unique([evaluationId, questionId])
   @@index([questionId])
   @@map("evaluation_answers")
+}
+
+enum HonoraryServiceWeekDay {
+  SATURDAY
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+}
+
+/// نوع خدمت خادم افتخاری (بدون وضعیت؛ فقط ثبت می‌شود)
+model HonoraryServiceType {
+  id            String                         @id @default(uuid())
+  code          String?                        @unique
+  name          String
+  description   String
+  announcements HonoraryServiceAnnouncement[]
+  reservationAssignments ReservationHonoraryAssignment[]
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@index([name])
+  @@index([createdAt])
+  @@map("honorary_service_types")
+}
+
+/// اعلام همکاری خادم افتخاری (یک نفر می‌تواند چند بازه/سال ثبت کند)
+model HonoraryServiceAnnouncement {
+  id               String                   @id @default(uuid())
+  userId           String
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceTypeId    String?
+  serviceType      HonoraryServiceType?     @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  otherDescription String?
+  startDate        DateTime                 @db.Date
+  endDate          DateTime                 @db.Date
+  weekDays         HonoraryServiceWeekDay[]
+  startTime        String
+  endTime          String
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@index([userId])
+  @@index([serviceTypeId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdAt])
+  @@map("honorary_service_announcements")
+}
+
+/// تخصیص خادم افتخاری به پرونده زیارتی (یک پرونده چند خدمت/نفر)
+model ReservationHonoraryAssignment {
+  id            String               @id @default(uuid())
+  reservationId String
+  reservation   Reservation          @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User                 @relation("ReservationHonoraryAssignee", fields: [userId], references: [id], onDelete: Restrict)
+  serviceTypeId String
+  serviceType   HonoraryServiceType  @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  assignedById  String
+  assignedBy    User                 @relation("ReservationHonoraryAssigner", fields: [assignedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@unique([reservationId, userId, serviceTypeId])
+  @@index([reservationId])
+  @@index([userId])
+  @@index([serviceTypeId])
+  @@index([assignedById])
+  @@index([createdAt])
+  @@map("reservation_honorary_assignments")
 }

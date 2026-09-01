@@ -93,6 +93,15 @@ async function main() {
     },
   });
 
+  const honoraryServantRole = await prisma.role.upsert({
+    where: { code: 'HONORARY_SERVANT' },
+    update: { nameKey: 'roles.honoraryServant' },
+    create: {
+      code: 'HONORARY_SERVANT',
+      nameKey: 'roles.honoraryServant',
+    },
+  });
+
   const dashboard = await prisma.navModule.upsert({
     where: { code: 'dashboard' },
     update: {},
@@ -291,6 +300,36 @@ async function main() {
     },
   });
 
+  const honoraryService = await prisma.navModule.upsert({
+    where: { code: 'honorary-service' },
+    update: {
+      nameKey: 'modules.honoraryService',
+      icon: 'hand-heart',
+      sortOrder: 13,
+    },
+    create: {
+      code: 'honorary-service',
+      nameKey: 'modules.honoraryService',
+      icon: 'hand-heart',
+      sortOrder: 13,
+    },
+  });
+
+  const honoraryServants = await prisma.navModule.upsert({
+    where: { code: 'honorary-servants' },
+    update: {
+      nameKey: 'modules.honoraryServants',
+      icon: 'hand-heart',
+      sortOrder: 14,
+    },
+    create: {
+      code: 'honorary-servants',
+      nameKey: 'modules.honoraryServants',
+      icon: 'hand-heart',
+      sortOrder: 14,
+    },
+  });
+
   const menus = [
     {
       code: 'dashboard.overview',
@@ -299,6 +338,22 @@ async function main() {
       path: '/',
       icon: 'home',
       sortOrder: 1,
+    },
+    {
+      code: 'honorary-service.apply',
+      moduleId: honoraryService.id,
+      nameKey: 'menus.honoraryApply',
+      path: '/honorary-apply',
+      icon: 'hand-heart',
+      sortOrder: 1,
+    },
+    {
+      code: 'honorary-service.history',
+      moduleId: honoraryService.id,
+      nameKey: 'menus.honoraryHistory',
+      path: '/honorary-history',
+      icon: 'history',
+      sortOrder: 2,
     },
     {
       code: 'pilgrims.list',
@@ -820,6 +875,30 @@ async function main() {
       icon: 'clipboard-list',
       sortOrder: 5,
     },
+    {
+      code: 'reservations.translator',
+      moduleId: honoraryServants.id,
+      nameKey: 'menus.translatorReservations',
+      path: '/translator-reservations',
+      icon: 'languages',
+      sortOrder: 0,
+    },
+    {
+      code: 'honorary-servants.list',
+      moduleId: honoraryServants.id,
+      nameKey: 'menus.honoraryServants',
+      path: '/honorary-servants',
+      icon: 'hand-heart',
+      sortOrder: 1,
+    },
+    {
+      code: 'honorary-servants.service-types',
+      moduleId: honoraryServants.id,
+      nameKey: 'menus.honoraryServiceTypes',
+      path: '/honorary-service-types',
+      icon: 'heart-handshake',
+      sortOrder: 2,
+    },
   ];
 
   const menuRecords = [];
@@ -836,6 +915,29 @@ async function main() {
       create: menu,
     });
     menuRecords.push(record);
+  }
+
+  for (const leftover of await prisma.menu.findMany({
+    where: {
+      OR: [
+        {
+          code: {
+            in: [
+              'base-info.place-types',
+              'base-info.medical-centers',
+              'base-info.red-crescents',
+              'dashboard.honorary-apply',
+            ],
+          },
+        },
+        {
+          nameKey: { in: ['menus.placeTypes', 'menus.medicalCenters', 'menus.redCrescents'] },
+        },
+      ],
+    },
+  })) {
+    await prisma.roleMenu.deleteMany({ where: { menuId: leftover.id } });
+    await prisma.menu.delete({ where: { id: leftover.id } });
   }
 
   for (const menu of menuRecords) {
@@ -871,6 +973,8 @@ async function main() {
 
   const managerMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'accommodation.mine',
     'accommodation.report',
     'logistics.my-vouchers',
@@ -928,6 +1032,8 @@ async function main() {
 
   const caravanMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'caravans.mine',
     'groups.mine',
     'reservations.create',
@@ -965,6 +1071,8 @@ async function main() {
 
   const groupMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'groups.mine',
     'reservations.create',
     'reservations.mine',
@@ -987,6 +1095,8 @@ async function main() {
 
   const pilgrimMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'reservations.create',
     'reservations.mine',
     'caravans.mine',
@@ -1022,8 +1132,31 @@ async function main() {
     });
   }
 
+  const honoraryServantMenuCodes = new Set([
+    'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
+    'reservations.translator',
+  ]);
+  for (const menu of menuRecords.filter((item) =>
+    honoraryServantMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: honoraryServantRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: honoraryServantRole.id, menuId: menu.id },
+    });
+  }
+
   const licenseIssuerMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'licenses.issue',
     'licenses.issued',
   ]);
@@ -1057,6 +1190,8 @@ async function main() {
 
   const governmentOrgOfficerMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'caravans.support-requests',
     'caravans.support-request-report',
   ]);
@@ -1088,6 +1223,8 @@ async function main() {
 
   const unitManagerMenuCodes = new Set([
     'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
     'headquarters.accommodation-liaisons',
     'headquarters.caravan-liaisons',
     'evaluations.mine',
@@ -1105,6 +1242,37 @@ async function main() {
       update: {},
       create: { roleId: unitManagerRole.id, menuId: menu.id },
     });
+  }
+
+  const honoraryServiceSelfMenus = menuRecords.filter(
+    (item) =>
+      item.code === 'honorary-service.apply' ||
+      item.code === 'honorary-service.history',
+  );
+  for (const role of [
+    adminRole,
+    accommodationManagerRole,
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    honoraryServantRole,
+    licenseIssuerRole,
+    governmentOrgOfficerRole,
+    unitManagerRole,
+    headquartersRepresentativeRole,
+  ]) {
+    for (const menu of honoraryServiceSelfMenus) {
+      await prisma.roleMenu.upsert({
+        where: {
+          roleId_menuId: {
+            roleId: role.id,
+            menuId: menu.id,
+          },
+        },
+        update: {},
+        create: { roleId: role.id, menuId: menu.id },
+      });
+    }
   }
 
   await prisma.smsSettings.upsert({
@@ -1131,6 +1299,7 @@ async function main() {
 
   await seedGeo();
   await seedPlaceTypes();
+  await seedHonoraryServiceTypes();
 
   const systemPasswordHash = await bcrypt.hash(
     `system-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
@@ -1480,6 +1649,28 @@ const placeTypeSeed = [
   { code: 'police', nameFa: 'پاسگاه پلیس', nameEn: 'Police station', icon: 'shield', sortOrder: 6 },
   { code: 'red-crescent', nameFa: 'هلال احمر', nameEn: 'Red Crescent', icon: 'heart-handshake', sortOrder: 7 },
 ];
+
+async function seedHonoraryServiceTypes() {
+  const name = 'مترجمی';
+  const description = 'ترجمه و همراهی زبانی زائران عراقی و بین‌المللی';
+  const existing = await prisma.honoraryServiceType.findFirst({
+    where: { name },
+  });
+  if (existing) {
+    await prisma.honoraryServiceType.update({
+      where: { id: existing.id },
+      data: {
+        name,
+        description: existing.description.trim() || description,
+        code: existing.code ?? 'TRANSLATION',
+      },
+    });
+    return;
+  }
+  await prisma.honoraryServiceType.create({
+    data: { name, description, code: 'TRANSLATION' },
+  });
+}
 
 async function seedPlaceTypes() {
   for (const item of placeTypeSeed) {

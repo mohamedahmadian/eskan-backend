@@ -9,6 +9,7 @@ import {
 import {
   isAdmin,
   isCaravanManager,
+  isHonoraryServant,
   isPilgrim,
   type RoleBearer,
 } from '../auth/roles.util';
@@ -60,6 +61,7 @@ import {
 } from './reservation-member-excel';
 import { AdjustReservationCapacityDto } from './dto/adjust-reservation-capacity.dto';
 import { ApproveReservationDto } from './dto/approve-reservation.dto';
+import { AssignReservationHonoraryDto } from './dto/assign-reservation-honorary.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
 import { RejectReservationPermitDto } from './dto/reject-reservation-permit.dto';
@@ -170,6 +172,14 @@ const reservationInclude = {
   },
   createdBy: { select: userSelect },
   caravanManager: { select: userSelect },
+  honoraryAssignments: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    include: {
+      user: { select: userSelect },
+      serviceType: { select: { id: true, name: true, code: true } },
+      assignedBy: { select: userSelect },
+    },
+  },
   basicInfoCompletedBy: { select: userSelect },
   managementReviewedBy: { select: userSelect },
   companionsCompletedBy: { select: userSelect },
@@ -609,7 +619,7 @@ export class ReservationsService {
           )
         : emptyPermitData();
 
-    return this.withCodeConflictRetry(() =>
+    const result = await this.withCodeConflictRetry(() =>
       this.prisma.$transaction(async (tx) => {
         const { code, codeSeq } = await this.nextReservationCode(tx, dto.year);
         const created = await tx.reservation.create({
@@ -660,6 +670,8 @@ export class ReservationsService {
         return this.submitDraft(tx, created, actor);
       }),
     );
+    await this.users.ensureRole(createdById, 'PILGRIM');
+    return result;
   }
 
   async update(id: string, dto: UpdateReservationDto, actor: Actor) {
@@ -1318,6 +1330,111 @@ export class ReservationsService {
         { members: { some: { userId: actor.id } } },
       ],
     });
+  }
+
+  async findAssignedToHonorary(query: FindReservationsQueryDto, actor: Actor) {
+    if (!isHonoraryServant(actor) && !isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    return this.list(query, {
+      honoraryAssignments: { some: { userId: actor.id } },
+    });
+  }
+
+  async assignHonorary(
+    id: string,
+    dto: AssignReservationHonoraryDto,
+    actor: Actor,
+  ) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    const current = await this.requireReservation(id);
+    this.assertCanAssignHonorary(current);
+    await this.assertHonoraryCandidate(dto.userId, dto.serviceTypeId);
+    try {
+      await this.prisma.reservationHonoraryAssignment.create({
+        data: {
+          reservationId: id,
+          userId: dto.userId,
+          serviceTypeId: dto.serviceTypeId,
+          assignedById: actor.id,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'این خادم برای این نوع خدمت قبلاً به پرونده تخصیص داده شده است',
+        );
+      }
+      throw error;
+    }
+    const updated = await this.requireReservation(id);
+    this.logger.log(
+      `reservation.assignHonorary ${id} user=${dto.userId} service=${dto.serviceTypeId} by=${actor.id}`,
+    );
+    return this.serialize(updated, actor);
+  }
+
+  async removeHonoraryAssignment(
+    id: string,
+    assignmentId: string,
+    actor: Actor,
+  ) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    const current = await this.requireReservation(id);
+    this.assertCanAssignHonorary(current);
+    const assignment = current.honoraryAssignments.find(
+      (item) => item.id === assignmentId,
+    );
+    if (!assignment) {
+      throw new NotFoundException('تخصیص خادم یافت نشد');
+    }
+    await this.prisma.reservationHonoraryAssignment.delete({
+      where: { id: assignmentId },
+    });
+    const updated = await this.requireReservation(id);
+    this.logger.log(
+      `reservation.removeHonorary ${id} assignment=${assignmentId} by=${actor.id}`,
+    );
+    return this.serialize(updated, actor);
+  }
+
+  private assertCanAssignHonorary(current: ReservationRecord) {
+    if (!current.managementReviewedAt) {
+      throw new BadRequestException('پرونده هنوز تایید نشده است');
+    }
+    if (
+      current.status === ReservationStatus.DRAFT ||
+      current.status === ReservationStatus.REJECTED ||
+      current.status === ReservationStatus.CANCELLED
+    ) {
+      throw new BadRequestException('پرونده در وضعیت مناسب این عملیات نیست');
+    }
+  }
+
+  private async assertHonoraryCandidate(userId: string, serviceTypeId: string) {
+    const serviceType = await this.prisma.honoraryServiceType.findUnique({
+      where: { id: serviceTypeId },
+      select: { id: true },
+    });
+    if (!serviceType) {
+      throw new BadRequestException('نوع خدمت یافت نشد');
+    }
+    const announcement = await this.prisma.honoraryServiceAnnouncement.findFirst({
+      where: { userId, serviceTypeId },
+      select: { id: true },
+    });
+    if (!announcement) {
+      throw new BadRequestException(
+        'این کاربر برای این نوع خدمت اعلام همکاری ندارد',
+      );
+    }
   }
 
   async getMineHome(actor: Actor) {
@@ -3441,7 +3558,8 @@ export class ReservationsService {
     if (isAdmin(actor)) return;
     if (
       reservation.createdById === actor.id ||
-      reservation.caravanManagerId === actor.id
+      reservation.caravanManagerId === actor.id ||
+      this.isHonoraryAssignee(reservation, actor.id)
     ) {
       return;
     }
@@ -3453,7 +3571,8 @@ export class ReservationsService {
     if (isAdmin(actor)) return true;
     return (
       reservation.createdById === actor.id ||
-      reservation.caravanManagerId === actor.id
+      reservation.caravanManagerId === actor.id ||
+      this.isHonoraryAssignee(reservation, actor.id)
     );
   }
 
@@ -3833,6 +3952,22 @@ export class ReservationsService {
     throw new BadRequestException('امکان صدور کد یکتای پرونده نبود');
   }
 
+  private isHonoraryAssignee(reservation: ReservationRecord, userId: string) {
+    return reservation.honoraryAssignments.some((item) => item.userId === userId);
+  }
+
+  private serializeHonoraryAssignment(
+    item: ReservationRecord['honoraryAssignments'][number],
+  ) {
+    return {
+      id: item.id,
+      user: item.user,
+      serviceType: item.serviceType,
+      assignedBy: item.assignedBy,
+      createdAt: item.createdAt.toISOString(),
+    };
+  }
+
   private serializeListItem(row: ReservationRecord) {
     return {
       id: row.id,
@@ -3865,6 +4000,9 @@ export class ReservationsService {
       group: row.group,
       createdBy: row.createdBy,
       caravanManager: row.caravanManager,
+      honoraryAssignments: row.honoraryAssignments.map((item) =>
+        this.serializeHonoraryAssignment(item),
+      ),
       hasPermit: row.hasPermit,
       permitStatus: row.permitStatus,
       permitSource: row.permitSource,
@@ -3872,6 +4010,7 @@ export class ReservationsService {
       createWizardStep: row.createWizardStep,
       walkingRoute: row.walkingRoute,
       internationalWorkflow: isInternationalWorkflowRow(row),
+      iraqiWorkflow: isIraqiWorkflowRow(row),
     };
   }
 
@@ -3918,6 +4057,9 @@ export class ReservationsService {
       caravan: row.caravan,
       group: row.group,
       caravanManager: row.caravanManager,
+      honoraryAssignments: row.honoraryAssignments.map((item) =>
+        this.serializeHonoraryAssignment(item),
+      ),
       hasPermit: row.hasPermit,
       permitStatus: row.permitStatus,
       permitSource: row.permitSource,
@@ -3959,6 +4101,7 @@ export class ReservationsService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       internationalWorkflow: isInternationalWorkflowRow(row),
+      iraqiWorkflow: isIraqiWorkflowRow(row),
       members: seeMembers
         ? row.members.map((item) => this.serializeMember(item))
         : undefined,
@@ -4115,6 +4258,14 @@ function issuedServicesPatch(
         ? undefined
         : dto.bankCardInitialBalance,
   };
+}
+
+function isIraqiWorkflowRow(row: {
+  createdBy?: { country?: { iso2?: string | null } | null } | null;
+  caravanManager?: { country?: { iso2?: string | null } | null } | null;
+}) {
+  const iso2 = row.caravanManager?.country?.iso2 ?? row.createdBy?.country?.iso2;
+  return iso2 === 'IQ';
 }
 
 function isInternationalWorkflowRow(row: {

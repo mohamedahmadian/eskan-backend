@@ -28,6 +28,7 @@ import { AdjustReservationCapacityDto } from './dto/adjust-reservation-capacity.
 import { ApproveReservationDto } from './dto/approve-reservation.dto';
 import { CopyPreviousMembersDto } from './dto/copy-previous-members.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { AssignReservationHonoraryDto } from './dto/assign-reservation-honorary.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
 import { ImportReservationMembersDto } from './dto/import-reservation-members.dto';
 import { RejectReservationDto } from './dto/reject-reservation.dto';
@@ -80,7 +81,7 @@ export class ReservationsController {
   constructor(private readonly reservations: ReservationsService) {}
 
   @Get('mine')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('AUTHENTICATED')
   findMine(
     @Query() query: FindReservationsQueryDto,
     @CurrentUser() actor: RequestUser,
@@ -89,9 +90,18 @@ export class ReservationsController {
   }
 
   @Get('mine/home')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('AUTHENTICATED')
   mineHome(@CurrentUser() actor: RequestUser) {
     return this.reservations.getMineHome(actor);
+  }
+
+  @Get('assigned')
+  @Roles('ADMIN', 'HONORARY_SERVANT')
+  findAssigned(
+    @Query() query: FindReservationsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.findAssignedToHonorary(query, actor);
   }
 
   @Get('dashboard')
@@ -103,7 +113,7 @@ export class ReservationsController {
   }
 
   @Get('permit-options')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('AUTHENTICATED')
   permitOptions(
     @Query() query: ReservationPermitOptionsQueryDto,
     @CurrentUser() actor: RequestUser,
@@ -144,7 +154,7 @@ export class ReservationsController {
   }
 
   @Get(':id/travel-history')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER', 'HONORARY_SERVANT')
   findTravelHistory(
     @Param('id') id: string,
     @CurrentUser() actor: RequestUser,
@@ -153,15 +163,33 @@ export class ReservationsController {
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER', 'HONORARY_SERVANT')
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
     return this.reservations.findOne(id, actor);
   }
 
   @Post()
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  @Roles('AUTHENTICATED')
   create(@Body() dto: CreateReservationDto, @CurrentUser() actor: RequestUser) {
     return this.reservations.create(dto, actor);
+  }
+
+  @Post(':id/honorary-assignments')
+  assignHonorary(
+    @Param('id') id: string,
+    @Body() dto: AssignReservationHonoraryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.assignHonorary(id, dto, actor);
+  }
+
+  @Delete(':id/honorary-assignments/:assignmentId')
+  removeHonoraryAssignment(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.removeHonoraryAssignment(id, assignmentId, actor);
   }
 
   @Patch(':id')

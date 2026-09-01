@@ -25,6 +25,13 @@ import { LoginDto } from './dto/login.dto';
 
 const IMPERSONATE_TOKEN_TTL = '2h';
 
+const retiredMenuCodes = new Set([
+  'base-info.medical-centers',
+  'base-info.red-crescents',
+  'dashboard.honorary-apply',
+]);
+const retiredMenuNameKeys = new Set(['menus.medicalCenters', 'menus.redCrescents']);
+
 const userWithRoles = {
   userRoles: { include: { role: true } },
   issuingOrganization: { select: { id: true, name: true, phone: true } },
@@ -240,23 +247,71 @@ export class AuthService {
   }
 
   private async toProfile(user: AuthUserRecord, extras?: ProfileExtras) {
-    const [roleMenus, groupCount, accommodationCount] = await Promise.all([
-      user.userRoles.length
-        ? this.prisma.roleMenu.findMany({
-            where: { roleId: { in: user.userRoles.map((item) => item.role.id) } },
-            include: {
-              menu: { include: { module: true } },
-            },
-          })
-        : Promise.resolve([]),
-      this.prisma.group.count({ where: { managerUserId: user.id } }),
-      this.prisma.accommodationManager.count({ where: { userId: user.id } }),
-    ]);
+    const [roleMenus, groupCount, accommodationCount, starterMenus, announcements] =
+      await Promise.all([
+        user.userRoles.length
+          ? this.prisma.roleMenu.findMany({
+              where: { roleId: { in: user.userRoles.map((item) => item.role.id) } },
+              include: {
+                menu: { include: { module: true } },
+              },
+            })
+          : Promise.resolve([]),
+        this.prisma.group.count({ where: { managerUserId: user.id } }),
+        this.prisma.accommodationManager.count({ where: { userId: user.id } }),
+        user.userRoles.length
+          ? Promise.resolve([])
+          : this.prisma.menu.findMany({
+              where: {
+                code: {
+                  in: [
+                    'dashboard.overview',
+                    'honorary-service.apply',
+                    'honorary-service.history',
+                    'reservations.mine',
+                  ],
+                },
+              },
+              include: { module: true },
+            }),
+        this.prisma.honoraryServiceAnnouncement.findMany({
+          where: { userId: user.id },
+          include: {
+            serviceType: { select: { id: true, name: true, code: true } },
+          },
+          orderBy: { startDate: 'desc' },
+        }),
+      ]);
     const accessUser = {
       ...user,
       hasGroup: groupCount > 0,
       managesAccommodation: accommodationCount > 0,
     };
+
+    const honoraryServices: { id: string; name: string; code: string | null }[] =
+      [];
+    const seenTypes = new Set<string>();
+    for (const item of announcements) {
+      if (item.serviceType) {
+        if (seenTypes.has(item.serviceType.id)) continue;
+        seenTypes.add(item.serviceType.id);
+        honoraryServices.push({
+          id: item.serviceType.id,
+          name: item.serviceType.name,
+          code: item.serviceType.code,
+        });
+      } else if (item.otherDescription?.trim()) {
+        const key = `other:${item.otherDescription.trim()}`;
+        if (seenTypes.has(key)) continue;
+        seenTypes.add(key);
+        honoraryServices.push({
+          id: item.id,
+          name: item.otherDescription.trim(),
+          code: null,
+        });
+      }
+    }
+    const hasHonoraryService = honoraryServices.length > 0;
 
     const modulesMap = new Map<
       string,
@@ -275,27 +330,44 @@ export class AuthService {
       }
     >();
 
-    for (const item of roleMenus) {
-      if (item.menu.code === 'caravans.mine' && !canAccessMyCaravans(accessUser)) {
-        continue;
+    const addMenu = (menu: {
+      code: string;
+      nameKey: string;
+      path: string;
+      icon: string;
+      sortOrder: number;
+      module: {
+        code: string;
+        nameKey: string;
+        icon: string;
+        sortOrder: number;
+      };
+    }) => {
+      if (retiredMenuCodes.has(menu.code) || retiredMenuNameKeys.has(menu.nameKey)) {
+        return;
       }
-      if (item.menu.code === 'groups.mine' && !canAccessMyGroups(accessUser)) {
-        continue;
+      if (menu.code === 'caravans.mine' && !canAccessMyCaravans(accessUser)) {
+        return;
+      }
+      if (menu.code === 'groups.mine' && !canAccessMyGroups(accessUser)) {
+        return;
       }
       if (
-        (item.menu.code === 'reservations.mine' ||
-          item.menu.code === 'reservations.create') &&
+        (menu.code === 'reservations.mine' || menu.code === 'reservations.create') &&
         !canAccessMyReservations(accessUser)
       ) {
-        continue;
+        return;
       }
-      if (item.menu.code === 'accommodation.mine' && !canAccessMyAccommodations(accessUser)) {
-        continue;
+      if (menu.code === 'accommodation.mine' && !canAccessMyAccommodations(accessUser)) {
+        return;
       }
-      if (item.menu.code === 'evaluations.mine' && !canAccessMyEvaluations(accessUser)) {
-        continue;
+      if (menu.code === 'evaluations.mine' && !canAccessMyEvaluations(accessUser)) {
+        return;
       }
-      const mod = item.menu.module;
+      if (menu.code === 'reservations.translator' && !hasHonoraryService) {
+        return;
+      }
+      const mod = menu.module;
       if (!modulesMap.has(mod.code)) {
         modulesMap.set(mod.code, {
           code: mod.code,
@@ -306,15 +378,22 @@ export class AuthService {
         });
       }
       const current = modulesMap.get(mod.code);
-      if (!current.menus.some((menu) => menu.code === item.menu.code)) {
+      if (!current.menus.some((item) => item.code === menu.code)) {
         current.menus.push({
-          code: item.menu.code,
-          nameKey: item.menu.nameKey,
-          path: item.menu.path,
-          icon: item.menu.icon,
-          sortOrder: item.menu.sortOrder,
+          code: menu.code,
+          nameKey: menu.nameKey,
+          path: menu.path,
+          icon: menu.icon,
+          sortOrder: menu.sortOrder,
         });
       }
+    };
+
+    for (const item of roleMenus) {
+      addMenu(item.menu);
+    }
+    for (const menu of starterMenus) {
+      addMenu(menu);
     }
 
     const modules = [...modulesMap.values()]
@@ -340,6 +419,7 @@ export class AuthService {
       })),
       hasGroup: accessUser.hasGroup,
       managesAccommodation: accessUser.managesAccommodation,
+      honoraryServices,
       modules,
       impersonating: extras?.impersonating ?? false,
       impersonatedBy: extras?.impersonatedBy ?? null,

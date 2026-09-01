@@ -21,6 +21,11 @@ export function hasRole(user: RoleBearer | null | undefined, code: string) {
   return roleCodes(user).includes(code);
 }
 
+/** Logged-in account with no domain/system roles yet. */
+export function hasNoRoles(user: RoleBearer | null | undefined) {
+  return Boolean(user) && roleCodes(user).length === 0;
+}
+
 export function isAdmin(user: RoleBearer | null | undefined) {
   return hasRole(user, 'ADMIN');
 }
@@ -65,15 +70,22 @@ export function isGovernmentOrgOfficer(user: RoleBearer | null | undefined) {
   return hasRole(user, 'GOVERNMENT_ORG_OFFICER');
 }
 
+export function isHonoraryServant(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'HONORARY_SERVANT');
+}
+
 export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
 }
 
 export function canAccessMyReservations(user: RoleBearer | null | undefined) {
-  return (
-    !isAdmin(user) &&
-    (isPilgrim(user) || isCaravanManager(user) || isGroupManager(user))
-  );
+  if (!user || isAdmin(user)) {
+    return false;
+  }
+  if (hasNoRoles(user)) {
+    return true;
+  }
+  return isPilgrim(user) || isCaravanManager(user) || isGroupManager(user);
 }
 
 export function canAccessMyGroups(user: RoleBearer | null | undefined) {

@@ -117,8 +117,11 @@ export class CreateWalkingRouteDto {
   @Min(0)
   distanceToMashhadKm: number;
 
+  @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? null : value))
+  @ValidateIf((_, value) => value != null)
   @IsUUID()
-  entryBorderId: string;
+  entryBorderId?: string | null;
 
   @IsArray()
   @ArrayMinSize(1)

@@ -32,7 +32,7 @@ export class WalkingRoutesController {
   constructor(private readonly walkingRoutes: WalkingRoutesService) {}
 
   @Get()
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER', 'GROUP_MANAGER')
+  @Roles('AUTHENTICATED')
   findAll(@Query() query: FindWalkingRoutesQueryDto) {
     return this.walkingRoutes.findAll(query);
   }
@@ -49,7 +49,7 @@ export class WalkingRoutesController {
   }
 
   @Get(':id')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER', 'GROUP_MANAGER')
+  @Roles('AUTHENTICATED')
   findOne(@Param('id') id: string) {
     return this.walkingRoutes.findOne(id);
   }

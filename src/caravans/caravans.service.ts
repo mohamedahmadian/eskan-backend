@@ -1618,11 +1618,7 @@ export class CaravansService {
       return { managerUserId: null };
     }
 
-    await this.users.assertHasRole(
-      managerUserId,
-      'PILGRIM',
-      'مدیر کاروان باید از میان زائران انتخاب شود',
-    );
+    await this.users.ensureRole(managerUserId, 'PILGRIM');
     await this.users.ensureRole(managerUserId, 'CARAVAN_MANAGER');
     return { managerUserId };
   }

@@ -32,6 +32,53 @@ const roleSelect = {
   nameKey: true,
 } satisfies Prisma.RoleSelect;
 
+const visitReservationSelect = {
+  id: true,
+  code: true,
+  year: true,
+  type: true,
+  status: true,
+  stayStartDate: true,
+  stayEndDate: true,
+  walkingStartDate: true,
+  requestedMaleCount: true,
+  requestedFemaleCount: true,
+  maleCount: true,
+  femaleCount: true,
+  totalCount: true,
+  originCity: { select: citySelect },
+  walkingRoute: { select: { id: true, name: true } },
+  caravan: { select: { id: true, name: true } },
+  group: { select: { id: true, name: true } },
+} satisfies Prisma.ReservationSelect;
+
+const personMatchSelect = {
+  id: true,
+  fullName: true,
+  firstName: true,
+  lastName: true,
+  nationalId: true,
+  phone: true,
+  photoId: true,
+  gender: true,
+  status: true,
+  city: { select: citySelect },
+  userRoles: { select: { role: { select: roleSelect } } },
+  honoraryServiceAnnouncements: {
+    select: { serviceType: { select: { code: true, name: true } } },
+    take: 8,
+  },
+  _count: {
+    select: {
+      reservationMembers: true,
+      createdReservations: true,
+      managedCaravans: true,
+      managedAccommodations: true,
+      honoraryAssignments: true,
+    },
+  },
+} satisfies Prisma.UserSelect;
+
 export type ReceptionKind = 'pilgrim' | 'caravanManager' | 'accommodationManager';
 
 @Injectable()
@@ -53,27 +100,7 @@ export class ReceptionService {
         where,
         take: MATCH_LIMIT,
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          fullName: true,
-          firstName: true,
-          lastName: true,
-          nationalId: true,
-          phone: true,
-          photoId: true,
-          gender: true,
-          status: true,
-          city: { select: citySelect },
-          userRoles: { select: { role: { select: roleSelect } } },
-          _count: {
-            select: {
-              reservationMembers: true,
-              createdReservations: true,
-              managedCaravans: true,
-              managedAccommodations: true,
-            },
-          },
-        },
+        select: personMatchSelect,
       }),
     ]);
 
@@ -107,27 +134,7 @@ export class ReceptionService {
       where: { id: { in: userIds } },
       take: MATCH_LIMIT,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
-      select: {
-        id: true,
-        fullName: true,
-        firstName: true,
-        lastName: true,
-        nationalId: true,
-        phone: true,
-        photoId: true,
-        gender: true,
-        status: true,
-        city: { select: citySelect },
-        userRoles: { select: { role: { select: roleSelect } } },
-        _count: {
-          select: {
-            reservationMembers: true,
-            createdReservations: true,
-            managedCaravans: true,
-            managedAccommodations: true,
-          },
-        },
-      },
+      select: personMatchSelect,
     });
     const matches = users.map((user) => this.toMatch(user));
     const profile = matches.length === 1 ? await this.profile(matches[0].id) : null;
@@ -157,12 +164,17 @@ export class ReceptionService {
         province: { select: geoSelect },
         city: { select: citySelect },
         userRoles: { select: { role: { select: roleSelect } } },
+        honoraryServiceAnnouncements: {
+          select: { serviceType: { select: { code: true, name: true } } },
+          take: 8,
+        },
         _count: {
           select: {
             reservationMembers: true,
             createdReservations: true,
             managedCaravans: true,
             managedAccommodations: true,
+            honoraryAssignments: true,
           },
         },
       },
@@ -174,7 +186,7 @@ export class ReceptionService {
     const kinds = this.kindsFor(user.userRoles, user._count);
     const year = currentJalaliYear();
 
-    const [memberships, caravans, caravanReservations, managerRows] =
+    const [memberships, caravans, caravanReservations, honoraryAssignments, managerRows] =
       await Promise.all([
         this.prisma.reservationMember.findMany({
           where: { userId: id },
@@ -185,25 +197,7 @@ export class ReceptionService {
           select: {
             id: true,
             reservation: {
-              select: {
-                id: true,
-                code: true,
-                year: true,
-                type: true,
-                status: true,
-                stayStartDate: true,
-                stayEndDate: true,
-                walkingStartDate: true,
-                requestedMaleCount: true,
-                requestedFemaleCount: true,
-                maleCount: true,
-                femaleCount: true,
-                totalCount: true,
-                originCity: { select: citySelect },
-                walkingRoute: { select: { id: true, name: true } },
-                caravan: { select: { id: true, name: true } },
-                group: { select: { id: true, name: true } },
-              },
+              select: visitReservationSelect,
             },
           },
         }),
@@ -230,24 +224,17 @@ export class ReceptionService {
             ],
           },
           orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+          select: visitReservationSelect,
+        }),
+        this.prisma.reservationHonoraryAssignment.findMany({
+          where: { userId: id },
+          orderBy: [
+            { reservation: { year: 'desc' } },
+            { reservation: { createdAt: 'desc' } },
+          ],
           select: {
-            id: true,
-            code: true,
-            year: true,
-            type: true,
-            status: true,
-            stayStartDate: true,
-            stayEndDate: true,
-            walkingStartDate: true,
-            requestedMaleCount: true,
-            requestedFemaleCount: true,
-            maleCount: true,
-            femaleCount: true,
-            totalCount: true,
-            originCity: { select: citySelect },
-            walkingRoute: { select: { id: true, name: true } },
-            caravan: { select: { id: true, name: true } },
-            group: { select: { id: true, name: true } },
+            reservationId: true,
+            reservation: { select: visitReservationSelect },
           },
         }),
         this.prisma.accommodationManager.findMany({
@@ -305,6 +292,11 @@ export class ReceptionService {
       ]),
     );
 
+    const hasHonoraryService = this.hasHonoraryService(
+      user.honoraryServiceAnnouncements,
+      user._count.honoraryAssignments,
+    );
+
     const person = {
       id: user.id,
       fullName: user.fullName,
@@ -326,6 +318,7 @@ export class ReceptionService {
       city: user.city,
       roles: user.userRoles.map((item) => item.role),
       kinds,
+      hasHonoraryService,
     };
 
     const pilgrimVisits = memberships.map((item) =>
@@ -350,6 +343,8 @@ export class ReceptionService {
       };
     });
     const showHousing = kinds.includes('accommodationManager') || history.length > 0;
+    const honoraryVisits = this.uniqueHonoraryVisits(honoraryAssignments);
+    const showHonorary = hasHonoraryService || honoraryVisits.length > 0;
 
     return {
       person,
@@ -381,28 +376,15 @@ export class ReceptionService {
             history,
           }
         : null,
+      honorary: showHonorary
+        ? {
+            visits: honoraryVisits,
+          }
+        : null,
     };
   }
 
-  private toMatch(user: {
-    id: string;
-    fullName: string;
-    firstName: string;
-    lastName: string;
-    nationalId: string | null;
-    phone: string | null;
-    photoId: string | null;
-    gender: string | null;
-    status: string;
-    city: { id: string; nameFa: string; nameEn: string; provinceId: string } | null;
-    userRoles: { role: { code: string; nameKey: string } }[];
-    _count: {
-      reservationMembers: number;
-      createdReservations: number;
-      managedCaravans: number;
-      managedAccommodations: number;
-    };
-  }) {
+  private toMatch(user: Prisma.UserGetPayload<{ select: typeof personMatchSelect }>) {
     return {
       id: user.id,
       fullName: user.fullName,
@@ -416,7 +398,37 @@ export class ReceptionService {
       city: user.city,
       roles: user.userRoles.map((item) => item.role),
       kinds: this.kindsFor(user.userRoles, user._count),
+      hasHonoraryService: this.hasHonoraryService(
+        user.honoraryServiceAnnouncements,
+        user._count.honoraryAssignments,
+      ),
     };
+  }
+
+  private hasHonoraryService(
+    announcements: { serviceType: { code: string | null; name: string } | null }[],
+    assignmentCount: number,
+  ) {
+    if (assignmentCount > 0) return true;
+    return announcements.length > 0;
+  }
+
+  private uniqueHonoraryVisits(
+    assignments: {
+      reservationId: string;
+      reservation: Prisma.ReservationGetPayload<{
+        select: typeof visitReservationSelect;
+      }>;
+    }[],
+  ) {
+    const seen = new Set<string>();
+    const visits = [];
+    for (const item of assignments) {
+      if (seen.has(item.reservationId)) continue;
+      seen.add(item.reservationId);
+      visits.push(this.toVisit(item.reservation));
+    }
+    return visits;
   }
 
   private kindsFor(

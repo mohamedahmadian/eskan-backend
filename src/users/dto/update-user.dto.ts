@@ -1,7 +1,6 @@
 import { OmitType, PartialType } from '@nestjs/mapped-types';
 import { Transform } from 'class-transformer';
 import {
-  ArrayMinSize,
   IsArray,
   IsOptional,
   IsString,
@@ -26,7 +25,6 @@ export class UpdateUserDto extends PartialType(
 
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   roleIds?: string[];
 

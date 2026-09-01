@@ -32,6 +32,7 @@ import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ReceptionModule } from './reception/reception.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
+import { HonoraryServantsModule } from './honorary-servants/honorary-servants.module';
 import { ProvincialMonitoringModule } from './provincial-monitoring/provincial-monitoring.module';
 import { NationalMonitoringModule } from './national-monitoring/national-monitoring.module';
 import { SupportRequestsModule } from './support-requests/support-requests.module';
@@ -71,6 +72,7 @@ import { PlacementsModule } from './placements/placements.module';
     ReservationsModule,
     ReceptionModule,
     EvaluationsModule,
+    HonoraryServantsModule,
     ProvincialMonitoringModule,
     NationalMonitoringModule,
     SupportRequestsModule,

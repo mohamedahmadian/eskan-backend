@@ -1273,7 +1273,7 @@ export class UsersService {
     return this.update(id, dto);
   }
 
-  async removeRole(userId: string, roleCode: string, actorId: string) {
+  async removeRole(userId: string, roleCode: string, _actorId: string) {
     const current = await this.findOne(userId);
     const remainingIds = current.roles
       .filter((role) => role.code !== roleCode)
@@ -1281,10 +1281,6 @@ export class UsersService {
 
     if (remainingIds.length === current.roles.length) {
       return this.findOne(userId);
-    }
-
-    if (remainingIds.length === 0) {
-      return this.remove(userId, actorId);
     }
 
     await this.assertNotLastAdmin(current, remainingIds);
@@ -1544,8 +1540,8 @@ export class UsersService {
     return { status: 'sent' as const };
   }
 
-  /** ثبت‌نام عمومی زائر؛ رمز را خودش می‌گذارد و پیامک نمی‌شود. */
-  async selfRegisterPilgrim(dto: {
+  /** ثبت‌نام عمومی حساب؛ بدون نقش دامنه. */
+  async selfRegister(dto: {
     username: string;
     password: string;
     firstName: string;
@@ -1604,17 +1600,19 @@ export class UsersService {
       throw new BadRequestException('شماره همراه معتبر نیست');
     }
 
-    const passport = normalizePassportNumber(dto.passportNumber ?? '');
-    if (passport) {
-      if (passport.length < 5) {
-        throw new BadRequestException('شماره گذرنامه معتبر نیست');
+    if (!isIranian) {
+      const passport = normalizePassportNumber(dto.passportNumber ?? '');
+      if (passport) {
+        if (passport.length < 5) {
+          throw new BadRequestException('شماره گذرنامه معتبر نیست');
+        }
+        nationalId = passport;
       }
-      nationalId = passport;
-    }
 
-    email = dto.email?.trim().toLowerCase() || null;
-    if (email && !email.includes('@')) {
-      throw new BadRequestException('ایمیل معتبر نیست');
+      email = dto.email?.trim().toLowerCase() || null;
+      if (email && !email.includes('@')) {
+        throw new BadRequestException('ایمیل معتبر نیست');
+      }
     }
 
     const firstName = dto.firstName.trim();
@@ -1626,7 +1624,6 @@ export class UsersService {
       email,
     });
 
-    const role = await this.ensureExistingRole('PILGRIM');
     const passwordHash = await bcrypt.hash(toLatinDigits(dto.password), 10);
 
     await this.prisma.user.create({
@@ -1643,7 +1640,6 @@ export class UsersService {
         gender: dto.gender ?? UserGender.MALE,
         countryId,
         status: UserStatus.ACTIVE,
-        userRoles: { create: [{ roleId: role.id }] },
       },
       select: { id: true },
     });

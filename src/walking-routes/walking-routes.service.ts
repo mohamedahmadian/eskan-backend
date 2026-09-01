@@ -148,14 +148,14 @@ export class WalkingRoutesService {
   async create(dto: CreateWalkingRouteDto) {
     const { entryBorderId, originCountryIds, stages } =
       await this.validateRelated(dto);
-    if (!entryBorderId || !originCountryIds || !stages) {
+    if (!originCountryIds || !stages) {
       throw new BadRequestException('اطلاعات مسیر ناقص است');
     }
     const created = await this.prisma.walkingRoute.create({
       data: {
         name: dto.name.trim(),
         distanceToMashhadKm: new Prisma.Decimal(dto.distanceToMashhadKm),
-        entryBorderId,
+        entryBorderId: entryBorderId ?? null,
         originCountries: {
           create: originCountryIds.map((countryId) => ({ countryId })),
         },
@@ -306,6 +306,8 @@ export class WalkingRoutesService {
       if (!border) {
         throw new BadRequestException('مرز ورودی معتبر نیست');
       }
+    } else if (entryBorderId === '') {
+      entryBorderId = null;
     }
 
     if (stages) {

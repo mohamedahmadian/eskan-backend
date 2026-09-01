@@ -20,11 +20,13 @@ export class ReceptionSettingsController {
   constructor(private readonly reservations: ReservationsService) {}
 
   @Get(':year/capacity')
+  @Roles('AUTHENTICATED')
   getCapacity(@Param('year', ParseIntPipe) year: number) {
     return this.reservations.getCapacity(year);
   }
 
   @Get(':year')
+  @Roles('AUTHENTICATED')
   getSettings(@Param('year', ParseIntPipe) year: number) {
     return this.reservations.getSettings(year);
   }

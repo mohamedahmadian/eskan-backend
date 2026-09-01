@@ -74,7 +74,7 @@ export class CaravansController {
   }
 
   @Get('mine')
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   findMine(
     @Query() query: FindCaravansQueryDto,
     @CurrentUser() actor: RequestUser,
@@ -193,7 +193,7 @@ export class CaravansController {
   }
 
   @Post()
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   create(@Body() dto: CreateCaravanDto, @CurrentUser() actor: RequestUser) {
     return this.caravans.create(dto, actor);
   }

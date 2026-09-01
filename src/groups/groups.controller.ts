@@ -37,7 +37,7 @@ export class GroupsController {
   }
 
   @Get('mine')
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   findMine(
     @Query() query: FindGroupsQueryDto,
     @CurrentUser() actor: RequestUser,
@@ -52,7 +52,7 @@ export class GroupsController {
   }
 
   @Post()
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   create(@Body() dto: CreateGroupDto, @CurrentUser() actor: RequestUser) {
     return this.groups.create(dto, actor);
   }

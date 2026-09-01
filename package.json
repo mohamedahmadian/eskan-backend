@@ -22,7 +22,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "seed:west-routes": "npx tsx prisma/seed-west-routes.ts"
+    "seed:west-routes": "npx tsx prisma/seed-west-routes.ts",
+    "import:accommodations-1405": "npx tsx prisma/import-accommodations-1405.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
