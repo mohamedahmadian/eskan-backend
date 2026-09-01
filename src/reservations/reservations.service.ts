@@ -118,6 +118,7 @@ const userSelect = {
   gender: true,
   birthDate: true,
   status: true,
+  country: { select: { iso2: true } },
 } satisfies Prisma.UserSelect;
 
 const reservationInclude = {
@@ -576,6 +577,9 @@ export class ReservationsService {
       dto.stayEndDate,
     );
     const settings = await this.requireEnabledSettings(dto.year, dto.type);
+    if (!asDraft && !dto.walkingRouteId) {
+      throw new BadRequestException('مسیر پیاده‌روی را انتخاب کنید');
+    }
     if (dto.originCityId) await this.assertOriginCity(dto.originCityId);
     await this.assertWalkingRoute(dto.walkingRouteId);
 
@@ -944,7 +948,8 @@ export class ReservationsService {
         current.id,
       );
 
-      if (current.type === ReservationType.INDIVIDUAL) {
+      const international = await this.isInternationalApplicant(tx, current);
+      if (current.type === ReservationType.INDIVIDUAL && !international) {
         await this.ensureApplicantMember(tx, current);
       }
 
@@ -953,16 +958,34 @@ export class ReservationsService {
       const updated = await tx.reservation.update({
         where: { id },
         data: {
-          status: nextAfterManagement(current.type),
           maleCount: counts.maleCount,
           femaleCount: counts.femaleCount,
           totalCount: counts.maleCount + counts.femaleCount,
-          managementReviewedAt: now,
-          managementReviewedById: actor.id,
-          basicInfoLockedAt: now,
           managementNotes: trimmedNotes
             ? trimmedNotes
             : current.managementNotes,
+          ...(international
+            ? {
+                ...this.internationalCompletionPatch(now, actor.id),
+                placementStatus: PlacementStatus.NOT_REQUIRED,
+                placementCompletedAt: null,
+                placementCompletedById: null,
+                ...(current.type === ReservationType.CARAVAN
+                  ? {
+                      hasPermit: true,
+                      permitStatus: ReservationPermitStatus.APPROVED,
+                      permitReviewedAt: now,
+                      permitReviewedById: actor.id,
+                      permitRejectionReason: null,
+                    }
+                  : {}),
+              }
+            : {
+                status: nextAfterManagement(current.type),
+                managementReviewedAt: now,
+                managementReviewedById: actor.id,
+                basicInfoLockedAt: now,
+              }),
         },
         include: reservationInclude,
       });
@@ -975,6 +998,9 @@ export class ReservationsService {
         year: current.year,
         updateYear: true,
       });
+      if (international) {
+        this.emitWorkflowEvent('complete', current.id, actor.id);
+      }
       return this.serialize(updated, actor);
     });
   }
@@ -1424,10 +1450,23 @@ export class ReservationsService {
           select: { id: true, nameFa: true, nameEn: true, countryId: true },
         },
         city: {
-          select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+          select: {
+            id: true,
+            nameFa: true,
+            nameEn: true,
+            provinceId: true,
+            latitude: true,
+            longitude: true,
+          },
         },
         walkingRouteStage: {
-          select: { id: true, name: true, stageNumber: true },
+          select: {
+            id: true,
+            name: true,
+            stageNumber: true,
+            latitude: true,
+            longitude: true,
+          },
         },
       },
     });
@@ -1437,11 +1476,31 @@ export class ReservationsService {
         reservationId: item.reservationId,
         userId: item.userId,
         walkingRouteStageId: item.walkingRouteStageId,
-        walkingRouteStage: item.walkingRouteStage,
+        walkingRouteStage: item.walkingRouteStage
+          ? {
+              ...item.walkingRouteStage,
+              latitude:
+                item.walkingRouteStage.latitude == null
+                  ? null
+                  : Number(item.walkingRouteStage.latitude),
+              longitude:
+                item.walkingRouteStage.longitude == null
+                  ? null
+                  : Number(item.walkingRouteStage.longitude),
+            }
+          : null,
         provinceId: item.provinceId,
         cityId: item.cityId,
         province: item.province,
-        city: item.city,
+        city: item.city
+          ? {
+              ...item.city,
+              latitude:
+                item.city.latitude == null ? null : Number(item.city.latitude),
+              longitude:
+                item.city.longitude == null ? null : Number(item.city.longitude),
+            }
+          : null,
         latitude: item.latitude == null ? null : Number(item.latitude),
         longitude: item.longitude == null ? null : Number(item.longitude),
         notes: item.notes,
@@ -2486,6 +2545,57 @@ export class ReservationsService {
     }
   }
 
+  private async originCityFromWalkingRoute(
+    tx: Tx,
+    walkingRouteId: string,
+    originCityId?: string | null,
+  ) {
+    if (originCityId) return originCityId;
+    const firstStage = await tx.walkingRouteStage.findFirst({
+      where: { walkingRouteId },
+      orderBy: { stageNumber: 'asc' },
+      select: { cityId: true },
+    });
+    return firstStage?.cityId ?? null;
+  }
+
+  private async applicantCountryIso2(
+    tx: Tx,
+    current: Pick<ReservationRecord, 'createdById' | 'caravanManagerId'>,
+  ) {
+    const userId = current.caravanManagerId ?? current.createdById;
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { country: { select: { iso2: true } } },
+    });
+    return user?.country?.iso2 ?? null;
+  }
+
+  private async isInternationalApplicant(
+    tx: Tx,
+    current: Pick<ReservationRecord, 'createdById' | 'caravanManagerId'>,
+  ) {
+    const iso2 = await this.applicantCountryIso2(tx, current);
+    return Boolean(iso2 && iso2 !== 'IR');
+  }
+
+  private internationalCompletionPatch(now: Date, actorId: string) {
+    return {
+      status: ReservationStatus.COMPLETED,
+      managementReviewedAt: now,
+      managementReviewedById: actorId,
+      basicInfoLockedAt: now,
+      companionsCompletedAt: now,
+      companionsCompletedById: actorId,
+      caravanContactsCompletedAt: now,
+      caravanContactsCompletedById: actorId,
+      insuranceCompletedAt: now,
+      insuranceCompletedById: actorId,
+      completedAt: now,
+      completedById: actorId,
+    };
+  }
+
   private async resolveCreatedById(
     createdById: string | null | undefined,
     actor: Actor,
@@ -2592,6 +2702,14 @@ export class ReservationsService {
       toDateOnly(current.stayStartDate),
       toDateOnly(current.stayEndDate),
     );
+    if (!current.walkingRouteId) {
+      throw new BadRequestException('مسیر پیاده‌روی را انتخاب کنید');
+    }
+    const originCityId = await this.originCityFromWalkingRoute(
+      tx,
+      current.walkingRouteId,
+      current.originCityId,
+    );
     if (current.type === ReservationType.CARAVAN && !current.caravanId) {
       throw new BadRequestException(
         'این پرونده کاروانی نیست یا کاروان انتخاب نشده است',
@@ -2600,8 +2718,12 @@ export class ReservationsService {
     if (current.type === ReservationType.GROUP && !current.groupId) {
       throw new BadRequestException('گروه را انتخاب کنید');
     }
+    const international = await this.isInternationalApplicant(tx, current);
+    const waivePermit =
+      current.type === ReservationType.CARAVAN && international;
     if (
       current.type === ReservationType.CARAVAN &&
+      !waivePermit &&
       !current.issuedLicenseId &&
       !current.permitImageId
     ) {
@@ -2609,7 +2731,7 @@ export class ReservationsService {
         'مجوز کاروان را از فهرست سازمانی انتخاب کنید یا تصویر مجوز را بارگذاری کنید',
       );
     }
-    if (current.type === ReservationType.CARAVAN && current.issuedLicenseId) {
+    if (current.type === ReservationType.CARAVAN && !waivePermit && current.issuedLicenseId) {
       const license = await tx.issuedLicense.findUnique({
         where: { id: current.issuedLicenseId },
         select: { status: true },
@@ -2629,10 +2751,14 @@ export class ReservationsService {
       throw new BadRequestException('پذیرش این نوع در این سال فعال نیست');
     }
 
-    const autoApprove = settings[settingsAutoApproveKey(current.type)];
-    const next = nextAfterBasicInfo(current.type, autoApprove);
+    const autoApprove =
+      international || settings[settingsAutoApproveKey(current.type)];
+    const next = international
+      ? ReservationStatus.COMPLETED
+      : nextAfterBasicInfo(current.type, autoApprove);
     const now = new Date();
     const systemUserId = autoApprove ? await this.systemUserId(tx) : null;
+    const stampUserId = systemUserId ?? actor.id;
 
     if (autoApprove) {
       await assertCapacity(
@@ -2646,7 +2772,7 @@ export class ReservationsService {
       );
     }
 
-    if (current.type === ReservationType.INDIVIDUAL) {
+    if (current.type === ReservationType.INDIVIDUAL && !international) {
       await this.ensureApplicantMember(tx, current);
     }
 
@@ -2657,16 +2783,36 @@ export class ReservationsService {
         basicInfoCompletedAt: now,
         basicInfoCompletedById: actor.id,
         createWizardStep: null,
-        ...(autoApprove
+        originCityId,
+        ...(waivePermit
           ? {
-              managementReviewedAt: now,
-              managementReviewedById: systemUserId,
-              basicInfoLockedAt: now,
+              hasPermit: true,
+              permitStatus: ReservationPermitStatus.APPROVED,
+              permitReviewedAt: now,
+              permitReviewedById: actor.id,
+              permitRejectionReason: null,
+            }
+          : {}),
+        ...(international
+          ? {
+              ...this.internationalCompletionPatch(now, stampUserId),
               maleCount: requestedMale,
               femaleCount: requestedFemale,
               totalCount: requestedMale + requestedFemale,
+              placementStatus: PlacementStatus.NOT_REQUIRED,
+              placementCompletedAt: null,
+              placementCompletedById: null,
             }
-          : unapprovedCounts()),
+          : autoApprove
+            ? {
+                managementReviewedAt: now,
+                managementReviewedById: systemUserId,
+                basicInfoLockedAt: now,
+                maleCount: requestedMale,
+                femaleCount: requestedFemale,
+                totalCount: requestedMale + requestedFemale,
+              }
+            : unapprovedCounts()),
       },
       include: reservationInclude,
     });
@@ -2680,6 +2826,9 @@ export class ReservationsService {
         year: current.year,
         updateYear: true,
       });
+    }
+    if (international) {
+      this.emitWorkflowEvent('complete', current.id, stampUserId);
     }
     return this.serialize(updated, actor);
   }
@@ -3695,6 +3844,7 @@ export class ReservationsService {
       returnedToStatus: row.returnedToStatus,
       createWizardStep: row.createWizardStep,
       walkingRoute: row.walkingRoute,
+      internationalWorkflow: isInternationalWorkflowRow(row),
     };
   }
 
@@ -3781,6 +3931,7 @@ export class ReservationsService {
       cancelledBy: row.cancelledBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      internationalWorkflow: isInternationalWorkflowRow(row),
       members: seeMembers
         ? row.members.map((item) => this.serializeMember(item))
         : undefined,
@@ -3937,6 +4088,14 @@ function issuedServicesPatch(
         ? undefined
         : dto.bankCardInitialBalance,
   };
+}
+
+function isInternationalWorkflowRow(row: {
+  createdBy?: { country?: { iso2?: string | null } | null } | null;
+  caravanManager?: { country?: { iso2?: string | null } | null } | null;
+}) {
+  const iso2 = row.caravanManager?.country?.iso2 ?? row.createdBy?.country?.iso2;
+  return Boolean(iso2 && iso2 !== 'IR');
 }
 
 function emptyPermitData() {

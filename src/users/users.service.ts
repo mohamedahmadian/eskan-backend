@@ -14,6 +14,7 @@ import {
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear, jalaliYearRange } from '../common/jalali-year';
 import { normalizeMobile, normalizePhone, phoneLookupValues } from '../common/phone';
+import { localeFromCountryIso2 } from '../common/request-locale';
 import {
   containsInsensitive,
   normalizeSearchDigits,
@@ -1511,6 +1512,7 @@ export class UsersService {
       select: { id: true },
     });
     const countryId = dto.countryId ?? iran?.id ?? null;
+    let countryIso2: string | null = null;
     if (countryId) {
       const country = await this.prisma.country.findUnique({
         where: { id: countryId },
@@ -1519,7 +1521,9 @@ export class UsersService {
       if (!country || !country.isActive) {
         throw new BadRequestException('کشور انتخاب‌شده معتبر نیست');
       }
+      countryIso2 = country.iso2;
     }
+    const locale = localeFromCountryIso2(countryIso2);
     const isIranian = Boolean(iran && countryId === iran.id);
 
     let nationalId: string | null = null;
@@ -1562,7 +1566,7 @@ export class UsersService {
         firstName,
         lastName,
         fullName: joinFullName(firstName, lastName),
-        locale: dto.locale ?? 'fa',
+        locale,
         nationalId,
         phone,
         email,
@@ -1574,7 +1578,7 @@ export class UsersService {
       select: { id: true },
     });
 
-    return { status: 'registered' as const };
+    return { status: 'registered' as const, locale };
   }
 
   private async findActiveByIdentifier(identifier: string) {
