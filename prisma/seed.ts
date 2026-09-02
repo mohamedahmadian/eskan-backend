@@ -4,10 +4,12 @@ import * as bcrypt from 'bcrypt';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { geoSeed } from './geo-data';
+import { seedParticipationsData } from './seed-participations-data';
 import {
   extraIranCities,
   loadOfficialIranCities,
 } from './iran-official';
+import { seedHeadquartersContent } from './seed-headquarters-content';
 import {
   codeFromNeshanSlug,
   displayCityNameFa,
@@ -240,6 +242,21 @@ async function main() {
       code: 'headquarters',
       nameKey: 'modules.headquarters',
       icon: 'landmark',
+      sortOrder: 8,
+    },
+  });
+
+  const participations = await prisma.navModule.upsert({
+    where: { code: 'participations' },
+    update: {
+      nameKey: 'modules.participations',
+      icon: 'heart-handshake',
+      sortOrder: 8,
+    },
+    create: {
+      code: 'participations',
+      nameKey: 'modules.participations',
+      icon: 'heart-handshake',
       sortOrder: 8,
     },
   });
@@ -692,6 +709,22 @@ async function main() {
       sortOrder: 4,
     },
     {
+      code: 'headquarters.news',
+      moduleId: headquarters.id,
+      nameKey: 'menus.headquartersNews',
+      path: '/headquarters/news',
+      icon: 'newspaper',
+      sortOrder: 5,
+    },
+    {
+      code: 'headquarters.announcements',
+      moduleId: headquarters.id,
+      nameKey: 'menus.headquartersAnnouncements',
+      path: '/headquarters/announcements',
+      icon: 'megaphone',
+      sortOrder: 6,
+    },
+    {
       code: 'users.list',
       moduleId: users.id,
       nameKey: 'menus.usersList',
@@ -906,6 +939,38 @@ async function main() {
       path: '/honorary-service-types',
       icon: 'heart-handshake',
       sortOrder: 2,
+    },
+    {
+      code: 'participations.home',
+      moduleId: participations.id,
+      nameKey: 'menus.participationsHome',
+      path: '/participations',
+      icon: 'heart-handshake',
+      sortOrder: 1,
+    },
+    {
+      code: 'participations.campaigns',
+      moduleId: participations.id,
+      nameKey: 'menus.participationCampaigns',
+      path: '/participations/campaigns',
+      icon: 'megaphone',
+      sortOrder: 2,
+    },
+    {
+      code: 'participations.bank-accounts',
+      moduleId: participations.id,
+      nameKey: 'menus.bankAccounts',
+      path: '/participations/bank-accounts',
+      icon: 'landmark',
+      sortOrder: 3,
+    },
+    {
+      code: 'participations.crypto-wallets',
+      moduleId: participations.id,
+      nameKey: 'menus.cryptoWallets',
+      path: '/participations/crypto-wallets',
+      icon: 'wallet',
+      sortOrder: 4,
     },
   ];
 
@@ -1308,6 +1373,8 @@ async function main() {
   await seedGeo();
   await seedPlaceTypes();
   await seedHonoraryServiceTypes();
+  await seedParticipationsData(prisma);
+  await seedHeadquartersContent(prisma);
 
   const systemPasswordHash = await bcrypt.hash(
     `system-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,

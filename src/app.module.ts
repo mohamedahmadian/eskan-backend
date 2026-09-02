@@ -20,6 +20,8 @@ import { PlacesModule } from './places/places.module';
 import { OrgUnitsModule } from './org-units/org-units.module';
 import { HeadquartersInfoModule } from './headquarters-info/headquarters-info.module';
 import { HeadquartersPhonesModule } from './headquarters-phones/headquarters-phones.module';
+import { HeadquartersNewsModule } from './headquarters-news/headquarters-news.module';
+import { HeadquartersAnnouncementsModule } from './headquarters-announcements/headquarters-announcements.module';
 import { IssuedLicensesModule } from './issued-licenses/issued-licenses.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { SupplierItemsModule } from './supplier-items/supplier-items.module';
@@ -38,6 +40,7 @@ import { ProvincialMonitoringModule } from './provincial-monitoring/provincial-m
 import { NationalMonitoringModule } from './national-monitoring/national-monitoring.module';
 import { SupportRequestsModule } from './support-requests/support-requests.module';
 import { PlacementsModule } from './placements/placements.module';
+import { ParticipationsModule } from './participations/participations.module';
 
 @Module({
   imports: [
@@ -63,6 +66,8 @@ import { PlacementsModule } from './placements/placements.module';
     OrgUnitsModule,
     HeadquartersInfoModule,
     HeadquartersPhonesModule,
+    HeadquartersNewsModule,
+    HeadquartersAnnouncementsModule,
     IssuedLicensesModule,
     SuppliersModule,
     SupplierItemsModule,
@@ -79,6 +84,7 @@ import { PlacementsModule } from './placements/placements.module';
     NationalMonitoringModule,
     SupportRequestsModule,
     PlacementsModule,
+    ParticipationsModule,
   ],
   controllers: [AppController],
 })

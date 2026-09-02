@@ -315,6 +315,7 @@ model StoredImage {
   issuedLicenseFiles IssuedLicense[] @relation("IssuedLicenseFile")
   reservationPermitImages Reservation[] @relation("ReservationPermitImage")
   headquartersLogos HeadquartersInfo[] @relation("HeadquartersLogo")
+  participationCampaignImages ParticipationCampaign[] @relation("ParticipationCampaignImage")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
@@ -1557,6 +1558,50 @@ model HeadquartersPhone {
   @@map("headquarters_phones")
 }
 
+/// مخاطب اطلاعیه ستاد جمعیت
+enum AnnouncementAudience {
+  PILGRIMS
+  CARAVAN_MANAGERS
+  ACCOMMODATION_MANAGERS
+}
+
+/// اخبار مهم ستاد جمعیت
+model HeadquartersNews {
+  id          String   @id @default(uuid())
+  title       String
+  summary     String?
+  body        String
+  publishedAt DateTime @db.Date
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([title])
+  @@index([publishedAt])
+  @@index([isPublished])
+  @@index([createdAt])
+  @@map("headquarters_news")
+}
+
+/// اطلاعیه‌های مهم ستاد جمعیت (عمومی یا ویژه نقش)
+model HeadquartersAnnouncement {
+  id          String               @id @default(uuid())
+  title       String
+  body        String
+  audience    AnnouncementAudience
+  publishedAt DateTime             @db.Date
+  isPublished Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([title])
+  @@index([audience])
+  @@index([publishedAt])
+  @@index([isPublished])
+  @@index([createdAt])
+  @@map("headquarters_announcements")
+}
+
 model OrgUnit {
   id               String   @id @default(uuid())
   name             String
@@ -1802,4 +1847,80 @@ model ReservationHonoraryAssignment {
   @@index([assignedById])
   @@index([createdAt])
   @@map("reservation_honorary_assignments")
+}
+
+model BankAccount {
+  id            String                   @id @default(uuid())
+  bankName      String
+  accountNumber String
+  cardNumber    String?
+  iban          String
+  isActive      Boolean                  @default(true)
+  campaigns     ParticipationCampaign[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@index([bankName])
+  @@index([isActive])
+  @@map("bank_accounts")
+}
+
+model CryptoWallet {
+  id        String                   @id @default(uuid())
+  currency  String
+  network   String?
+  address   String
+  label     String
+  isActive  Boolean                  @default(true)
+  campaigns ParticipationCampaign[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([currency])
+  @@index([isActive])
+  @@map("crypto_wallets")
+}
+
+model ParticipationCampaign {
+  id             String                 @id @default(uuid())
+  name           String
+  startDate      DateTime               @db.Date
+  endDate        DateTime               @db.Date
+  description    String?
+  imageId        String?
+  image          StoredImage?           @relation("ParticipationCampaignImage", fields: [imageId], references: [id], onDelete: SetNull)
+  isActive       Boolean                @default(true)
+  totalAmount    Int
+  sharePrice     Int
+  bankAccountId  String?
+  bankAccount    BankAccount?           @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  cryptoWalletId String?
+  cryptoWallet   CryptoWallet?          @relation(fields: [cryptoWalletId], references: [id], onDelete: SetNull)
+  participants   CampaignParticipant[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([bankAccountId])
+  @@index([cryptoWalletId])
+  @@map("participation_campaigns")
+}
+
+model CampaignParticipant {
+  id         String                 @id @default(uuid())
+  campaignId String
+  campaign   ParticipationCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  fullName   String
+  phone      String?
+  shareCount Int
+  paidAmount Int
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  @@index([campaignId])
+  @@index([fullName])
+  @@map("campaign_participants")
 }
