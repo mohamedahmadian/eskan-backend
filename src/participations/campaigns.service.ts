@@ -101,7 +101,6 @@ export class ParticipationCampaignsService {
     const items = await this.prisma.participationCampaign.findMany({
       where: { isActive: true },
       orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
-      take: 3,
       include: { _count: { select: { participants: true } } },
     });
     if (!items.length) {
@@ -136,6 +135,49 @@ export class ParticipationCampaignsService {
         ...stats,
       };
     });
+  }
+
+  async findPublicOne(id: string) {
+    const item = await this.prisma.participationCampaign.findFirst({
+      where: { id, isActive: true },
+      include: campaignInclude,
+    });
+    if (!item) {
+      throw new NotFoundException('پویش یافت نشد');
+    }
+    const [serialized] = await this.serializeMany([item]);
+    return {
+      id: serialized.id,
+      name: serialized.name,
+      startDate: serialized.startDate,
+      endDate: serialized.endDate,
+      description: serialized.description,
+      imageId: serialized.imageId,
+      isActive: serialized.isActive,
+      totalAmount: serialized.totalAmount,
+      sharePrice: serialized.sharePrice,
+      totalShares: serialized.totalShares,
+      purchasedShares: serialized.purchasedShares,
+      remainingShares: serialized.remainingShares,
+      participantCount: serialized.participantCount,
+      progressPercent: serialized.progressPercent,
+      bankAccount: item.bankAccount
+        ? {
+            bankName: item.bankAccount.bankName,
+            accountNumber: item.bankAccount.accountNumber,
+            cardNumber: item.bankAccount.cardNumber,
+            iban: item.bankAccount.iban,
+          }
+        : null,
+      cryptoWallet: item.cryptoWallet
+        ? {
+            label: item.cryptoWallet.label,
+            currency: item.cryptoWallet.currency,
+            network: item.cryptoWallet.network,
+            address: item.cryptoWallet.address,
+          }
+        : null,
+    };
   }
 
   async findOne(id: string) {

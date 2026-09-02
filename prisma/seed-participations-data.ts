@@ -143,21 +143,54 @@ const PARTICIPANTS = [
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000003', campaignId: CAMPAIGNS[0].id, fullName: 'حسین کریمی', phone: '09351112233', shareCount: 80 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000004', campaignId: CAMPAIGNS[0].id, fullName: 'فاطمه احمدی', phone: '09125556677', shareCount: 200 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000005', campaignId: CAMPAIGNS[0].id, fullName: 'محمد حسینی', phone: '09201234567', shareCount: 35 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000020', campaignId: CAMPAIGNS[0].id, fullName: 'سمیه باقری', phone: '09121230001', shareCount: 150 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000021', campaignId: CAMPAIGNS[0].id, fullName: 'محسن نجفی', phone: '09121230002', shareCount: 90 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000022', campaignId: CAMPAIGNS[0].id, fullName: 'الهام رحیمی', phone: '09121230003', shareCount: 220 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000023', campaignId: CAMPAIGNS[0].id, fullName: 'پیمان یوسفی', phone: '09121230004', shareCount: 60 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000024', campaignId: CAMPAIGNS[0].id, fullName: 'ناهید فرهادی', phone: '09121230005', shareCount: 180 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000025', campaignId: CAMPAIGNS[0].id, fullName: 'کامران عزیزی', phone: '09121230006', shareCount: 75 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000026', campaignId: CAMPAIGNS[0].id, fullName: 'شیما کاویانی', phone: '09121230007', shareCount: 110 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000006', campaignId: CAMPAIGNS[1].id, fullName: 'مریم نوری', phone: '09127654321', shareCount: 10 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000007', campaignId: CAMPAIGNS[1].id, fullName: 'رضا اکبری', phone: '09361234567', shareCount: 4 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000008', campaignId: CAMPAIGNS[1].id, fullName: 'سارا جعفری', phone: '09139876543', shareCount: 8 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000009', campaignId: CAMPAIGNS[1].id, fullName: 'امیر قاسمی', phone: '09012345678', shareCount: 20 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000027', campaignId: CAMPAIGNS[1].id, fullName: 'فریده سلیمانی', phone: '09123440011', shareCount: 15 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000028', campaignId: CAMPAIGNS[1].id, fullName: 'سعید محمودی', phone: '09123440012', shareCount: 25 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000029', campaignId: CAMPAIGNS[1].id, fullName: 'آرزو حیدری', phone: '09123440013', shareCount: 12 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000030', campaignId: CAMPAIGNS[1].id, fullName: 'بهروز نیکنام', phone: '09123440014', shareCount: 30 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000031', campaignId: CAMPAIGNS[1].id, fullName: 'گلناز امینی', phone: '09123440015', shareCount: 18 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000010', campaignId: CAMPAIGNS[2].id, fullName: 'Ahmed Al-Khalidi', phone: '09120001122', shareCount: 5 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000011', campaignId: CAMPAIGNS[2].id, fullName: 'فاطمه علوی', phone: '09124445566', shareCount: 12 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000012', campaignId: CAMPAIGNS[2].id, fullName: 'یوسف عباسی', phone: '09330001122', shareCount: 3 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000032', campaignId: CAMPAIGNS[2].id, fullName: 'حسن الهاشمی', phone: '09125550021', shareCount: 20 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000033', campaignId: CAMPAIGNS[2].id, fullName: 'Maryam Al-Sadr', phone: '09125550022', shareCount: 8 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000034', campaignId: CAMPAIGNS[2].id, fullName: 'کاظم تقوی', phone: '09125550023', shareCount: 15 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000035', campaignId: CAMPAIGNS[2].id, fullName: 'زینب موسوی', phone: '09125550024', shareCount: 25 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000036', campaignId: CAMPAIGNS[2].id, fullName: 'عبدالله رضوی', phone: '09125550025', shareCount: 10 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000037', campaignId: CAMPAIGNS[2].id, fullName: 'هدی شریعتی', phone: '09125550026', shareCount: 18 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000013', campaignId: CAMPAIGNS[3].id, fullName: 'نرگس شریفی', phone: '09127778899', shareCount: 40 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000014', campaignId: CAMPAIGNS[3].id, fullName: 'مهدی صادقی', phone: '09223334455', shareCount: 80 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000015', campaignId: CAMPAIGNS[3].id, fullName: 'لیلا موسوی', phone: '09126667788', shareCount: 25 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000016', campaignId: CAMPAIGNS[3].id, fullName: 'کاظم رستمی', phone: '09359998877', shareCount: 60 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000038', campaignId: CAMPAIGNS[3].id, fullName: 'پروین صالحی', phone: '09126660031', shareCount: 35 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000039', campaignId: CAMPAIGNS[3].id, fullName: 'داریوش کریمی', phone: '09126660032', shareCount: 50 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000040', campaignId: CAMPAIGNS[3].id, fullName: 'مینا رفیعی', phone: '09126660033', shareCount: 45 },
+  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000041', campaignId: CAMPAIGNS[3].id, fullName: 'ناصر قلی‌پور', phone: '09126660034', shareCount: 70 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000017', campaignId: CAMPAIGNS[4].id, fullName: 'حسن طاهری', phone: '09121110000', shareCount: 400 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000018', campaignId: CAMPAIGNS[4].id, fullName: 'زینب کاظمی', phone: '09123330000', shareCount: 350 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000019', campaignId: CAMPAIGNS[4].id, fullName: 'جواد مرادی', phone: '09351110000', shareCount: 250 },
 ] as const;
+
+const FILL_NAMES = [
+  'احمد توکلی',
+  'فرشته نادری',
+  'مجید اسماعیلی',
+  'سپیده قربانی',
+  'حمیدرضا فلاح',
+  'مهسا نعمتی',
+  'علیرضا شفیعی',
+  'پریسا محمدپور',
+];
 
 export async function seedParticipationsData(prisma: PrismaClient) {
   for (const item of BANKS) {
@@ -231,5 +264,33 @@ export async function seedParticipationsData(prisma: PrismaClient) {
         paidAmount,
       },
     });
+  }
+
+  const emptyCampaigns = await prisma.participationCampaign.findMany({
+    where: { participants: { none: {} } },
+    select: { id: true, sharePrice: true, totalAmount: true, name: true },
+  });
+  for (const campaign of emptyCampaigns) {
+    const totalShares = campaign.sharePrice > 0
+      ? Math.floor(campaign.totalAmount / campaign.sharePrice)
+      : 0;
+    const targetShares = Math.max(8, Math.floor(totalShares * 0.35));
+    let remaining = targetShares;
+    for (let index = 0; index < FILL_NAMES.length && remaining > 0; index += 1) {
+      const shareCount = Math.max(
+        1,
+        Math.min(remaining, Math.ceil(targetShares / FILL_NAMES.length) + (index % 3) * 2),
+      );
+      remaining -= shareCount;
+      await prisma.campaignParticipant.create({
+        data: {
+          campaignId: campaign.id,
+          fullName: FILL_NAMES[index],
+          phone: `0912${String(4000000 + index).slice(-7)}`,
+          shareCount,
+          paidAmount: shareCount * campaign.sharePrice,
+        },
+      });
+    }
   }
 }

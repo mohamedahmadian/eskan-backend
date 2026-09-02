@@ -1,14 +1,47 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
+import {
+  newsTranslationLocales,
+  type NewsTranslationLocale,
+} from '../news-locales';
+
+export class HeadquartersNewsTranslationDto {
+  @IsIn([...newsTranslationLocales])
+  locale: NewsTranslationLocale;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MaxLength(200)
+  title?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MaxLength(400)
+  summary?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  body?: string | null;
+}
 
 export class CreateHeadquartersNewsDto {
   @IsString()
@@ -34,4 +67,16 @@ export class CreateHeadquartersNewsDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  imageId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HeadquartersNewsTranslationDto)
+  translations?: HeadquartersNewsTranslationDto[];
 }

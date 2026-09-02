@@ -316,6 +316,7 @@ model StoredImage {
   reservationPermitImages Reservation[] @relation("ReservationPermitImage")
   headquartersLogos HeadquartersInfo[] @relation("HeadquartersLogo")
   participationCampaignImages ParticipationCampaign[] @relation("ParticipationCampaignImage")
+  headquartersNewsImages HeadquartersNews[] @relation("HeadquartersNewsImage")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
@@ -1565,22 +1566,43 @@ enum AnnouncementAudience {
   ACCOMMODATION_MANAGERS
 }
 
-/// اخبار مهم ستاد جمعیت
+/// اخبار مهم ستاد جمعیت (متن اصلی فارسی)
 model HeadquartersNews {
-  id          String   @id @default(uuid())
-  title       String
-  summary     String?
-  body        String
-  publishedAt DateTime @db.Date
-  isPublished Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String                       @id @default(uuid())
+  title         String
+  summary       String?
+  body          String
+  publishedAt   DateTime                     @db.Date
+  isPublished   Boolean                      @default(true)
+  imageId       String?
+  image         StoredImage?                 @relation("HeadquartersNewsImage", fields: [imageId], references: [id], onDelete: SetNull)
+  translations  HeadquartersNewsTranslation[]
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
 
   @@index([title])
   @@index([publishedAt])
   @@index([isPublished])
   @@index([createdAt])
   @@map("headquarters_news")
+}
+
+/// ترجمهٔ خبر برای زبان‌های غیر فارسی
+model HeadquartersNewsTranslation {
+  id        String           @id @default(uuid())
+  newsId    String
+  news      HeadquartersNews @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  locale    String
+  title     String
+  summary   String?
+  body      String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([newsId, locale])
+  @@index([locale])
+  @@index([createdAt])
+  @@map("headquarters_news_translations")
 }
 
 /// اطلاعیه‌های مهم ستاد جمعیت (عمومی یا ویژه نقش)

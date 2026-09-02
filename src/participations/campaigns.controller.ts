@@ -36,6 +36,13 @@ export class ParticipationCampaignsController {
     return this.campaigns.showcasePublic();
   }
 
+  @Get('public/:id')
+  @Public()
+  @Roles()
+  findPublicOne(@Param('id') id: string) {
+    return this.campaigns.findPublicOne(id);
+  }
+
   @Get()
   findAll(@Query() query: FindParticipationCampaignsQueryDto) {
     return this.campaigns.findAll(query);
