@@ -53,7 +53,7 @@ export function nextAfterManagement(
   }
   if (features.companions) return ReservationStatus.COMPANIONS;
   if (type === ReservationType.CARAVAN) {
-    return ReservationStatus.CARAVAN_CONTACTS;
+    return nextAfterCompanions(type, features);
   }
   return features.insurance
     ? ReservationStatus.INSURANCE
@@ -65,7 +65,8 @@ export function nextAfterCompanions(
   features: ReservationFeatures = defaultIranianFeatures,
 ): ReservationStatus {
   if (type === ReservationType.CARAVAN) {
-    return ReservationStatus.CARAVAN_CONTACTS;
+    if (features.caravanContacts) return ReservationStatus.CARAVAN_CONTACTS;
+    return nextAfterContacts(features);
   }
   if (type === ReservationType.GROUP) {
     return features.insurance

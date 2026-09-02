@@ -94,6 +94,20 @@ export class WalkingStationsService {
     return this.serialize(item, occupied.get(id) ?? { male: 0, female: 0 });
   }
 
+  async findPublicOne(id: string) {
+    const item = await this.prisma.walkingStation.findUnique({
+      where: { id },
+      include: walkingStationInclude,
+    });
+    if (!item) {
+      throw new NotFoundException('ایستگاه یافت نشد');
+    }
+    const publicItem = this.serialize(item);
+    const { occupiedMaleCount: _occupiedMale, occupiedFemaleCount: _occupiedFemale, ...rest } =
+      publicItem;
+    return rest;
+  }
+
   async listStays(id: string) {
     await this.findOne(id);
     const items = await this.prisma.reservationStationStay.findMany({
@@ -208,6 +222,8 @@ export class WalkingStationsService {
           { neshanAddress: containsInsensitive(query.q) },
           { managerName: containsInsensitive(query.q) },
           { managerPhone: containsInsensitive(query.q) },
+          { heatingSystem: containsInsensitive(query.q) },
+          { coolingSystem: containsInsensitive(query.q) },
           { city: { nameFa: containsInsensitive(query.q) } },
           { city: { nameEn: containsInsensitive(query.q) } },
           { city: { province: { nameFa: containsInsensitive(query.q) } } },
@@ -316,6 +332,44 @@ export class WalkingStationsService {
         dto.description === undefined
           ? undefined
           : dto.description?.trim() || null,
+      hasLaundry:
+        dto.hasLaundry === undefined
+          ? partial
+            ? undefined
+            : false
+          : dto.hasLaundry,
+      hasInternet:
+        dto.hasInternet === undefined
+          ? partial
+            ? undefined
+            : false
+          : dto.hasInternet,
+      hasPrayerRoom:
+        dto.hasPrayerRoom === undefined
+          ? partial
+            ? undefined
+            : false
+          : dto.hasPrayerRoom,
+      hasElevator:
+        dto.hasElevator === undefined
+          ? partial
+            ? undefined
+            : false
+          : dto.hasElevator,
+      heatingSystem:
+        dto.heatingSystem === undefined
+          ? undefined
+          : dto.heatingSystem?.trim() || null,
+      coolingSystem:
+        dto.coolingSystem === undefined
+          ? undefined
+          : dto.coolingSystem?.trim() || null,
+      parkingCapacity:
+        dto.parkingCapacity === undefined ? undefined : dto.parkingCapacity,
+      bathroomCount:
+        dto.bathroomCount === undefined ? undefined : dto.bathroomCount,
+      toiletCount: dto.toiletCount === undefined ? undefined : dto.toiletCount,
+      areaSqm: decimal(dto.areaSqm),
     };
   }
 
@@ -369,6 +423,16 @@ export class WalkingStationsService {
       managerEitaa: item.managerEitaa,
       distanceToMashhadKm: num(item.distanceToMashhadKm),
       description: item.description,
+      hasLaundry: item.hasLaundry,
+      hasInternet: item.hasInternet,
+      hasPrayerRoom: item.hasPrayerRoom,
+      hasElevator: item.hasElevator,
+      heatingSystem: item.heatingSystem,
+      coolingSystem: item.coolingSystem,
+      parkingCapacity: item.parkingCapacity,
+      bathroomCount: item.bathroomCount,
+      toiletCount: item.toiletCount,
+      areaSqm: num(item.areaSqm),
       routes: item.routeStages.map((row) => ({
         id: row.walkingRoute.id,
         name: row.walkingRoute.name,

@@ -6,14 +6,17 @@ import {
   IsEmail,
   IsEnum,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
 import { Religion, UserGender, UserStatus } from '../../generated/prisma/client';
-import { emptyToNull } from '../../common/dto-transform';
+import { emptyToNull, toOptionalNumber } from '../../common/dto-transform';
 import { IsIranianNationalId, normalizeNationalId } from '../../common/national-id';
 import { normalizePhone } from '../../common/phone';
 
@@ -74,6 +77,16 @@ export class CreateUserDto {
   @ValidateIf((_, value) => value != null)
   @IsDateString()
   birthDate?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === undefined ? undefined : toOptionalNumber(value),
+  )
+  @ValidateIf((_, value) => value != null)
+  @IsInt()
+  @Min(1300)
+  @Max(1600)
+  activityStartYear?: number | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

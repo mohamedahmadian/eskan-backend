@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -62,4 +63,12 @@ export class UpdateReservationMemberDto {
   @ValidateIf((_, value) => value != null)
   @IsDateString()
   birthDate?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  requestsSimCard?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requestsBankCard?: boolean;
 }

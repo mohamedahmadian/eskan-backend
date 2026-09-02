@@ -9,6 +9,7 @@ import {
   canAssignBothGendersTogether,
   isOwnerCreateDraft,
   nextAfterContacts,
+  nextAfterCompanions,
   nextAfterManagement,
   placementModeFromSettings,
   validRewindStatuses,
@@ -95,6 +96,21 @@ describe('nextAfterManagement', () => {
       ReservationStatus.CARAVAN_CONTACTS,
     );
     expect(nextAfterContacts(noCompanionsInsurance)).toBe(ReservationStatus.COMPLETED);
+  });
+
+  it('skips caravan contacts when that feature is off', () => {
+    const noContacts = {
+      ...defaultIranianFeatures,
+      companions: false,
+      caravanContacts: false,
+      insurance: true,
+    };
+    expect(nextAfterManagement(ReservationType.CARAVAN, noContacts)).toBe(
+      ReservationStatus.INSURANCE,
+    );
+    expect(nextAfterCompanions(ReservationType.CARAVAN, noContacts)).toBe(
+      ReservationStatus.INSURANCE,
+    );
   });
 });
 

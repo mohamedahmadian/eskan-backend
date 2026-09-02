@@ -87,6 +87,7 @@ model User {
   phone               String?       @unique
   email               String?       @unique
   birthDate           DateTime?     @db.Date
+  activityStartYear   Int?
   address             String?
   notes               String?
   religion            Religion?
@@ -718,6 +719,9 @@ model ReservationMember {
   userId        String
   user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
 
+  requestsSimCard  Boolean @default(false)
+  requestsBankCard Boolean @default(false)
+
   insuranceStatus          ReservationMemberInsuranceStatus @default(PENDING)
   insurancePaidAt          DateTime?
   insurancePaidAmount      Int?
@@ -815,6 +819,7 @@ enum ReceptionFeature {
   INDIVIDUAL
   GROUP
   CARAVAN
+  CARAVAN_CONTACTS
 }
 
 model ReceptionSettingsCountry {
@@ -1276,6 +1281,16 @@ model WalkingStation {
   managerEitaa        String?
   distanceToMashhadKm Decimal?              @db.Decimal(8, 2)
   description         String?
+  hasLaundry          Boolean               @default(false)
+  hasInternet         Boolean               @default(false)
+  hasPrayerRoom       Boolean               @default(false)
+  hasElevator         Boolean               @default(false)
+  heatingSystem       String?
+  coolingSystem       String?
+  parkingCapacity     Int?
+  bathroomCount       Int?
+  toiletCount         Int?
+  areaSqm             Decimal?              @db.Decimal(10, 2)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   routeStages         WalkingRouteStage[]

@@ -9,6 +9,7 @@ import {
   PilgrimsUsersController,
 } from './role-scoped-users.controller';
 import { PublicAuthController } from './public-auth.controller';
+import { PublicProfilesController } from './public-profiles.controller';
 import { RolesController } from './roles.controller';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -18,6 +19,7 @@ import { UsersService } from './users.service';
   controllers: [
     AccountController,
     PublicAuthController,
+    PublicProfilesController,
     UsersController,
     RolesController,
     PilgrimsUsersController,

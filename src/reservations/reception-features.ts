@@ -8,6 +8,7 @@ export const receptionFeatures = {
   INDIVIDUAL: ReceptionFeature.INDIVIDUAL,
   GROUP: ReceptionFeature.GROUP,
   CARAVAN: ReceptionFeature.CARAVAN,
+  CARAVAN_CONTACTS: ReceptionFeature.CARAVAN_CONTACTS,
 } as const;
 
 export type ReservationFeatures = {
@@ -15,6 +16,7 @@ export type ReservationFeatures = {
   insurance: boolean;
   mashhadPlacement: boolean;
   routePlacement: boolean;
+  caravanContacts: boolean;
 };
 
 export const defaultIranianFeatures: ReservationFeatures = {
@@ -22,6 +24,7 @@ export const defaultIranianFeatures: ReservationFeatures = {
   insurance: true,
   mashhadPlacement: true,
   routePlacement: true,
+  caravanContacts: true,
 };
 
 export type FeatureCountryLists = {
@@ -32,6 +35,7 @@ export type FeatureCountryLists = {
   individualCountryIds: string[];
   groupCountryIds: string[];
   caravanCountryIds: string[];
+  caravanContactsCountryIds: string[];
 };
 
 export const emptyFeatureCountryLists = (): FeatureCountryLists => ({
@@ -42,6 +46,7 @@ export const emptyFeatureCountryLists = (): FeatureCountryLists => ({
   individualCountryIds: [],
   groupCountryIds: [],
   caravanCountryIds: [],
+  caravanContactsCountryIds: [],
 });
 
 export const receptionCountryBindings: {
@@ -55,6 +60,7 @@ export const receptionCountryBindings: {
   { key: 'individualCountryIds', feature: ReceptionFeature.INDIVIDUAL },
   { key: 'groupCountryIds', feature: ReceptionFeature.GROUP },
   { key: 'caravanCountryIds', feature: ReceptionFeature.CARAVAN },
+  { key: 'caravanContactsCountryIds', feature: ReceptionFeature.CARAVAN_CONTACTS },
 ];
 
 export function featuresFromCountryLists(
@@ -65,6 +71,7 @@ export function featuresFromCountryLists(
     | 'routePlacementCountryIds'
     | 'companionsCountryIds'
     | 'insuranceCountryIds'
+    | 'caravanContactsCountryIds'
   >,
 ): ReservationFeatures {
   const id = originCountryId ?? '';
@@ -74,6 +81,7 @@ export function featuresFromCountryLists(
     routePlacement: has(lists.routePlacementCountryIds),
     companions: has(lists.companionsCountryIds),
     insurance: has(lists.insuranceCountryIds),
+    caravanContacts: has(lists.caravanContactsCountryIds),
   };
 }
 
@@ -82,6 +90,7 @@ export const receptionFeatureKeys = [
   'routePlacement',
   'companions',
   'insurance',
+  'caravanContacts',
 ] as const;
 
 export type ReceptionFeatureKey = (typeof receptionFeatureKeys)[number];
@@ -90,6 +99,7 @@ export function featureEnumFromKey(key: ReceptionFeatureKey): ReceptionFeature {
   if (key === 'mashhadPlacement') return ReceptionFeature.MASHHAD_PLACEMENT;
   if (key === 'routePlacement') return ReceptionFeature.ROUTE_PLACEMENT;
   if (key === 'companions') return ReceptionFeature.COMPANIONS;
+  if (key === 'caravanContacts') return ReceptionFeature.CARAVAN_CONTACTS;
   return ReceptionFeature.INSURANCE;
 }
 
@@ -98,6 +108,7 @@ export function featureKeyFromEnum(feature: ReceptionFeature): ReceptionFeatureK
   if (feature === ReceptionFeature.ROUTE_PLACEMENT) return 'routePlacement';
   if (feature === ReceptionFeature.COMPANIONS) return 'companions';
   if (feature === ReceptionFeature.INSURANCE) return 'insurance';
+  if (feature === ReceptionFeature.CARAVAN_CONTACTS) return 'caravanContacts';
   return null;
 }
 

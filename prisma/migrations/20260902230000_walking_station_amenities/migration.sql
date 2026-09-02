@@ -1,0 +1,10 @@
+ALTER TABLE "walking_stations" ADD COLUMN "hasLaundry" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "walking_stations" ADD COLUMN "hasInternet" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "walking_stations" ADD COLUMN "hasPrayerRoom" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "walking_stations" ADD COLUMN "hasElevator" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "walking_stations" ADD COLUMN "heatingSystem" TEXT;
+ALTER TABLE "walking_stations" ADD COLUMN "coolingSystem" TEXT;
+ALTER TABLE "walking_stations" ADD COLUMN "parkingCapacity" INTEGER;
+ALTER TABLE "walking_stations" ADD COLUMN "bathroomCount" INTEGER;
+ALTER TABLE "walking_stations" ADD COLUMN "toiletCount" INTEGER;
+ALTER TABLE "walking_stations" ADD COLUMN "areaSqm" DECIMAL(10, 2);

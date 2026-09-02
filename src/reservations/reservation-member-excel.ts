@@ -25,6 +25,8 @@ export type ParsedMemberImportRow = {
   phone: string;
   birthDate: string | null;
   birthDateText: string;
+  requestsSimCard: boolean;
+  requestsBankCard: boolean;
   errors: string[];
   duplicateOfRow?: number;
 };
@@ -35,7 +37,9 @@ type ColumnKey =
   | 'lastName'
   | 'phone'
   | 'gender'
-  | 'birthDate';
+  | 'birthDate'
+  | 'requestsSimCard'
+  | 'requestsBankCard';
 
 const HEADER_ALIASES: Record<ColumnKey, string[]> = {
   nationalId: ['کدملی', 'nationalcode', 'nationalid', 'national_code'],
@@ -44,6 +48,18 @@ const HEADER_ALIASES: Record<ColumnKey, string[]> = {
   phone: ['تلفن', 'تلفنهمراه', 'شمارههمراه', 'شمارهموبایل', 'موبایل', 'همراه', 'phone', 'mobile'],
   gender: ['جنسیت', 'gender'],
   birthDate: ['تاریخولد', 'تاریختولد', 'متولد', 'birthdate', 'birth_date'],
+  requestsSimCard: [
+    'متقاضیسیمکارت',
+    'سیمکارت',
+    'simcard',
+    'requestssimcard',
+  ],
+  requestsBankCard: [
+    'متقاضیکارتبانکی',
+    'کارتبانکی',
+    'bankcard',
+    'requestsbankcard',
+  ],
 };
 
 const DEFAULT_COLUMNS: Record<ColumnKey, number> = {
@@ -53,6 +69,8 @@ const DEFAULT_COLUMNS: Record<ColumnKey, number> = {
   phone: 4,
   gender: 5,
   birthDate: 6,
+  requestsSimCard: 7,
+  requestsBankCard: 8,
 };
 
 function normalizeHeader(value: string) {
@@ -220,6 +238,24 @@ export function parseMemberGender(value: string): UserGender | null {
   return null;
 }
 
+function parseYesFlag(value: ExcelJS.CellValue): boolean {
+  const text = toLatinDigits(cellToText(value))
+    .toLowerCase()
+    .replace(/[\u200c\u200d]/g, '')
+    .replace(/\s+/g, '');
+  if (!text) return false;
+  return (
+    text === '1' ||
+    text === 'true' ||
+    text === 'yes' ||
+    text === 'y' ||
+    text === 'بله' ||
+    text === 'بلی' ||
+    text === 'آری' ||
+    text === 'اری'
+  );
+}
+
 function isValidOptionalPhone(phone: string) {
   const digits = phone.replace(/\D/g, '');
   if (!digits) return true;
@@ -295,6 +331,8 @@ function parseRow(
     phone,
     birthDate,
     birthDateText,
+    requestsSimCard: parseYesFlag(cells.requestsSimCard.value),
+    requestsBankCard: parseYesFlag(cells.requestsBankCard.value),
     errors,
   };
 }
@@ -315,7 +353,7 @@ export async function parseReservationMemberExcel(
   let dataCount = 0;
 
   sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    const texts = [1, 2, 3, 4, 5, 6, 7, 8].map((col) =>
+    const texts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((col) =>
       cellToText(row.getCell(col).value),
     );
     if (!headerResolved) {
@@ -345,6 +383,8 @@ export async function parseReservationMemberExcel(
         phone: row.getCell(columns.phone),
         gender: row.getCell(columns.gender),
         birthDate: row.getCell(columns.birthDate),
+        requestsSimCard: row.getCell(columns.requestsSimCard),
+        requestsBankCard: row.getCell(columns.requestsBankCard),
       }),
     );
   });

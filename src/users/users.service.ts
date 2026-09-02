@@ -152,6 +152,7 @@ type PublicUserSource = {
   phone: string | null;
   email: string | null;
   birthDate: Date | null;
+  activityStartYear: number | null;
   address: string | null;
   notes: string | null;
   religion: Religion | null;
@@ -901,6 +902,127 @@ export class UsersService {
       throw new NotFoundException('کاربر یافت نشد');
     }
     return this.toPublicUser(user, true);
+  }
+
+  async findPublicProfile(id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, status: UserStatus.ACTIVE },
+      include: {
+        userRoles: { include: { role: { select: roleSelect } } },
+        country: { select: geoSelect },
+        province: { select: { ...geoSelect, countryId: true } },
+        city: { select: { ...geoSelect, provinceId: true } },
+        managedAccommodations: {
+          orderBy: [{ year: 'desc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
+          include: {
+            accommodation: {
+              select: { id: true, name: true, type: true, status: true },
+            },
+          },
+        },
+        managedCaravans: {
+          orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            licenseNumber: true,
+            totalCount: true,
+            city: {
+              select: {
+                id: true,
+                nameFa: true,
+                nameEn: true,
+                provinceId: true,
+              },
+            },
+            walkingRoute: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    const roles = user.userRoles.map((item) => item.role);
+    const roleCodes = new Set(roles.map((role) => role.code));
+    const isCaravanManager = roleCodes.has('CARAVAN_MANAGER');
+    const isAccommodationManager = roleCodes.has('ACCOMMODATION_MANAGER');
+    const isPilgrimUser = roleCodes.has('PILGRIM');
+    const pilgrimages =
+      isCaravanManager || isPilgrimUser
+        ? await this.findPublicPilgrimages(user.id)
+        : [];
+
+    return {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: user.fullName,
+      gender: user.gender,
+      nationalId: user.nationalId,
+      phone: user.phone,
+      photoId: user.photoId,
+      activityStartYear: user.activityStartYear,
+      country: user.country,
+      province: user.province,
+      city: user.city,
+      roles,
+      caravans: isCaravanManager ? user.managedCaravans : [],
+      accommodations: isAccommodationManager
+        ? user.managedAccommodations.map((item) => ({
+            id: item.id,
+            year: item.year,
+            isPrimary: item.isPrimary,
+            accommodation: item.accommodation,
+          }))
+        : [],
+      pilgrimages,
+    };
+  }
+
+  private async findPublicPilgrimages(userId: string) {
+    const rows = await this.prisma.reservation.findMany({
+      where: {
+        OR: [
+          { members: { some: { userId } } },
+          {
+            createdById: userId,
+            type: { in: [ReservationType.INDIVIDUAL, ReservationType.GROUP] },
+          },
+        ],
+      },
+      orderBy: [{ year: 'desc' }, { stayStartDate: 'desc' }, { createdAt: 'desc' }],
+      take: 40,
+      select: {
+        id: true,
+        year: true,
+        type: true,
+        status: true,
+        stayStartDate: true,
+        stayEndDate: true,
+        walkingStartDate: true,
+        originCity: {
+          select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+        },
+        walkingRoute: { select: { id: true, name: true } },
+        caravan: { select: { id: true, name: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      year: row.year,
+      type: row.type,
+      status: row.status,
+      stayStartDate: toDateOnly(row.stayStartDate),
+      stayEndDate: toDateOnly(row.stayEndDate),
+      walkingStartDate: toDateOnly(row.walkingStartDate),
+      originCity: row.originCity,
+      walkingRoute: row.walkingRoute,
+      caravan: row.caravan,
+    }));
   }
 
   async create(dto: CreateUserDto) {
@@ -2044,6 +2166,7 @@ export class UsersService {
     set('nationalId', dto.nationalId);
     set('phone', dto.phone);
     set('birthDate', dto.birthDate === undefined ? undefined : parseDateOnly(dto.birthDate));
+    set('activityStartYear', dto.activityStartYear);
     set('email', dto.email);
     set('address', dto.address);
     set('notes', dto.notes);
@@ -2081,6 +2204,7 @@ export class UsersService {
       nationalId: user.nationalId,
       phone: user.phone,
       birthDate: toDateOnly(user.birthDate),
+      activityStartYear: user.activityStartYear,
       email: user.email,
       address: user.address,
       notes: user.notes,

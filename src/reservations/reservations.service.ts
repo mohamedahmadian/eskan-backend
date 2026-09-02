@@ -320,6 +320,7 @@ const emptySettings = (year: number) => ({
   individualCountries: [],
   groupCountries: [],
   caravanCountries: [],
+  caravanContactsCountries: [],
 });
 
 type SettingsWithPlans = ReceptionSettings & {
@@ -392,6 +393,10 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     individualCountries: countriesForFeature(row, ReceptionFeature.INDIVIDUAL),
     groupCountries: countriesForFeature(row, ReceptionFeature.GROUP),
     caravanCountries: countriesForFeature(row, ReceptionFeature.CARAVAN),
+    caravanContactsCountries: countriesForFeature(
+      row,
+      ReceptionFeature.CARAVAN_CONTACTS,
+    ),
     insuranceOrganization: row.insuranceOrganization ?? '',
     insurancePlans: (row.insurancePlans ?? []).map((plan) => ({
       id: plan.id,
@@ -465,6 +470,7 @@ export class ReservationsService {
       individualCountryIds,
       groupCountryIds,
       caravanCountryIds,
+      caravanContactsCountryIds,
       ...rest
     } = dto;
     this.assertOccasionDates(prophetDemiseDate, imamRezaMartyrdomDate);
@@ -476,6 +482,7 @@ export class ReservationsService {
       individualCountryIds,
       groupCountryIds,
       caravanCountryIds,
+      caravanContactsCountryIds,
     });
     const data = {
       ...rest,
@@ -732,8 +739,14 @@ export class ReservationsService {
             walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate) ?? null,
             requestsAccommodation: dto.requestsAccommodation ?? true,
             requestsBus: dto.requestsBus ?? true,
-            requestsSimCard: dto.requestsSimCard ?? false,
-            requestsBankCard: dto.requestsBankCard ?? false,
+            requestsSimCard:
+              dto.type === ReservationType.INDIVIDUAL
+                ? (dto.requestsSimCard ?? false)
+                : false,
+            requestsBankCard:
+              dto.type === ReservationType.INDIVIDUAL
+                ? (dto.requestsBankCard ?? false)
+                : false,
             specialServices: dto.specialServices?.trim() || null,
             requestedMaleCount: maleCount,
             requestedFemaleCount: femaleCount,
@@ -946,8 +959,10 @@ export class ReservationsService {
       walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate),
       requestsAccommodation: dto.requestsAccommodation,
       requestsBus: dto.requestsBus,
-      requestsSimCard: dto.requestsSimCard,
-      requestsBankCard: dto.requestsBankCard,
+      requestsSimCard:
+        type === ReservationType.INDIVIDUAL ? dto.requestsSimCard : undefined,
+      requestsBankCard:
+        type === ReservationType.INDIVIDUAL ? dto.requestsBankCard : undefined,
       specialServices:
         dto.specialServices === undefined
           ? undefined
@@ -1768,7 +1783,12 @@ export class ReservationsService {
       const { user } = await this.resolveCompanion(dto);
       try {
         await tx.reservationMember.create({
-          data: { reservationId: id, userId: user.id },
+          data: {
+            reservationId: id,
+            userId: user.id,
+            requestsSimCard: dto.requestsSimCard ?? false,
+            requestsBankCard: dto.requestsBankCard ?? false,
+          },
         });
       } catch (error) {
         if (
@@ -1780,6 +1800,7 @@ export class ReservationsService {
         throw error;
       }
 
+      await this.syncMemberServiceRequests(tx, id);
       const updated = await this.requireReservation(id, tx);
       return this.serialize(updated, actor);
     });
@@ -1815,6 +1836,23 @@ export class ReservationsService {
       phone: dto.phone,
       birthDate: dto.birthDate,
     });
+    if (
+      dto.requestsSimCard !== undefined ||
+      dto.requestsBankCard !== undefined
+    ) {
+      await this.prisma.reservationMember.update({
+        where: { id: memberId },
+        data: {
+          ...(dto.requestsSimCard !== undefined
+            ? { requestsSimCard: dto.requestsSimCard }
+            : {}),
+          ...(dto.requestsBankCard !== undefined
+            ? { requestsBankCard: dto.requestsBankCard }
+            : {}),
+        },
+      });
+      await this.syncMemberServiceRequests(this.prisma, id);
+    }
     return this.serialize(await this.requireReservation(id), actor);
   }
 
@@ -1832,6 +1870,7 @@ export class ReservationsService {
       throw new NotFoundException('عضو پرونده یافت نشد');
     }
     await this.prisma.reservationMember.delete({ where: { id: memberId } });
+    await this.syncMemberServiceRequests(this.prisma, id);
     return this.serialize(await this.requireReservation(id), actor);
   }
 
@@ -1975,9 +2014,12 @@ export class ReservationsService {
         data: toCreate.map((item) => ({
           reservationId: id,
           userId: item.userId,
+          requestsSimCard: item.requestsSimCard,
+          requestsBankCard: item.requestsBankCard,
         })),
         skipDuplicates: true,
       });
+      await this.syncMemberServiceRequests(tx, id);
 
       return this.serialize(await this.requireReservation(id, tx), actor);
     });
@@ -1997,6 +2039,8 @@ export class ReservationsService {
         { header: 'تلفن همراه', key: 'phone', width: 16 },
         { header: 'جنسیت', key: 'gender', width: 12 },
         { header: 'تاریخ تولد', key: 'birthDate', width: 16 },
+        { header: 'متقاضی سیم‌کارت', key: 'requestsSimCard', width: 18 },
+        { header: 'متقاضی کارت بانکی', key: 'requestsBankCard', width: 18 },
       ],
       rows: [
         {
@@ -2006,6 +2050,8 @@ export class ReservationsService {
           phone: '09123456789',
           gender: 'مرد',
           birthDate: '1370/1/15',
+          requestsSimCard: 'خیر',
+          requestsBankCard: 'خیر',
         },
       ],
     });
@@ -2109,12 +2155,15 @@ export class ReservationsService {
         resolved.map((item) => item.user.gender),
       );
       await tx.reservationMember.createMany({
-        data: resolved.map((item) => ({
+        data: resolved.map((item, index) => ({
           reservationId: id,
           userId: item.user.id,
+          requestsSimCard: selected[index]?.requestsSimCard ?? false,
+          requestsBankCard: selected[index]?.requestsBankCard ?? false,
         })),
         skipDuplicates: true,
       });
+      await this.syncMemberServiceRequests(tx, id);
       return this.serialize(await this.requireReservation(id, tx), actor);
     });
   }
@@ -3495,6 +3544,7 @@ export class ReservationsService {
       individualCountries: iran,
       groupCountries: iran,
       caravanCountries: countries,
+      caravanContactsCountries: iran,
     };
   }
 
@@ -3547,6 +3597,9 @@ export class ReservationsService {
         individualCountryIds: this.idsFromCountries(defaults.individualCountries),
         groupCountryIds: this.idsFromCountries(defaults.groupCountries),
         caravanCountryIds: this.idsFromCountries(defaults.caravanCountries),
+        caravanContactsCountryIds: this.idsFromCountries(
+          defaults.caravanContactsCountries,
+        ),
       };
     }
     const ids = (feature: ReceptionFeature) =>
@@ -3561,6 +3614,7 @@ export class ReservationsService {
       individualCountryIds: ids(ReceptionFeature.INDIVIDUAL),
       groupCountryIds: ids(ReceptionFeature.GROUP),
       caravanCountryIds: ids(ReceptionFeature.CARAVAN),
+      caravanContactsCountryIds: ids(ReceptionFeature.CARAVAN_CONTACTS),
     };
   }
 
@@ -3643,6 +3697,12 @@ export class ReservationsService {
         ? {
             companionsCompletedAt: now,
             companionsCompletedById: actorId,
+          }
+        : {}),
+      ...(!features.caravanContacts && type === ReservationType.CARAVAN
+        ? {
+            caravanContactsCompletedAt: now,
+            caravanContactsCompletedById: actorId,
           }
         : {}),
       ...(!features.insurance
@@ -4384,6 +4444,8 @@ export class ReservationsService {
       genderText: row.genderText,
       phone: user?.phone ?? row.phone,
       birthDate: toDateOnly(user?.birthDate) ?? row.birthDate,
+      requestsSimCard: row.requestsSimCard,
+      requestsBankCard: row.requestsBankCard,
       status,
       errors,
       duplicateOfRow: row.duplicateOfRow,
@@ -4494,8 +4556,49 @@ export class ReservationsService {
     };
   }
 
+  private memberServiceRequestCounts(
+    row: Pick<ReservationRecord, 'type' | 'members' | 'requestsSimCard' | 'requestsBankCard'>,
+  ) {
+    if (row.type === ReservationType.INDIVIDUAL) {
+      return {
+        simCardRequestCount: row.requestsSimCard ? 1 : 0,
+        bankCardRequestCount: row.requestsBankCard ? 1 : 0,
+      };
+    }
+    return {
+      simCardRequestCount: row.members.filter((item) => item.requestsSimCard)
+        .length,
+      bankCardRequestCount: row.members.filter((item) => item.requestsBankCard)
+        .length,
+    };
+  }
+
+  private async syncMemberServiceRequests(
+    db: Pick<Tx, 'reservationMember' | 'reservation'>,
+    reservationId: string,
+  ) {
+    const members = await db.reservationMember.findMany({
+      where: { reservationId },
+      select: { requestsSimCard: true, requestsBankCard: true },
+    });
+    const simCardRequestCount = members.filter(
+      (item) => item.requestsSimCard,
+    ).length;
+    const bankCardRequestCount = members.filter(
+      (item) => item.requestsBankCard,
+    ).length;
+    await db.reservation.update({
+      where: { id: reservationId },
+      data: {
+        requestsSimCard: simCardRequestCount > 0,
+        requestsBankCard: bankCardRequestCount > 0,
+      },
+    });
+  }
+
   private serializeListItem(row: ReservationRecord, features: ReservationFeatures) {
     const originIso2 = row.originCountry?.iso2 ?? null;
+    const serviceCounts = this.memberServiceRequestCounts(row);
     return {
       id: row.id,
       code: row.code,
@@ -4513,6 +4616,8 @@ export class ReservationsService {
       requestsBus: row.requestsBus,
       requestsSimCard: row.requestsSimCard,
       requestsBankCard: row.requestsBankCard,
+      simCardRequestCount: serviceCounts.simCardRequestCount,
+      bankCardRequestCount: serviceCounts.bankCardRequestCount,
       specialServices: row.specialServices,
       requestedMaleCount: row.requestedMaleCount,
       requestedFemaleCount: row.requestedFemaleCount,
@@ -4552,6 +4657,7 @@ export class ReservationsService {
       row.originCountryId,
     );
     const originIso2 = row.originCountry?.iso2 ?? null;
+    const serviceCounts = this.memberServiceRequestCounts(row);
     return {
       id: row.id,
       createdBy: row.createdBy,
@@ -4573,6 +4679,8 @@ export class ReservationsService {
       requestsBus: row.requestsBus,
       requestsSimCard: row.requestsSimCard,
       requestsBankCard: row.requestsBankCard,
+      simCardRequestCount: serviceCounts.simCardRequestCount,
+      bankCardRequestCount: serviceCounts.bankCardRequestCount,
       specialServices: row.specialServices,
       simCardNumber: row.simCardNumber,
       simCardOperator: row.simCardOperator,
@@ -4704,6 +4812,8 @@ export class ReservationsService {
           }
         : null,
       insuranceManualNote: item.insuranceManualNote,
+      requestsSimCard: item.requestsSimCard,
+      requestsBankCard: item.requestsBankCard,
     };
   }
 

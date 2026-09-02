@@ -16,8 +16,8 @@ import {
 } from '../common/pagination';
 import {
   Prisma,
+  AccommodationStatus,
   type AccommodationContactRole,
-  type AccommodationStatus,
   type AccommodationType,
   type GenderType,
   type ManagementType,
@@ -264,6 +264,57 @@ export class AccommodationsService {
       include: accommodationInclude,
     });
     return this.buildExcel(items.map((item) => this.serialize(item)));
+  }
+
+  async findPublicOne(id: string) {
+    const item = await this.prisma.accommodation.findFirst({
+      where: { id, status: { not: AccommodationStatus.INACTIVE } },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        status: true,
+        genderType: true,
+        managementType: true,
+        maleCapacity: true,
+        femaleCapacity: true,
+        phone: true,
+        address: true,
+        neshanAddress: true,
+        latitude: true,
+        longitude: true,
+        eitaa: true,
+        bale: true,
+        otherSocial: true,
+        description: true,
+        country: { select: geoSelect },
+        province: { select: { ...geoSelect, countryId: true } },
+        city: { select: { ...geoSelect, provinceId: true } },
+        distanceToShrineKm: true,
+        distanceToMashhadKm: true,
+        hasLaundry: true,
+        hasInternet: true,
+        hasPrayerRoom: true,
+        hasElevator: true,
+        heatingSystem: true,
+        coolingSystem: true,
+        parkingCapacity: true,
+        bathroomCount: true,
+        toiletCount: true,
+      },
+    });
+    if (!item) {
+      throw new NotFoundException('اسکان یافت نشد');
+    }
+    const num = (value: Prisma.Decimal | null) =>
+      value == null ? null : Number(value);
+    return {
+      ...item,
+      latitude: num(item.latitude),
+      longitude: num(item.longitude),
+      distanceToShrineKm: num(item.distanceToShrineKm),
+      distanceToMashhadKm: num(item.distanceToMashhadKm),
+    };
   }
 
   async findOne(id: string, actor: Actor) {

@@ -160,6 +160,10 @@ export class UpdateReceptionSettingsDto {
   @IsUUID('4', { each: true })
   caravanCountryIds: string[];
 
+  @IsArray()
+  @IsUUID('4', { each: true })
+  caravanContactsCountryIds: string[];
+
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MaxLength(200)
