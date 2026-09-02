@@ -8,10 +8,13 @@ import {
   canAdjustApprovedCapacity,
   canAssignBothGendersTogether,
   isOwnerCreateDraft,
+  nextAfterContacts,
+  nextAfterManagement,
   placementModeFromSettings,
   validRewindStatuses,
   unapprovedCounts,
 } from './reservation-workflow';
+import { defaultIranianFeatures } from './reception-features';
 
 describe('validRewindStatuses', () => {
   it('keeps all return targets for a rejected caravan', () => {
@@ -68,6 +71,30 @@ describe('isOwnerCreateDraft', () => {
     expect(
       isOwnerCreateDraft({ status: ReservationStatus.INSURANCE, returnedToStatus: null }),
     ).toBe(false);
+  });
+});
+
+describe('nextAfterManagement', () => {
+  const noCompanionsInsurance = {
+    ...defaultIranianFeatures,
+    companions: false,
+    insurance: false,
+  };
+
+  it('skips companions and insurance when those features are off', () => {
+    expect(nextAfterManagement(ReservationType.GROUP, noCompanionsInsurance)).toBe(
+      ReservationStatus.COMPLETED,
+    );
+    expect(nextAfterManagement(ReservationType.INDIVIDUAL, noCompanionsInsurance)).toBe(
+      ReservationStatus.COMPLETED,
+    );
+  });
+
+  it('still sends a caravan to contacts when companions are off', () => {
+    expect(nextAfterManagement(ReservationType.CARAVAN, noCompanionsInsurance)).toBe(
+      ReservationStatus.CARAVAN_CONTACTS,
+    );
+    expect(nextAfterContacts(noCompanionsInsurance)).toBe(ReservationStatus.COMPLETED);
   });
 });
 

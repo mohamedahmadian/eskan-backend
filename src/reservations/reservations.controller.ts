@@ -41,6 +41,7 @@ import { UpdateMemberInsuranceDto } from './dto/update-member-insurance.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { UpdateReservationPermitDto } from './dto/update-reservation-permit.dto';
 import { MEMBER_IMPORT_MAX_BYTES } from './reservation-member-excel';
+import { ReserveStationStayDto } from './dto/reserve-station-stay.dto';
 import { ReservationsService } from './reservations.service';
 
 type ExcelUpload = {
@@ -160,6 +161,35 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.findTravelHistory(id, actor);
+  }
+
+  @Get(':id/route-placement')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  getRoutePlacement(
+    @Param('id') id: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.getRoutePlacement(id, actor);
+  }
+
+  @Post(':id/route-placement')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  reserveStationStay(
+    @Param('id') id: string,
+    @Body() dto: ReserveStationStayDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.reserveStationStay(id, dto, actor);
+  }
+
+  @Post(':id/route-placement/:stayId/cancel')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  cancelStationStay(
+    @Param('id') id: string,
+    @Param('stayId') stayId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.cancelStationStay(id, stayId, actor);
   }
 
   @Get(':id')

@@ -162,6 +162,9 @@ model User {
   managedOrgUnits       OrgUnit[] @relation("OrgUnitManager")
   locationHistories     UserLocationHistory[]
   reservationTravelHistories ReservationTravelHistory[]
+  stationStaysReserved       ReservationStationStay[] @relation("StationStayReservedBy")
+  stationStaysCancelled      ReservationStationStay[] @relation("StationStayCancelledBy")
+  stationStaysEvacuated      ReservationStationStay[] @relation("StationStayEvacuatedBy")
   evaluationsAsEvaluator Evaluation[] @relation("EvaluationEvaluator")
   evaluationsAsTarget    Evaluation[] @relation("EvaluationTarget")
   evaluationsSubmitted   Evaluation[] @relation("EvaluationSubmitter")
@@ -556,6 +559,8 @@ model Reservation {
 
   originCityId     String?
   originCity       City?     @relation("ReservationOriginCity", fields: [originCityId], references: [id], onDelete: SetNull)
+  originCountryId  String?
+  originCountry    Country?  @relation("ReservationOriginCountry", fields: [originCountryId], references: [id], onDelete: SetNull)
   walkingRouteId   String?
   walkingRoute     WalkingRoute? @relation(fields: [walkingRouteId], references: [id], onDelete: Restrict)
 
@@ -648,6 +653,7 @@ model Reservation {
   honoraryAssignments  ReservationHonoraryAssignment[]
   allocations          ReservationAllocation[]
   travelHistories      ReservationTravelHistory[]
+  stationStays         ReservationStationStay[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -663,6 +669,7 @@ model Reservation {
   @@index([caravanManagerId])
   @@index([walkingRouteId])
   @@index([originCityId])
+  @@index([originCountryId])
   @@index([hasPermit])
   @@index([permitStatus])
   @@index([issuedLicenseId])
@@ -790,10 +797,35 @@ model ReceptionSettings {
   imamRezaMartyrdomDate DateTime? @db.Date
   prophetDemiseDate     DateTime? @db.Date
 
+  featureCountries ReceptionSettingsCountry[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("reception_settings")
+}
+
+enum ReceptionFeature {
+  MASHHAD_PLACEMENT
+  ROUTE_PLACEMENT
+  COMPANIONS
+  INSURANCE
+  INDIVIDUAL
+  GROUP
+  CARAVAN
+}
+
+model ReceptionSettingsCountry {
+  year      Int
+  settings  ReceptionSettings @relation(fields: [year], references: [year], onDelete: Cascade)
+  countryId String
+  country   Country           @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  feature   ReceptionFeature
+
+  @@id([year, countryId, feature])
+  @@index([countryId])
+  @@index([feature])
+  @@map("reception_settings_countries")
 }
 
 model ReceptionInsurancePlan {
@@ -857,6 +889,8 @@ model Country {
   users                  User[]
   walkingRouteOrigins    WalkingRouteOriginCountry[]
   entryBorders           EntryBorder[]
+  reservationOrigins     Reservation[]               @relation("ReservationOriginCountry")
+  receptionFeatures      ReceptionSettingsCountry[]
   createdAt              DateTime                    @default(now())
   updatedAt              DateTime                    @updatedAt
 
@@ -927,7 +961,7 @@ model City {
   travelHistories            ReservationTravelHistory[] @relation("TravelHistoryCity")
   representativeId           String?
   representative             User?                     @relation("CityHeadquartersRep", fields: [representativeId], references: [id], onDelete: SetNull)
-  walkingRouteStages         WalkingRouteStage[]
+  walkingStations            WalkingStation[]
   entryBorders               EntryBorder[]
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
@@ -1223,58 +1257,109 @@ model WalkingRouteOriginCountry {
   @@map("walking_route_origin_countries")
 }
 
-model WalkingRouteStage {
-  id                   String       @id @default(uuid())
-  walkingRouteId       String
-  walkingRoute         WalkingRoute @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
-  cityId               String
-  city                 City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  stageNumber          Int
-  name                 String?
-  latitude             Decimal?     @db.Decimal(10, 7)
-  longitude            Decimal?     @db.Decimal(10, 7)
-  managerName          String?
-  managerPhone         String?
-  managerTelegram      String?
-  managerWhatsapp      String?
-  managerEitaa         String?
-  distanceToNextKm     Decimal?     @db.Decimal(8, 2)
-  distanceToPreviousKm Decimal?     @db.Decimal(8, 2)
-  distanceToMashhadKm  Decimal?     @db.Decimal(8, 2)
-  description          String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+model WalkingStation {
+  id                  String                @id @default(uuid())
+  cityId              String
+  city                City                  @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  name                String
+  latitude            Decimal?              @db.Decimal(10, 7)
+  longitude           Decimal?              @db.Decimal(10, 7)
+  neshanAddress       String?
+  maleCount           Int                   @default(0)
+  femaleCount         Int                   @default(0)
+  managerName         String?
+  managerPhone        String?
+  managerTelegram     String?
+  managerWhatsapp     String?
+  managerEitaa        String?
+  distanceToMashhadKm Decimal?              @db.Decimal(8, 2)
+  description         String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  routeStages         WalkingRouteStage[]
+  travelHistories     ReservationTravelHistory[]
+  stationStays        ReservationStationStay[]
 
-  travelHistories ReservationTravelHistory[]
+  @@index([cityId])
+  @@index([name])
+  @@map("walking_stations")
+}
+
+model WalkingRouteStage {
+  id                   String         @id @default(uuid())
+  walkingRouteId       String
+  walkingRoute         WalkingRoute   @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
+  walkingStationId     String
+  walkingStation       WalkingStation @relation(fields: [walkingStationId], references: [id], onDelete: Restrict)
+  stageNumber          Int
+  distanceToNextKm     Decimal?       @db.Decimal(8, 2)
+  distanceToPreviousKm Decimal?       @db.Decimal(8, 2)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   @@unique([walkingRouteId, stageNumber])
-  @@index([cityId])
+  @@unique([walkingRouteId, walkingStationId])
+  @@index([walkingStationId])
   @@map("walking_route_stages")
 }
 
 model ReservationTravelHistory {
-  id                  String            @id @default(uuid())
-  reservationId       String
-  reservation         Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  userId              String
-  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  walkingRouteStageId String?
-  walkingRouteStage   WalkingRouteStage? @relation(fields: [walkingRouteStageId], references: [id], onDelete: SetNull)
-  provinceId          String?
-  province            Province?         @relation("TravelHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
-  cityId              String?
-  city                City?             @relation("TravelHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
-  latitude            Decimal?          @db.Decimal(10, 7)
-  longitude           Decimal?          @db.Decimal(10, 7)
-  notes               String?
-  createdAt           DateTime          @default(now())
+  id                String           @id @default(uuid())
+  reservationId     String
+  reservation       Reservation      @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walkingStationId  String?
+  walkingStation    WalkingStation?  @relation(fields: [walkingStationId], references: [id], onDelete: SetNull)
+  provinceId        String?
+  province          Province?        @relation("TravelHistoryProvince", fields: [provinceId], references: [id], onDelete: SetNull)
+  cityId            String?
+  city              City?            @relation("TravelHistoryCity", fields: [cityId], references: [id], onDelete: SetNull)
+  latitude          Decimal?         @db.Decimal(10, 7)
+  longitude         Decimal?         @db.Decimal(10, 7)
+  notes             String?
+  createdAt         DateTime         @default(now())
 
   @@index([reservationId, createdAt])
   @@index([userId, createdAt])
-  @@index([walkingRouteStageId])
+  @@index([walkingStationId])
   @@index([provinceId])
   @@index([cityId])
   @@map("reservation_travel_histories")
+}
+
+enum ReservationStationStayStatus {
+  RESERVED
+  CANCELLED
+  EVACUATED
+}
+
+model ReservationStationStay {
+  id               String                       @id @default(uuid())
+  reservationId    String
+  reservation      Reservation                  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  walkingStationId String
+  walkingStation   WalkingStation               @relation(fields: [walkingStationId], references: [id], onDelete: Restrict)
+  stayDate         DateTime                     @db.Date
+  maleCount        Int
+  femaleCount      Int
+  status           ReservationStationStayStatus @default(RESERVED)
+  reservedAt       DateTime                     @default(now())
+  reservedById     String
+  reservedBy       User                         @relation("StationStayReservedBy", fields: [reservedById], references: [id], onDelete: Restrict)
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancelledBy      User?                        @relation("StationStayCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  evacuatedAt      DateTime?
+  evacuatedById    String?
+  evacuatedBy      User?                        @relation("StationStayEvacuatedBy", fields: [evacuatedById], references: [id], onDelete: Restrict)
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  @@index([reservationId, status])
+  @@index([walkingStationId, status])
+  @@index([walkingStationId, stayDate])
+  @@map("reservation_station_stays")
 }
 
 model Supplier {

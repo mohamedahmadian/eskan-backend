@@ -48,8 +48,20 @@ const visitReservationSelect = {
   totalCount: true,
   originCity: { select: citySelect },
   walkingRoute: { select: { id: true, name: true } },
-  caravan: { select: { id: true, name: true } },
-  group: { select: { id: true, name: true } },
+  caravan: {
+    select: {
+      id: true,
+      name: true,
+      walkingRoute: { select: { id: true, name: true } },
+    },
+  },
+  group: {
+    select: {
+      id: true,
+      name: true,
+      walkingRoute: { select: { id: true, name: true } },
+    },
+  },
 } satisfies Prisma.ReservationSelect;
 
 const personMatchSelect = {
@@ -487,8 +499,16 @@ export class ReceptionService {
       provinceId: string;
     } | null;
     walkingRoute: { id: string; name: string } | null;
-    caravan: { id: string; name: string } | null;
-    group: { id: string; name: string } | null;
+    caravan: {
+      id: string;
+      name: string;
+      walkingRoute: { id: string; name: string } | null;
+    } | null;
+    group: {
+      id: string;
+      name: string;
+      walkingRoute: { id: string; name: string } | null;
+    } | null;
   }) {
     return {
       id: reservation.id,
@@ -500,7 +520,11 @@ export class ReceptionService {
       stayEndDate: toDateOnly(reservation.stayEndDate),
       walkingStartDate: toDateOnly(reservation.walkingStartDate),
       originCity: reservation.originCity,
-      walkingRoute: reservation.walkingRoute,
+      walkingRoute:
+        reservation.walkingRoute ??
+        reservation.caravan?.walkingRoute ??
+        reservation.group?.walkingRoute ??
+        null,
       requestedMaleCount: reservation.requestedMaleCount,
       requestedFemaleCount: reservation.requestedFemaleCount,
       maleCount: reservation.maleCount,

@@ -1040,32 +1040,32 @@ export class UsersService {
     ) {
       throw new BadRequestException('عرض و طول جغرافیایی باید با هم ثبت شوند');
     }
-    const stage = dto.walkingRouteStageId
-      ? await this.prisma.walkingRouteStage.findUnique({
-          where: { id: dto.walkingRouteStageId },
+    const station = dto.walkingStationId
+      ? await this.prisma.walkingStation.findUnique({
+          where: { id: dto.walkingStationId },
           include: { city: true },
         })
       : null;
-    if (dto.walkingRouteStageId && !stage) {
+    if (dto.walkingStationId && !station) {
       throw new BadRequestException('ایستگاه انتخاب‌شده معتبر نیست');
     }
     const geo = await this.resolveLocationGeo({
-      provinceId: dto.provinceId ?? stage?.city.provinceId ?? null,
-      cityId: dto.cityId ?? stage?.cityId ?? null,
+      provinceId: dto.provinceId ?? station?.city.provinceId ?? null,
+      cityId: dto.cityId ?? station?.cityId ?? null,
     });
     const notes = dto.notes?.trim() ? dto.notes.trim() : null;
     const source =
-      dto.source ?? (stage ? LocationSource.STATION : LocationSource.MANUAL);
+      dto.source ?? (station ? LocationSource.STATION : LocationSource.MANUAL);
     let latitude =
       dto.latitude == null ? null : new Prisma.Decimal(dto.latitude);
     let longitude =
       dto.longitude == null ? null : new Prisma.Decimal(dto.longitude);
-    if (latitude == null && longitude == null && stage) {
-      const stageLat = stage.latitude ?? stage.city.latitude;
-      const stageLng = stage.longitude ?? stage.city.longitude;
-      if (stageLat != null && stageLng != null) {
-        latitude = new Prisma.Decimal(stageLat);
-        longitude = new Prisma.Decimal(stageLng);
+    if (latitude == null && longitude == null && station) {
+      const stationLat = station.latitude ?? station.city.latitude;
+      const stationLng = station.longitude ?? station.city.longitude;
+      if (stationLat != null && stationLng != null) {
+        latitude = new Prisma.Decimal(stationLat);
+        longitude = new Prisma.Decimal(stationLng);
       }
     }
     const user = await this.prisma.$transaction(async (tx) => {
@@ -1102,7 +1102,7 @@ export class UsersService {
           data: {
             reservationId: reservation.id,
             userId: id,
-            walkingRouteStageId: stage?.id ?? null,
+            walkingStationId: station?.id ?? null,
             provinceId: geo.provinceId,
             cityId: geo.cityId,
             latitude,

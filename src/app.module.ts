@@ -28,6 +28,7 @@ import { ItemQuotasModule } from './item-quotas/item-quotas.module';
 import { ItemQuotaVouchersModule } from './item-quota-vouchers/item-quota-vouchers.module';
 import { IceVouchersModule } from './ice-vouchers/ice-vouchers.module';
 import { WalkingRoutesModule } from './walking-routes/walking-routes.module';
+import { WalkingStationsModule } from './walking-stations/walking-stations.module';
 import { PublicVouchersModule } from './public-vouchers/public-vouchers.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ReceptionModule } from './reception/reception.module';
@@ -53,6 +54,7 @@ import { PlacementsModule } from './placements/placements.module';
     AccommodationsModule,
     UsersModule,
     WalkingRoutesModule,
+    WalkingStationsModule,
     FoodSuppliersModule,
     BenefactorsModule,
     GovernmentOrganizationsModule,

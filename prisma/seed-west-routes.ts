@@ -200,34 +200,55 @@ async function ensureBorder(spec: RouteSpec) {
   });
 }
 
+async function upsertStation(
+  spec: StageSpec,
+  city: { id: string; latitude: Prisma.Decimal | null; longitude: Prisma.Decimal | null },
+  manager: { name: string; phone: string },
+) {
+  const existing = await prisma.walkingStation.findFirst({
+    where: { cityId: city.id, name: spec.stationName },
+    select: { id: true },
+  });
+  if (existing) {
+    return existing.id;
+  }
+  const created = await prisma.walkingStation.create({
+    data: {
+      cityId: city.id,
+      name: spec.stationName,
+      latitude: dec(toCoord(city.latitude)),
+      longitude: dec(toCoord(city.longitude)),
+      managerName: manager.name,
+      managerPhone: manager.phone,
+      distanceToMashhadKm: dec(spec.toMashhadKm),
+      description: `${PLACE_SEED_MARK} ایستگاه مسیر غرب به مشهد`,
+    },
+  });
+  return created.id;
+}
+
 async function upsertRoute(spec: RouteSpec, iraqId: string) {
   const border = await ensureBorder(spec);
   const resolved = [];
-  for (const stage of spec.stages) {
+  for (const [index, stage] of spec.stages.entries()) {
     const city = await findCity(stage.provinceFa, stage.cityFa);
-    resolved.push({ spec: stage, city });
+    const manager = managers[index % managers.length];
+    const walkingStationId = await upsertStation(stage, city, manager);
+    resolved.push({ spec: stage, walkingStationId });
   }
 
   const stages = resolved.map((row, index) => {
     const prev = resolved[index - 1];
     const next = resolved[index + 1];
-    const manager = managers[index % managers.length];
     return {
-      cityId: row.city.id,
+      walkingStationId: row.walkingStationId,
       stageNumber: index + 1,
-      name: row.spec.stationName,
-      latitude: dec(toCoord(row.city.latitude)),
-      longitude: dec(toCoord(row.city.longitude)),
-      managerName: manager.name,
-      managerPhone: manager.phone,
-      distanceToMashhadKm: dec(row.spec.toMashhadKm),
       distanceToPreviousKm: prev
         ? dec(Math.abs(prev.spec.toMashhadKm - row.spec.toMashhadKm))
         : null,
       distanceToNextKm: next
         ? dec(Math.abs(row.spec.toMashhadKm - next.spec.toMashhadKm))
         : null,
-      description: `${PLACE_SEED_MARK} ایستگاه مسیر غرب به مشهد`,
     };
   });
 

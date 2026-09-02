@@ -4,6 +4,8 @@ import {
   ReservationStatus,
   ReservationType,
 } from '../generated/prisma/client';
+import type { ReservationFeatures } from './reception-features';
+import { defaultIranianFeatures } from './reception-features';
 
 export const IN_PROGRESS_FILTER = 'IN_PROGRESS';
 
@@ -32,28 +34,53 @@ export const CARAVAN_CONTACT_ROLES = [
 export function nextAfterBasicInfo(
   type: ReservationType,
   autoApprove: boolean,
+  features: ReservationFeatures = defaultIranianFeatures,
 ): ReservationStatus {
   if (!autoApprove) {
     return ReservationStatus.PENDING_MANAGEMENT_REVIEW;
   }
-  return nextAfterManagement(type);
+  return nextAfterManagement(type, features);
 }
 
-export function nextAfterManagement(type: ReservationType): ReservationStatus {
+export function nextAfterManagement(
+  type: ReservationType,
+  features: ReservationFeatures = defaultIranianFeatures,
+): ReservationStatus {
   if (type === ReservationType.INDIVIDUAL) {
-    return ReservationStatus.INSURANCE;
+    return features.insurance
+      ? ReservationStatus.INSURANCE
+      : ReservationStatus.COMPLETED;
   }
-  return ReservationStatus.COMPANIONS;
+  if (features.companions) return ReservationStatus.COMPANIONS;
+  if (type === ReservationType.CARAVAN) {
+    return ReservationStatus.CARAVAN_CONTACTS;
+  }
+  return features.insurance
+    ? ReservationStatus.INSURANCE
+    : ReservationStatus.COMPLETED;
 }
 
-export function nextAfterCompanions(type: ReservationType): ReservationStatus {
+export function nextAfterCompanions(
+  type: ReservationType,
+  features: ReservationFeatures = defaultIranianFeatures,
+): ReservationStatus {
   if (type === ReservationType.CARAVAN) {
     return ReservationStatus.CARAVAN_CONTACTS;
   }
   if (type === ReservationType.GROUP) {
-    return ReservationStatus.INSURANCE;
+    return features.insurance
+      ? ReservationStatus.INSURANCE
+      : ReservationStatus.COMPLETED;
   }
   throw new Error('مرحله همراهان برای این نوع پذیرش وجود ندارد');
+}
+
+export function nextAfterContacts(
+  features: ReservationFeatures = defaultIranianFeatures,
+): ReservationStatus {
+  return features.insurance
+    ? ReservationStatus.INSURANCE
+    : ReservationStatus.COMPLETED;
 }
 
 /** Owner can keep editing companions after the step is completed, until the file is finished. */

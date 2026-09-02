@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   Min,
   ValidateIf,
@@ -130,6 +131,34 @@ export class UpdateReceptionSettingsDto {
 
   @IsEnum(PlacementGenderPolicy)
   placementGenderPolicy: PlacementGenderPolicy;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  mashhadPlacementCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  routePlacementCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  companionsCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  insuranceCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  individualCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  groupCountryIds: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  caravanCountryIds: string[];
 
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

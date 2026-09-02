@@ -588,12 +588,20 @@ async function main() {
       sortOrder: 4,
     },
     {
+      code: 'base-info.walking-stations',
+      moduleId: baseInfo.id,
+      nameKey: 'menus.walkingStations',
+      path: '/base-info/walking-stations',
+      icon: 'milestone',
+      sortOrder: 5,
+    },
+    {
       code: 'base-info.walking-routes',
       moduleId: baseInfo.id,
       nameKey: 'menus.walkingRoutes',
       path: '/base-info/walking-routes',
       icon: 'route',
-      sortOrder: 5,
+      sortOrder: 6,
     },
     {
       code: 'base-info.food-suppliers',
@@ -601,7 +609,7 @@ async function main() {
       nameKey: 'menus.foodSuppliers',
       path: '/base-info/food-suppliers',
       icon: 'utensils-crossed',
-      sortOrder: 6,
+      sortOrder: 7,
     },
     {
       code: 'base-info.benefactors',
@@ -609,7 +617,7 @@ async function main() {
       nameKey: 'menus.benefactors',
       path: '/base-info/benefactors',
       icon: 'hand-heart',
-      sortOrder: 7,
+      sortOrder: 8,
     },
     {
       code: 'base-info.government-organizations',

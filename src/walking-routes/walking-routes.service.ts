@@ -40,13 +40,17 @@ const walkingRouteInclude = {
   stages: {
     orderBy: { stageNumber: 'asc' as const },
     include: {
-      city: {
-        select: {
-          ...geoSelect,
-          provinceId: true,
-          latitude: true,
-          longitude: true,
-          province: { select: { ...geoSelect, countryId: true } },
+      walkingStation: {
+        include: {
+          city: {
+            select: {
+              ...geoSelect,
+              provinceId: true,
+              latitude: true,
+              longitude: true,
+              province: { select: { ...geoSelect, countryId: true } },
+            },
+          },
         },
       },
     },
@@ -232,10 +236,14 @@ export class WalkingRoutesService {
       });
     }
     if (query.cityId) {
-      filters.push({ stages: { some: { cityId: query.cityId } } });
+      filters.push({
+        stages: { some: { walkingStation: { cityId: query.cityId } } },
+      });
     } else if (query.provinceId) {
       filters.push({
-        stages: { some: { city: { provinceId: query.provinceId } } },
+        stages: {
+          some: { walkingStation: { city: { provinceId: query.provinceId } } },
+        },
       });
     }
     if (query.q) {
@@ -246,12 +254,15 @@ export class WalkingRoutesService {
           {
             stages: {
               some: {
-                OR: [
-                  { name: containsInsensitive(query.q) },
-                  { description: containsInsensitive(query.q) },
-                  { managerName: containsInsensitive(query.q) },
-                  { managerPhone: containsInsensitive(query.q) },
-                ],
+                walkingStation: {
+                  OR: [
+                    { name: containsInsensitive(query.q) },
+                    { description: containsInsensitive(query.q) },
+                    { neshanAddress: containsInsensitive(query.q) },
+                    { managerName: containsInsensitive(query.q) },
+                    { managerPhone: containsInsensitive(query.q) },
+                  ],
+                },
               },
             },
           },
@@ -318,27 +329,16 @@ export class WalkingRoutesService {
       if (new Set(numbers).size !== numbers.length) {
         throw new BadRequestException('شماره ایستگاه در مسیر تکراری است');
       }
-      const cityIds = [...new Set(stages.map((stage) => stage.cityId))];
-      const cities = await this.prisma.city.findMany({
-        where: { id: { in: cityIds } },
-        include: { province: { include: { country: true } } },
+      const stationIds = stages.map((stage) => stage.walkingStationId);
+      if (new Set(stationIds).size !== stationIds.length) {
+        throw new BadRequestException('ایستگاه در مسیر تکراری است');
+      }
+      const stations = await this.prisma.walkingStation.findMany({
+        where: { id: { in: stationIds } },
+        select: { id: true },
       });
-      if (cities.length !== cityIds.length) {
-        throw new BadRequestException('شهر انتخاب‌شده معتبر نیست');
-      }
-      for (const city of cities) {
-        if (city.province.country.iso2 !== 'IR') {
-          throw new BadRequestException(
-            'ایستگاه‌های مسیر فقط می‌توانند شهرهای ایران باشند',
-          );
-        }
-      }
-      for (const stage of stages) {
-        const hasLat = stage.latitude != null;
-        const hasLng = stage.longitude != null;
-        if (hasLat !== hasLng) {
-          throw new BadRequestException('موقعیت مکانی ایستگاه ناقص است');
-        }
+      if (stations.length !== stationIds.length) {
+        throw new BadRequestException('ایستگاه انتخاب‌شده معتبر نیست');
       }
     }
 
@@ -353,20 +353,10 @@ export class WalkingRoutesService {
       return new Prisma.Decimal(value);
     };
     return {
-      cityId: stage.cityId,
+      walkingStationId: stage.walkingStationId,
       stageNumber: stage.stageNumber,
-      name: stage.name?.trim() || null,
-      latitude: decimal(stage.latitude),
-      longitude: decimal(stage.longitude),
-      managerName: stage.managerName?.trim() || null,
-      managerPhone: stage.managerPhone?.trim() || null,
-      managerTelegram: stage.managerTelegram?.trim() || null,
-      managerWhatsapp: stage.managerWhatsapp?.trim() || null,
-      managerEitaa: stage.managerEitaa?.trim() || null,
       distanceToNextKm: decimal(stage.distanceToNextKm),
       distanceToPreviousKm: decimal(stage.distanceToPreviousKm),
-      distanceToMashhadKm: decimal(stage.distanceToMashhadKm),
-      description: stage.description?.trim() || null,
     };
   }
 
@@ -380,28 +370,35 @@ export class WalkingRoutesService {
       entryBorderId: item.entryBorderId,
       entryBorder: item.entryBorder,
       originCountries: item.originCountries.map((row) => row.country),
-      stages: item.stages.map((stage) => ({
-        id: stage.id,
-        cityId: stage.cityId,
-        city: {
-          ...stage.city,
-          latitude: num(stage.city.latitude),
-          longitude: num(stage.city.longitude),
-        },
-        stageNumber: stage.stageNumber,
-        name: stage.name,
-        latitude: num(stage.latitude),
-        longitude: num(stage.longitude),
-        managerName: stage.managerName,
-        managerPhone: stage.managerPhone,
-        managerTelegram: stage.managerTelegram,
-        managerWhatsapp: stage.managerWhatsapp,
-        managerEitaa: stage.managerEitaa,
-        distanceToNextKm: num(stage.distanceToNextKm),
-        distanceToPreviousKm: num(stage.distanceToPreviousKm),
-        distanceToMashhadKm: num(stage.distanceToMashhadKm),
-        description: stage.description,
-      })),
+      stages: item.stages.map((stage) => {
+        const station = stage.walkingStation;
+        return {
+          id: stage.id,
+          stationId: station.id,
+          cityId: station.cityId,
+          city: {
+            ...station.city,
+            latitude: num(station.city.latitude),
+            longitude: num(station.city.longitude),
+          },
+          stageNumber: stage.stageNumber,
+          name: station.name,
+          latitude: num(station.latitude),
+          longitude: num(station.longitude),
+          neshanAddress: station.neshanAddress,
+          maleCount: station.maleCount,
+          femaleCount: station.femaleCount,
+          managerName: station.managerName,
+          managerPhone: station.managerPhone,
+          managerTelegram: station.managerTelegram,
+          managerWhatsapp: station.managerWhatsapp,
+          managerEitaa: station.managerEitaa,
+          distanceToNextKm: num(stage.distanceToNextKm),
+          distanceToPreviousKm: num(stage.distanceToPreviousKm),
+          distanceToMashhadKm: num(station.distanceToMashhadKm),
+          description: station.description,
+        };
+      }),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };
