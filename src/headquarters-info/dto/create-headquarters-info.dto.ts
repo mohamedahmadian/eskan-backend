@@ -1,6 +1,8 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsInt,
+  IsLatitude,
+  IsLongitude,
   IsOptional,
   IsString,
   IsUUID,
@@ -9,7 +11,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { emptyToNull } from '../../common/dto-transform';
+import { emptyToNull, toOptionalNumber } from '../../common/dto-transform';
 
 export class CreateHeadquartersInfoDto {
   @IsString()
@@ -27,6 +29,24 @@ export class CreateHeadquartersInfoDto {
   @ValidateIf((_, value) => value != null)
   @IsString()
   address?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  neshanAddress?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => toOptionalNumber(value))
+  @ValidateIf((_, value) => value != null)
+  @IsLatitude()
+  latitude?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) => toOptionalNumber(value))
+  @ValidateIf((_, value) => value != null)
+  @IsLongitude()
+  longitude?: number | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

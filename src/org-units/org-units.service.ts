@@ -104,6 +104,32 @@ export class OrgUnitsService {
     return this.serialize(item);
   }
 
+  async findPublic() {
+    const items = await this.prisma.orgUnit.findMany({
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        description: true,
+        eitaaChannel: true,
+        telegramChannel: true,
+        manager: {
+          select: { id: true, fullName: true, photoId: true },
+        },
+      },
+    });
+    return items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      phone: item.phone,
+      description: item.description,
+      eitaaChannel: item.eitaaChannel,
+      telegramChannel: item.telegramChannel,
+      manager: item.manager,
+    }));
+  }
+
   async create(dto: CreateOrgUnitDto) {
     const managerUserId = await this.resolveManager(dto.managerUserId);
     const item = await this.prisma.orgUnit.create({

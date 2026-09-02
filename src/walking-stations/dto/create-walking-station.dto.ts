@@ -39,6 +39,12 @@ export class CreateWalkingStationDto {
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsString()
+  address?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
   neshanAddress?: string | null;
 
   @IsOptional()

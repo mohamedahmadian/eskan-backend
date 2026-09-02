@@ -16,6 +16,20 @@ import { UpdateCryptoWalletDto } from './dto/update-crypto-wallet.dto';
 export class CryptoWalletsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  listPublic() {
+    return this.prisma.cryptoWallet.findMany({
+      where: { isActive: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        label: true,
+        currency: true,
+        network: true,
+        address: true,
+      },
+    });
+  }
+
   async findAll(query: FindCryptoWalletsQueryDto) {
     const where = this.listWhere(query);
     const orderBy = this.listOrderBy(query);

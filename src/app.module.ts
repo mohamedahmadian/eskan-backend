@@ -41,6 +41,11 @@ import { NationalMonitoringModule } from './national-monitoring/national-monitor
 import { SupportRequestsModule } from './support-requests/support-requests.module';
 import { PlacementsModule } from './placements/placements.module';
 import { ParticipationsModule } from './participations/participations.module';
+import { IngredientsModule } from './ingredients/ingredients.module';
+import { FoodsModule } from './foods/foods.module';
+import { RestaurantMealPlansModule } from './restaurant-meal-plans/restaurant-meal-plans.module';
+import { RestaurantsModule } from './restaurants/restaurants.module';
+import { WarehouseCalculatorModule } from './warehouse-calculator/warehouse-calculator.module';
 
 @Module({
   imports: [
@@ -85,6 +90,11 @@ import { ParticipationsModule } from './participations/participations.module';
     SupportRequestsModule,
     PlacementsModule,
     ParticipationsModule,
+    IngredientsModule,
+    FoodsModule,
+    RestaurantsModule,
+    RestaurantMealPlansModule,
+    WarehouseCalculatorModule,
   ],
   controllers: [AppController],
 })

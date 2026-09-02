@@ -249,7 +249,12 @@ export class ItemQuotaVouchersService {
       }),
       this.prisma.itemQuotaVoucher.count({ where }),
     ]);
-    return paginatedResult(items, total, page, pageSize);
+    return paginatedResult(
+      await this.attachCurrentAccommodation(items),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   async findMine(query: FindItemQuotaVouchersQueryDto, actorId: string) {
@@ -282,7 +287,8 @@ export class ItemQuotaVouchersService {
     if (!item) {
       throw new NotFoundException('حواله یافت نشد');
     }
-    return item;
+    const [withAccommodation] = await this.attachCurrentAccommodation([item]);
+    return withAccommodation;
   }
 
   async findMineOne(id: string, actorId: string) {
@@ -309,7 +315,7 @@ export class ItemQuotaVouchersService {
     await this.ensureManager(dto.accommodationManagerId);
     await this.assertStock(dto.quotaId, dto.quantity);
     const supplier = await this.resolveSupplier(dto);
-    return this.createWithSequentialCode(quota.year, {
+    const created = await this.createWithSequentialCode(quota.year, {
       quotaId: dto.quotaId,
       accommodationManagerId: dto.accommodationManagerId,
       quantity: dto.quantity,
@@ -318,6 +324,8 @@ export class ItemQuotaVouchersService {
       pickupLocation: supplier.pickupLocation,
       description: dto.description?.trim() || null,
     });
+    const [withAccommodation] = await this.attachCurrentAccommodation([created]);
+    return withAccommodation;
   }
 
   async update(id: string, dto: UpdateItemQuotaVoucherDto) {
@@ -349,7 +357,7 @@ export class ItemQuotaVouchersService {
               : dto.pickupLocation,
         })
       : null;
-    return this.prisma.itemQuotaVoucher.update({
+    const updated = await this.prisma.itemQuotaVoucher.update({
       where: { id },
       data: {
         quotaId: dto.quotaId,
@@ -369,6 +377,8 @@ export class ItemQuotaVouchersService {
       },
       include: voucherInclude,
     });
+    const [withAccommodation] = await this.attachCurrentAccommodation([updated]);
+    return withAccommodation;
   }
 
   async remove(id: string) {
@@ -420,6 +430,37 @@ export class ItemQuotaVouchersService {
         `تعداد درخواستی بیشتر از باقیمانده سهمیه (${remaining}) است`,
       );
     }
+  }
+
+  private async attachCurrentAccommodation<
+    T extends { accommodationManagerId: string },
+  >(items: T[]) {
+    if (!items.length) {
+      return items.map((item) => ({ ...item, currentAccommodation: null }));
+    }
+    const year = currentJalaliYear();
+    const managerIds = [
+      ...new Set(items.map((item) => item.accommodationManagerId)),
+    ];
+    const assignments = await this.prisma.accommodationManager.findMany({
+      where: { year, userId: { in: managerIds } },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      select: {
+        userId: true,
+        accommodation: { select: { id: true, name: true } },
+      },
+    });
+    const byManager = new Map<string, { id: string; name: string }>();
+    for (const row of assignments) {
+      if (!row.userId || byManager.has(row.userId)) {
+        continue;
+      }
+      byManager.set(row.userId, row.accommodation);
+    }
+    return items.map((item) => ({
+      ...item,
+      currentAccommodation: byManager.get(item.accommodationManagerId) ?? null,
+    }));
   }
 
   private async ensureManager(userId: string) {

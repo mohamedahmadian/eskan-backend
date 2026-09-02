@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -22,6 +23,13 @@ import { UpdateCryptoWalletDto } from './dto/update-crypto-wallet.dto';
 @Roles('ADMIN')
 export class CryptoWalletsController {
   constructor(private readonly cryptoWallets: CryptoWalletsService) {}
+
+  @Get('public')
+  @Public()
+  @Roles()
+  listPublic() {
+    return this.cryptoWallets.listPublic();
+  }
 
   @Get()
   findAll(@Query() query: FindCryptoWalletsQueryDto) {

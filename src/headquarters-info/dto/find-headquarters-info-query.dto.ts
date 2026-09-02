@@ -8,6 +8,7 @@ export const headquartersInfoSortFields = [
   'name',
   'title',
   'address',
+  'neshanAddress',
   'activityStartYear',
   'phoneCount',
 ] as const;

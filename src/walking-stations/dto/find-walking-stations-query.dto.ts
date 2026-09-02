@@ -8,6 +8,7 @@ export const walkingStationSortFields = [
   'name',
   'province',
   'city',
+  'address',
   'maleCount',
   'femaleCount',
   'managerName',

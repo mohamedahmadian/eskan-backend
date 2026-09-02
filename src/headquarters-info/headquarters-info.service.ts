@@ -87,6 +87,8 @@ export class HeadquartersInfoService {
         name: dto.name.trim(),
         title: dto.title?.trim() || null,
         address: dto.address?.trim() || null,
+        neshanAddress: dto.neshanAddress?.trim() || null,
+        ...this.coordsData(dto),
         description: dto.description?.trim() || null,
         activityStartYear: dto.activityStartYear,
         website: dto.website?.trim() || null,
@@ -113,6 +115,11 @@ export class HeadquartersInfoService {
         title: dto.title === undefined ? undefined : dto.title?.trim() || null,
         address:
           dto.address === undefined ? undefined : dto.address?.trim() || null,
+        neshanAddress:
+          dto.neshanAddress === undefined
+            ? undefined
+            : dto.neshanAddress?.trim() || null,
+        ...this.coordsData(dto, true),
         description:
           dto.description === undefined
             ? undefined
@@ -148,6 +155,11 @@ export class HeadquartersInfoService {
       select: {
         name: true,
         title: true,
+        address: true,
+        neshanAddress: true,
+        latitude: true,
+        longitude: true,
+        description: true,
         activityStartYear: true,
         website: true,
         eitaa: true,
@@ -165,6 +177,11 @@ export class HeadquartersInfoService {
     return {
       name: item?.name ?? null,
       title: item?.title ?? null,
+      address: item?.address ?? null,
+      neshanAddress: item?.neshanAddress ?? null,
+      latitude: item?.latitude == null ? null : Number(item.latitude),
+      longitude: item?.longitude == null ? null : Number(item.longitude),
+      description: item?.description ?? null,
       activityStartYear,
       currentYear,
       yearsOfService:
@@ -191,6 +208,7 @@ export class HeadquartersInfoService {
         name: (dir) => ({ name: dir }),
         title: (dir) => ({ title: dir }),
         address: (dir) => ({ address: dir }),
+        neshanAddress: (dir) => ({ neshanAddress: dir }),
         activityStartYear: (dir) => ({ activityStartYear: dir }),
         phoneCount: (dir) => ({ phones: { _count: dir } }),
       },
@@ -209,6 +227,7 @@ export class HeadquartersInfoService {
         { name: containsInsensitive(query.q) },
         { title: containsInsensitive(query.q) },
         { address: containsInsensitive(query.q) },
+        { neshanAddress: containsInsensitive(query.q) },
         { description: containsInsensitive(query.q) },
         { website: containsInsensitive(query.q) },
         { eitaa: containsInsensitive(query.q) },
@@ -218,6 +237,32 @@ export class HeadquartersInfoService {
         { phones: { some: { phone: containsInsensitive(query.q) } } },
         { phones: { some: { department: containsInsensitive(query.q) } } },
       ],
+    };
+  }
+
+  private coordsData(
+    dto: Pick<CreateHeadquartersInfoDto, 'latitude' | 'longitude'>,
+    partial = false,
+  ) {
+    const hasLat = dto.latitude !== undefined;
+    const hasLng = dto.longitude !== undefined;
+    if (!partial && (dto.latitude == null) !== (dto.longitude == null)) {
+      throw new BadRequestException('موقعیت جغرافیایی ناقص است');
+    }
+    if (partial && hasLat !== hasLng) {
+      throw new BadRequestException('موقعیت جغرافیایی ناقص است');
+    }
+    if (partial && !hasLat && !hasLng) {
+      return {};
+    }
+    if ((dto.latitude == null) !== (dto.longitude == null)) {
+      throw new BadRequestException('موقعیت جغرافیایی ناقص است');
+    }
+    return {
+      latitude:
+        dto.latitude == null ? null : new Prisma.Decimal(dto.latitude),
+      longitude:
+        dto.longitude == null ? null : new Prisma.Decimal(dto.longitude),
     };
   }
 
@@ -241,6 +286,9 @@ export class HeadquartersInfoService {
       name: item.name,
       title: item.title,
       address: item.address,
+      neshanAddress: item.neshanAddress,
+      latitude: item.latitude == null ? null : Number(item.latitude),
+      longitude: item.longitude == null ? null : Number(item.longitude),
       description: item.description,
       activityStartYear: item.activityStartYear,
       website: item.website,

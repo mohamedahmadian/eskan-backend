@@ -258,6 +258,7 @@ export class WalkingRoutesService {
                   OR: [
                     { name: containsInsensitive(query.q) },
                     { description: containsInsensitive(query.q) },
+                    { address: containsInsensitive(query.q) },
                     { neshanAddress: containsInsensitive(query.q) },
                     { managerName: containsInsensitive(query.q) },
                     { managerPhone: containsInsensitive(query.q) },
@@ -385,6 +386,7 @@ export class WalkingRoutesService {
           name: station.name,
           latitude: num(station.latitude),
           longitude: num(station.longitude),
+          address: station.address,
           neshanAddress: station.neshanAddress,
           maleCount: station.maleCount,
           femaleCount: station.femaleCount,

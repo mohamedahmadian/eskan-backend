@@ -13,7 +13,9 @@ import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { BankAccountsService } from './bank-accounts.service';
 import { ParticipationCampaignsService } from './campaigns.service';
+import { CryptoWalletsService } from './crypto-wallets.service';
 import { CreateParticipationCampaignDto } from './dto/create-campaign.dto';
 import { FindParticipationCampaignsQueryDto } from './dto/find-campaigns-query.dto';
 import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
@@ -22,7 +24,11 @@ import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class ParticipationCampaignsController {
-  constructor(private readonly campaigns: ParticipationCampaignsService) {}
+  constructor(
+    private readonly campaigns: ParticipationCampaignsService,
+    private readonly bankAccounts: BankAccountsService,
+    private readonly cryptoWallets: CryptoWalletsService,
+  ) {}
 
   @Get('showcase')
   showcase() {
@@ -34,6 +40,17 @@ export class ParticipationCampaignsController {
   @Roles()
   showcasePublic() {
     return this.campaigns.showcasePublic();
+  }
+
+  @Get('public/payment-methods')
+  @Public()
+  @Roles()
+  async listPublicPaymentMethods() {
+    const [bankAccounts, cryptoWallets] = await Promise.all([
+      this.bankAccounts.listPublic(),
+      this.cryptoWallets.listPublic(),
+    ]);
+    return { bankAccounts, cryptoWallets };
   }
 
   @Get('public/:id')

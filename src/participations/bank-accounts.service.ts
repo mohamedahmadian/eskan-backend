@@ -16,6 +16,20 @@ import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
 export class BankAccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  listPublic() {
+    return this.prisma.bankAccount.findMany({
+      where: { isActive: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        bankName: true,
+        accountNumber: true,
+        cardNumber: true,
+        iban: true,
+      },
+    });
+  }
+
   async findAll(query: FindBankAccountsQueryDto) {
     const where = this.listWhere(query);
     const orderBy = this.listOrderBy(query);

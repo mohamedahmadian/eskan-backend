@@ -51,6 +51,20 @@ enum SupportRequestStatus {
   REJECTED
 }
 
+enum IngredientUnit {
+  GRAM
+  KILOGRAM
+  MILLILITER
+  LITER
+  PIECE
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
 model Role {
   id        String     @id @default(uuid())
   code      String     @unique
@@ -1090,6 +1104,7 @@ model Accommodation {
   yearContacts          AccommodationYearContact[]
   iceVouchers           IceVoucher[]
   allocations           ReservationAllocation[]
+  mealPlanDistributions RestaurantMealPlanDistribution[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 
@@ -1271,6 +1286,7 @@ model WalkingStation {
   name                String
   latitude            Decimal?              @db.Decimal(10, 7)
   longitude           Decimal?              @db.Decimal(10, 7)
+  address             String?
   neshanAddress       String?
   maleCount           Int                   @default(0)
   femaleCount         Int                   @default(0)
@@ -1540,6 +1556,9 @@ model HeadquartersInfo {
   name        String
   title       String?
   address     String?
+  neshanAddress String?
+  latitude    Decimal?            @db.Decimal(10, 7)
+  longitude   Decimal?            @db.Decimal(10, 7)
   description String?
   logoId      String?
   logo        StoredImage?        @relation("HeadquartersLogo", fields: [logoId], references: [id], onDelete: SetNull)
@@ -1960,4 +1979,102 @@ model CampaignParticipant {
   @@index([campaignId])
   @@index([fullName])
   @@map("campaign_participants")
+}
+
+model Ingredient {
+  id           String           @id @default(uuid())
+  name         String
+  unit         IngredientUnit
+  pricePerUnit Decimal          @db.Decimal(14, 2)
+  stockQty     Decimal          @db.Decimal(14, 3)
+  description  String?
+  recipes      FoodIngredient[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([name])
+  @@map("ingredients")
+}
+
+model Food {
+  id          String               @id @default(uuid())
+  name        String
+  description String?
+  finalPrice  Decimal              @db.Decimal(14, 2)
+  ingredients FoodIngredient[]
+  mealPlans   RestaurantMealPlan[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([name])
+  @@map("foods")
+}
+
+model FoodIngredient {
+  id           String         @id @default(uuid())
+  foodId       String
+  food         Food           @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal        @db.Decimal(14, 3)
+  unit         IngredientUnit
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([foodId, ingredientId])
+  @@index([ingredientId])
+  @@map("food_ingredients")
+}
+
+model Restaurant {
+  id            String               @id @default(uuid())
+  name          String
+  managerName   String?
+  managerPhone  String?
+  address       String?
+  neshanAddress String?
+  description   String?
+  mealPlans     RestaurantMealPlan[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([name])
+  @@map("restaurants")
+}
+
+model RestaurantMealPlan {
+  id            String                             @id @default(uuid())
+  restaurantId  String
+  restaurant    Restaurant                         @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  foodId        String
+  food          Food                               @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  planDate      DateTime                           @db.Date
+  mealType      MealType
+  servings      Int
+  description   String?
+  distributions RestaurantMealPlanDistribution[]
+  createdAt     DateTime                           @default(now())
+  updatedAt     DateTime                           @updatedAt
+
+  @@unique([restaurantId, planDate, mealType])
+  @@index([restaurantId, planDate])
+  @@index([planDate])
+  @@index([foodId])
+  @@map("restaurant_meal_plans")
+}
+
+model RestaurantMealPlanDistribution {
+  id              String             @id @default(uuid())
+  mealPlanId      String
+  mealPlan        RestaurantMealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Restrict)
+  accommodationId String
+  accommodation   Accommodation      @relation(fields: [accommodationId], references: [id], onDelete: Restrict)
+  servings        Int
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([mealPlanId, accommodationId])
+  @@index([mealPlanId])
+  @@index([accommodationId])
+  @@map("restaurant_meal_plan_distributions")
 }

@@ -219,6 +219,7 @@ export class WalkingStationsService {
         OR: [
           { name: containsInsensitive(query.q) },
           { description: containsInsensitive(query.q) },
+          { address: containsInsensitive(query.q) },
           { neshanAddress: containsInsensitive(query.q) },
           { managerName: containsInsensitive(query.q) },
           { managerPhone: containsInsensitive(query.q) },
@@ -248,6 +249,7 @@ export class WalkingStationsService {
         managerName: (dir) => ({ managerName: dir }),
         province: (dir) => ({ city: { province: { nameFa: dir } } }),
         city: (dir) => ({ city: { nameFa: dir } }),
+        address: (dir) => ({ address: dir }),
         maleCount: (dir) => ({ maleCount: dir }),
         femaleCount: (dir) => ({ femaleCount: dir }),
         routeCount: (dir) => ({ routeStages: { _count: dir } }),
@@ -297,6 +299,8 @@ export class WalkingStationsService {
       name: dto.name === undefined ? undefined : dto.name.trim(),
       latitude: decimal(dto.latitude),
       longitude: decimal(dto.longitude),
+      address:
+        dto.address === undefined ? undefined : dto.address?.trim() || null,
       neshanAddress:
         dto.neshanAddress === undefined
           ? undefined
@@ -411,6 +415,7 @@ export class WalkingStationsService {
       name: item.name,
       latitude: num(item.latitude),
       longitude: num(item.longitude),
+      address: item.address,
       neshanAddress: item.neshanAddress,
       maleCount: item.maleCount,
       femaleCount: item.femaleCount,

@@ -468,6 +468,14 @@ export class AccommodationsService {
 
   async remove(id: string, actor: Actor) {
     await this.findRecord(id, actor);
+    const distributionCount = await this.prisma.restaurantMealPlanDistribution.count({
+      where: { accommodationId: id },
+    });
+    if (distributionCount) {
+      throw new BadRequestException(
+        'ابتدا توزیع غذای وابسته به این اسکان را حذف کنید',
+      );
+    }
     await this.prisma.accommodation.delete({ where: { id } });
     return { ok: true };
   }
@@ -1104,8 +1112,15 @@ export class AccommodationsService {
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
     }
-    if (query.year) {
-      filters.push({ managers: { some: { year: query.year } } });
+    if (query.year || query.managerUserId) {
+      filters.push({
+        managers: {
+          some: {
+            ...(query.year != null ? { year: query.year } : {}),
+            ...(query.managerUserId ? { userId: query.managerUserId } : {}),
+          },
+        },
+      });
     }
     if (query.hasManagerThisYear !== undefined) {
       const year = currentJalaliYear();
