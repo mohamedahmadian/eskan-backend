@@ -169,6 +169,12 @@ export class UpdateReceptionSettingsDto {
   @MaxLength(200)
   insuranceOrganization: string;
 
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID('4')
+  insuranceBankAccountId?: string | null;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ReceptionInsurancePlanDto)
@@ -185,4 +191,52 @@ export class UpdateReceptionSettingsDto {
   @ValidateIf((_, value) => value != null)
   @IsDateString()
   prophetDemiseDate?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpTravel?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpReview?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpCompanions?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpCompanionsCaravan?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpContacts?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpInsurance?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpComplete?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(4000)
+  helpPlacement?: string;
 }

@@ -11,6 +11,7 @@ const prisma = new PrismaClient({
 
 async function main() {
   const admin = await prisma.role.findUnique({ where: { code: 'ADMIN' } });
+  const pilgrim = await prisma.role.findUnique({ where: { code: 'PILGRIM' } });
   if (!admin) {
     throw new Error('نقش مدیر یافت نشد');
   }
@@ -81,6 +82,17 @@ async function main() {
       update: {},
       create: { roleId: admin.id, menuId: menu.id },
     });
+    if (pilgrim && item.code === 'participations.campaigns') {
+      await prisma.roleMenu.upsert({
+        where: { roleId_menuId: { roleId: pilgrim.id, menuId: menu.id } },
+        update: {},
+        create: { roleId: pilgrim.id, menuId: menu.id },
+      });
+    } else if (pilgrim) {
+      await prisma.roleMenu.deleteMany({
+        where: { roleId: pilgrim.id, menuId: menu.id },
+      });
+    }
   }
 
   await seedParticipationsData(prisma);

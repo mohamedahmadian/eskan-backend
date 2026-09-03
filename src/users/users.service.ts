@@ -7,6 +7,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { isAdmin } from '../auth/roles.util';
 import {
+  isValidIranianNationalId,
   normalizeNationalId,
   normalizePassportNumber,
   toLatinDigits,
@@ -1030,6 +1031,7 @@ export class UsersService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const geo = await this.resolveGeo(dto);
     await this.assertImages(dto);
+    await this.assertNationalIdForCountry(geo.countryId, dto.nationalId);
     await this.assertUniqueIdentity(dto);
     await this.assertLicenseIssuerOrganization(roleIds, dto.issuingOrganizationId);
 
@@ -1070,6 +1072,11 @@ export class UsersService {
       cityId: dto.cityId === undefined ? current.cityId : dto.cityId,
     });
     await this.assertImages(dto);
+    if (dto.nationalId !== undefined || dto.countryId !== undefined) {
+      const nextNationalId =
+        dto.nationalId === undefined ? current.nationalId : dto.nationalId;
+      await this.assertNationalIdForCountry(geo.countryId, nextNationalId);
+    }
     await this.assertUniqueIdentity(dto, id);
     const nextRoleIds = dto.roleIds ?? current.roles.map((role) => role.id);
     const nextOrganizationId =
@@ -1424,6 +1431,19 @@ export class UsersService {
         await tx.orgUnit.updateMany({
           where: { managerUserId: userId },
           data: { managerUserId: null },
+        });
+      }
+      if (roleCode === 'STATION_MANAGER') {
+        await tx.walkingStation.updateMany({
+          where: { managerUserId: userId },
+          data: {
+            managerUserId: null,
+            managerName: null,
+            managerPhone: null,
+            managerTelegram: null,
+            managerWhatsapp: null,
+            managerEitaa: null,
+          },
         });
       }
       if (roleCode === 'GOVERNMENT_ORG_OFFICER') {
@@ -3300,6 +3320,33 @@ export class UsersService {
       });
     } catch (error) {
       this.rethrowUnique(error);
+    }
+  }
+
+  private async isIranianCountry(countryId: string | null | undefined) {
+    if (!countryId) {
+      return true;
+    }
+    const iran = await this.prisma.country.findFirst({
+      where: { iso2: 'IR' },
+      select: { id: true },
+    });
+    return !iran || countryId === iran.id;
+  }
+
+  private async assertNationalIdForCountry(
+    countryId: string | null | undefined,
+    nationalId: string | null | undefined,
+  ) {
+    if (!(await this.isIranianCountry(countryId))) {
+      return;
+    }
+    const value = nationalId?.trim() || '';
+    if (!value) {
+      throw new BadRequestException('کد ملی را وارد کنید');
+    }
+    if (!isValidIranianNationalId(value)) {
+      throw new BadRequestException('کد ملی معتبر نیست');
     }
   }
 

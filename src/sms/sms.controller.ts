@@ -14,6 +14,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { PaginationQueryDto } from '../common/pagination';
+import { FindSmsEitaaQueryDto } from './dto/find-sms-eitaa-query.dto';
 import { SendSmsDto } from './dto/send-sms.dto';
 import { UpdateSmsSettingsDto } from './dto/update-sms-settings.dto';
 import { SmsService } from './sms.service';
@@ -25,6 +26,11 @@ type RequestUser = { id: string };
 @Roles('ADMIN')
 export class SmsController {
   constructor(private readonly sms: SmsService) {}
+
+  @Get('eitaa')
+  findEitaa(@Query() query: FindSmsEitaaQueryDto) {
+    return this.sms.findEitaaByPhone(query.phone);
+  }
 
   @Get('settings')
   getSettings() {

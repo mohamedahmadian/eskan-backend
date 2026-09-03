@@ -13,7 +13,6 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { emptyToNull, toBoolean, toOptionalNumber } from '../../common/dto-transform';
-import { normalizePhone } from '../../common/phone';
 
 export class CreateWalkingStationDto {
   @IsUUID()
@@ -62,40 +61,8 @@ export class CreateWalkingStationDto {
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsString()
-  managerName?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) =>
-    typeof value === 'string'
-      ? emptyToNull(normalizePhone(value))
-      : emptyToNull(value),
-  )
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  managerPhone?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  managerTelegram?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) =>
-    typeof value === 'string'
-      ? emptyToNull(normalizePhone(value))
-      : emptyToNull(value),
-  )
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  managerWhatsapp?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  managerEitaa?: string | null;
+  @IsUUID()
+  managerUserId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => toOptionalNumber(value))

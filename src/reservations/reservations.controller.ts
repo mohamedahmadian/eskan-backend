@@ -41,7 +41,10 @@ import { UpdateMemberInsuranceDto } from './dto/update-member-insurance.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { UpdateReservationPermitDto } from './dto/update-reservation-permit.dto';
 import { MEMBER_IMPORT_MAX_BYTES } from './reservation-member-excel';
-import { ReserveStationStayDto } from './dto/reserve-station-stay.dto';
+import {
+  AutoReserveStationStaysDto,
+  ReserveStationStayDto,
+} from './dto/reserve-station-stay.dto';
 import { ReservationsService } from './reservations.service';
 
 type ExcelUpload = {
@@ -180,6 +183,16 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.reserveStationStay(id, dto, actor);
+  }
+
+  @Post(':id/route-placement/auto')
+  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
+  autoReserveStationStays(
+    @Param('id') id: string,
+    @Body() dto: AutoReserveStationStaysDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.autoReserveStationStays(id, dto, actor);
   }
 
   @Post(':id/route-placement/:stayId/cancel')
@@ -503,12 +516,7 @@ export class ReservationsController {
     @Body() dto: PayReservationInsuranceDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.payInsurance(
-      id,
-      dto.memberIds,
-      dto.insurancePlanId,
-      actor,
-    );
+    return this.reservations.payInsurance(id, dto, actor);
   }
 
   @Patch(':id/members/:memberId/insurance')

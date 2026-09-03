@@ -74,6 +74,10 @@ export function isHonoraryServant(user: RoleBearer | null | undefined) {
   return hasRole(user, 'HONORARY_SERVANT');
 }
 
+export function isStationManager(user: RoleBearer | null | undefined) {
+  return hasRole(user, 'STATION_MANAGER');
+}
+
 export function canAccessMyCaravans(user: RoleBearer | null | undefined) {
   return isAdmin(user) || isCaravanManager(user);
 }

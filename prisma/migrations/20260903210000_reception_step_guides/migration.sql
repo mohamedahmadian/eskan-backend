@@ -1,0 +1,10 @@
+-- AlterTable
+ALTER TABLE "reception_settings"
+ADD COLUMN "helpTravel" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpReview" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpCompanions" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpCompanionsCaravan" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpContacts" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpInsurance" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpComplete" TEXT NOT NULL DEFAULT '',
+ADD COLUMN "helpPlacement" TEXT NOT NULL DEFAULT '';

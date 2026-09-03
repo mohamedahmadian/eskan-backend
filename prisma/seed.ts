@@ -104,6 +104,15 @@ async function main() {
     },
   });
 
+  const stationManagerRole = await prisma.role.upsert({
+    where: { code: 'STATION_MANAGER' },
+    update: { nameKey: 'roles.stationManager' },
+    create: {
+      code: 'STATION_MANAGER',
+      nameKey: 'roles.stationManager',
+    },
+  });
+
   const dashboard = await prisma.navModule.upsert({
     where: { code: 'dashboard' },
     update: {},
@@ -228,6 +237,21 @@ async function main() {
       nameKey: 'modules.accommodation',
       icon: 'building-2',
       sortOrder: 5,
+    },
+  });
+
+  const stations = await prisma.navModule.upsert({
+    where: { code: 'stations' },
+    update: {
+      nameKey: 'modules.stations',
+      icon: 'milestone',
+      sortOrder: 6,
+    },
+    create: {
+      code: 'stations',
+      nameKey: 'modules.stations',
+      icon: 'milestone',
+      sortOrder: 6,
     },
   });
 
@@ -611,6 +635,30 @@ async function main() {
       path: '/base-info/walking-stations',
       icon: 'milestone',
       sortOrder: 5,
+    },
+    {
+      code: 'stations.mine',
+      moduleId: stations.id,
+      nameKey: 'menus.myWalkingStations',
+      path: '/my-walking-stations',
+      icon: 'milestone',
+      sortOrder: 1,
+    },
+    {
+      code: 'stations.report',
+      moduleId: stations.id,
+      nameKey: 'menus.stationReport',
+      path: '/station-report',
+      icon: 'chart-column',
+      sortOrder: 2,
+    },
+    {
+      code: 'stations.history',
+      moduleId: stations.id,
+      nameKey: 'menus.stationReservationHistory',
+      path: '/station-reservation-history',
+      icon: 'clipboard-list',
+      sortOrder: 3,
     },
     {
       code: 'base-info.walking-routes',
@@ -1072,6 +1120,9 @@ async function main() {
       item.code === 'groups.mine' ||
       item.code === 'evaluations.mine' ||
       item.code === 'accommodation.mine' ||
+      item.code === 'stations.mine' ||
+      item.code === 'stations.report' ||
+      item.code === 'stations.history' ||
       item.code === 'location.mine' ||
       item.code === 'location.history',
   );
@@ -1218,6 +1269,7 @@ async function main() {
     'evaluations.mine',
     'location.mine',
     'location.history',
+    'participations.campaigns',
   ]);
   for (const menu of menuRecords.filter((item) =>
     pilgrimMenuCodes.has(item.code),
@@ -1334,6 +1386,40 @@ async function main() {
     });
   }
 
+  const stationManagerMenuCodes = new Set([
+    'dashboard.overview',
+    'honorary-service.apply',
+    'honorary-service.history',
+    'stations.mine',
+    'stations.report',
+    'stations.history',
+  ]);
+  for (const menu of menuRecords.filter((item) =>
+    stationManagerMenuCodes.has(item.code),
+  )) {
+    await prisma.roleMenu.upsert({
+      where: {
+        roleId_menuId: {
+          roleId: stationManagerRole.id,
+          menuId: menu.id,
+        },
+      },
+      update: {},
+      create: { roleId: stationManagerRole.id, menuId: menu.id },
+    });
+  }
+  const stationManagerForbiddenMenus = menuRecords.filter(
+    (item) => !stationManagerMenuCodes.has(item.code),
+  );
+  if (stationManagerForbiddenMenus.length) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        roleId: stationManagerRole.id,
+        menuId: { in: stationManagerForbiddenMenus.map((item) => item.id) },
+      },
+    });
+  }
+
   const unitManagerMenuCodes = new Set([
     'dashboard.overview',
     'honorary-service.apply',
@@ -1372,6 +1458,7 @@ async function main() {
     licenseIssuerRole,
     governmentOrgOfficerRole,
     unitManagerRole,
+    stationManagerRole,
     headquartersRepresentativeRole,
   ]) {
     for (const menu of honoraryServiceSelfMenus) {

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { phoneLookupValues } from '../common/phone';
 import {
   containsInsensitive,
   paginatedResult,
@@ -49,6 +50,24 @@ export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  async findEitaaByPhone(phone: string) {
+    const values = phoneLookupValues(phone);
+    if (!values.length) {
+      throw new BadRequestException('شماره تلفن معتبر نیست');
+    }
+    const user = await this.prisma.user.findFirst({
+      where: { OR: values.map((item) => ({ phone: item })) },
+      select: { fullName: true, eitaa: true },
+    });
+    if (!user) {
+      throw new NotFoundException('کاربری با این شماره تلفن یافت نشد');
+    }
+    return {
+      fullName: user.fullName,
+      eitaa: user.eitaa,
+    };
+  }
 
   async getSettings() {
     const settings = await this.ensureSettings();

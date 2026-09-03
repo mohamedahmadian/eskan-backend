@@ -186,6 +186,7 @@ model User {
   requestedSupportRequests SupportRequest[] @relation("SupportRequestRequester")
   handledSupportRequests   SupportRequest[] @relation("SupportRequestHandler")
   honoraryServiceAnnouncements HonoraryServiceAnnouncement[]
+  managedWalkingStations WalkingStation[] @relation("WalkingStationManager")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -540,6 +541,7 @@ enum ReservationMemberInsuranceStatus {
 enum ReservationMemberInsurancePaidMethod {
   MANAGEMENT
   ONLINE_GATEWAY
+  BANK_RECEIPT
 }
 
 enum ReservationPermitStatus {
@@ -743,6 +745,8 @@ model ReservationMember {
   insurancePlanId          String?
   insurancePlan            ReceptionInsurancePlan? @relation(fields: [insurancePlanId], references: [id], onDelete: SetNull)
   insurancePaymentRef      String?
+  insuranceReceiptDate     DateTime? @db.Date
+  insuranceReceiptBankName String?
   insurancePaidMethod      ReservationMemberInsurancePaidMethod?
   insurancePaidById        String?
   insurancePaidBy          User? @relation("ReservationMemberInsurancePayer", fields: [insurancePaidById], references: [id], onDelete: Restrict)
@@ -811,17 +815,29 @@ model ReceptionSettings {
   /// MIXED allows both genders in one accommodation only if it has capacity for each.
   placementGenderPolicy PlacementGenderPolicy @default(SINGLE_GENDER)
 
-  insuranceOrganization String @default("")
-  insurancePlans        ReceptionInsurancePlan[]
+  insuranceOrganization   String @default("")
+  insuranceBankAccountId  String?
+  insuranceBankAccount    BankAccount? @relation(fields: [insuranceBankAccountId], references: [id], onDelete: SetNull)
+  insurancePlans          ReceptionInsurancePlan[]
 
   imamRezaMartyrdomDate DateTime? @db.Date
   prophetDemiseDate     DateTime? @db.Date
+
+  helpTravel             String @default("")
+  helpReview             String @default("")
+  helpCompanions         String @default("")
+  helpCompanionsCaravan  String @default("")
+  helpContacts           String @default("")
+  helpInsurance          String @default("")
+  helpComplete           String @default("")
+  helpPlacement          String @default("")
 
   featureCountries ReceptionSettingsCountry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([insuranceBankAccountId])
   @@map("reception_settings")
 }
 
@@ -1290,6 +1306,8 @@ model WalkingStation {
   neshanAddress       String?
   maleCount           Int                   @default(0)
   femaleCount         Int                   @default(0)
+  managerUserId       String?
+  manager             User?                 @relation("WalkingStationManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   managerName         String?
   managerPhone        String?
   managerTelegram     String?
@@ -1315,6 +1333,7 @@ model WalkingStation {
 
   @@index([cityId])
   @@index([name])
+  @@index([managerUserId])
   @@map("walking_stations")
 }
 
@@ -1374,9 +1393,11 @@ model ReservationStationStay {
   walkingStationId String
   walkingStation   WalkingStation               @relation(fields: [walkingStationId], references: [id], onDelete: Restrict)
   stayDate         DateTime                     @db.Date
+  mealType         MealType                     @default(LUNCH)
   maleCount        Int
   femaleCount      Int
   status           ReservationStationStayStatus @default(RESERVED)
+  present          Boolean                      @default(false)
   reservedAt       DateTime                     @default(now())
   reservedById     String
   reservedBy       User                         @relation("StationStayReservedBy", fields: [reservedById], references: [id], onDelete: Restrict)
@@ -1912,9 +1933,10 @@ model BankAccount {
   cardNumber    String?
   iban          String
   isActive      Boolean                  @default(true)
-  campaigns     ParticipationCampaign[]
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  campaigns          ParticipationCampaign[]
+  receptionSettings  ReceptionSettings[]
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
 
   @@index([bankName])
   @@index([isActive])

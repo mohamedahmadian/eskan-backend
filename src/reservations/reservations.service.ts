@@ -34,6 +34,7 @@ import {
   AllocationStatus,
   CaravanContactRole,
   IssuedLicenseStatus,
+  MealType,
   PlacementGenderPolicy,
   PlacementMode,
   PlacementStatus,
@@ -70,10 +71,18 @@ import { RejectReservationPermitDto } from './dto/reject-reservation-permit.dto'
 import { ReservationPermitOptionsQueryDto } from './dto/reservation-permit-options-query.dto';
 import { SetReservationContactDto } from './dto/set-reservation-contact.dto';
 import { UpdateMemberInsuranceDto } from './dto/update-member-insurance.dto';
+import {
+  InsurancePaymentMethod,
+  PayReservationInsuranceDto,
+} from './dto/pay-reservation-insurance.dto';
 import { UpdateReceptionSettingsDto } from './dto/update-reception-settings.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { UpdateReservationPermitDto } from './dto/update-reservation-permit.dto';
-import { ReserveStationStayDto } from './dto/reserve-station-stay.dto';
+import {
+  AutoReserveStationStaysDto,
+  ReserveStationStayDto,
+  type StationMealType,
+} from './dto/reserve-station-stay.dto';
 import {
   emptyFeatureCountryLists,
   featuresFromCountryLists,
@@ -113,7 +122,6 @@ type Actor = RoleBearer & { id: string };
 type Tx = Prisma.TransactionClient;
 
 const INSURANCE_OK: ReservationMemberInsuranceStatus[] = [
-  ReservationMemberInsuranceStatus.PAID,
   ReservationMemberInsuranceStatus.APPROVED,
 ];
 
@@ -129,6 +137,7 @@ const userSelect = {
   fullName: true,
   nationalId: true,
   phone: true,
+  eitaa: true,
   gender: true,
   birthDate: true,
   status: true,
@@ -154,6 +163,7 @@ const reservationInclude = {
       id: true,
       name: true,
       managerUserId: true,
+      eitaa: true,
       maleCount: true,
       femaleCount: true,
       totalCount: true,
@@ -310,9 +320,19 @@ const emptySettings = (year: number) => ({
   caravanRules: '',
   placementGenderPolicy: PlacementGenderPolicy.SINGLE_GENDER,
   insuranceOrganization: '',
+  insuranceBankAccountId: null,
+  insuranceBankAccount: null,
   insurancePlans: [],
   imamRezaMartyrdomDate: null,
   prophetDemiseDate: null,
+  helpTravel: '',
+  helpReview: '',
+  helpCompanions: '',
+  helpCompanionsCaravan: '',
+  helpContacts: '',
+  helpInsurance: '',
+  helpComplete: '',
+  helpPlacement: '',
   mashhadPlacementCountries: [],
   routePlacementCountries: [],
   companionsCountries: [],
@@ -331,6 +351,13 @@ type SettingsWithPlans = ReceptionSettings & {
     description: string;
     sortOrder: number;
   }[];
+  insuranceBankAccount: {
+    id: string;
+    bankName: string;
+    accountNumber: string;
+    cardNumber: string | null;
+    iban: string;
+  } | null;
   featureCountries: {
     feature: ReceptionFeature;
     country: { id: string; iso2: string; nameFa: string; nameEn: string };
@@ -398,6 +425,16 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
       ReceptionFeature.CARAVAN_CONTACTS,
     ),
     insuranceOrganization: row.insuranceOrganization ?? '',
+    insuranceBankAccountId: row.insuranceBankAccountId ?? null,
+    insuranceBankAccount: row.insuranceBankAccount
+      ? {
+          id: row.insuranceBankAccount.id,
+          bankName: row.insuranceBankAccount.bankName,
+          accountNumber: row.insuranceBankAccount.accountNumber,
+          cardNumber: row.insuranceBankAccount.cardNumber,
+          iban: row.insuranceBankAccount.iban,
+        }
+      : null,
     insurancePlans: (row.insurancePlans ?? []).map((plan) => ({
       id: plan.id,
       coverageAmount: plan.coverageAmount,
@@ -407,6 +444,14 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     })),
     imamRezaMartyrdomDate: toDateOnly(row.imamRezaMartyrdomDate),
     prophetDemiseDate: toDateOnly(row.prophetDemiseDate),
+    helpTravel: row.helpTravel ?? '',
+    helpReview: row.helpReview ?? '',
+    helpCompanions: row.helpCompanions ?? '',
+    helpCompanionsCaravan: row.helpCompanionsCaravan ?? '',
+    helpContacts: row.helpContacts ?? '',
+    helpInsurance: row.helpInsurance ?? '',
+    helpComplete: row.helpComplete ?? '',
+    helpPlacement: row.helpPlacement ?? '',
   };
 }
 
@@ -414,6 +459,7 @@ const settingsInclude = {
   insurancePlans: {
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
   },
+  insuranceBankAccount: true,
   featureCountries: {
     include: { country: { select: countryGeoSelect } },
     orderBy: { country: { sortOrder: 'asc' as const } },
@@ -474,6 +520,15 @@ export class ReservationsService {
       ...rest
     } = dto;
     this.assertOccasionDates(prophetDemiseDate, imamRezaMartyrdomDate);
+    if (rest.insuranceBankAccountId) {
+      const account = await this.prisma.bankAccount.findFirst({
+        where: { id: rest.insuranceBankAccountId, isActive: true },
+        select: { id: true },
+      });
+      if (!account) {
+        throw new BadRequestException('حساب بانکی بیمه معتبر نیست');
+      }
+    }
     const featureRows = await this.featureCountryRows({
       mashhadPlacementCountryIds,
       routePlacementCountryIds,
@@ -687,8 +742,8 @@ export class ReservationsService {
     const createdById = await this.resolveCreatedById(dto.createdById, actor);
     const caravan = await this.resolveCaravan(dto, actor);
     const group = await this.resolveGroup(dto, actor);
-    const originCountryId = await this.resolveOriginCountryId(this.prisma, {
-      walkingRouteId: dto.walkingRouteId ?? null,
+    const originCountryId = await this.resolvePilgrimOriginCountryId(this.prisma, {
+      createdById,
       caravanId: caravan?.id ?? null,
       groupId: group?.id ?? null,
     });
@@ -697,6 +752,12 @@ export class ReservationsService {
       originCountryId,
       dto.type,
     );
+    if (dto.walkingRouteId) {
+      await this.assertWalkingRouteForPilgrimCountry(
+        dto.walkingRouteId,
+        originCountryId,
+      );
+    }
     if (!asDraft) {
       if (dto.type === ReservationType.CARAVAN && !caravan) {
         throw new BadRequestException('کاروان را انتخاب کنید');
@@ -936,15 +997,21 @@ export class ReservationsService {
       );
     }
 
-    const originCountryId = await this.resolveOriginCountryId(this.prisma, {
-      walkingRouteId:
-        dto.walkingRouteId === undefined
-          ? current.walkingRouteId
-          : dto.walkingRouteId,
+    const originCountryId = await this.resolvePilgrimOriginCountryId(this.prisma, {
+      createdById: current.createdById,
       caravanId: caravan?.id ?? null,
       groupId: group?.id ?? null,
     });
     await this.assertTypeAllowedForOriginCountry(year, originCountryId, type);
+    const routeTouched = dto.walkingRouteId !== undefined;
+    const routeChanged =
+      routeTouched && dto.walkingRouteId !== current.walkingRouteId;
+    if (routeChanged && dto.walkingRouteId) {
+      await this.assertWalkingRouteForPilgrimCountry(
+        dto.walkingRouteId,
+        originCountryId,
+      );
+    }
 
     const data: Prisma.ReservationUncheckedUpdateInput = {
       type,
@@ -2453,35 +2520,37 @@ export class ReservationsService {
     if (accepted && !member.insurancePaidAmount) {
       plan = await this.requireInsurancePlan(current.year, dto.insurancePlanId);
     }
-    await this.prisma.reservationMember.update({
-      where: { id: memberId },
-      data: {
-        insuranceStatus: accepted
-          ? ReservationMemberInsuranceStatus.APPROVED
-          : dto.status,
-        insuranceManualNote: dto.note?.trim() || null,
-        insurancePaidAt: accepted ? (member.insurancePaidAt ?? now) : null,
-        insurancePaidAmount: accepted
-          ? (member.insurancePaidAmount ?? plan?.premiumAmount ?? 0)
-          : null,
-        insuranceCoverageAmount: accepted
-          ? (member.insuranceCoverageAmount ?? plan?.coverageAmount ?? null)
-          : null,
-        insurancePlanId: accepted
-          ? (member.insurancePlanId ?? plan?.id ?? null)
-          : null,
-        insurancePaidMethod: accepted
-          ? (member.insurancePaidMethod ??
-            ReservationMemberInsurancePaidMethod.MANAGEMENT)
-          : null,
-        insurancePaidById: accepted
-          ? (member.insurancePaidById ?? actor.id)
-          : null,
-        insuranceVerifiedAt: accepted ? now : null,
-        insuranceVerifiedById: accepted ? actor.id : null,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.reservationMember.update({
+        where: { id: memberId },
+        data: {
+          insuranceStatus: accepted
+            ? ReservationMemberInsuranceStatus.APPROVED
+            : dto.status,
+          insuranceManualNote: dto.note?.trim() || null,
+          insurancePaidAt: accepted ? (member.insurancePaidAt ?? now) : null,
+          insurancePaidAmount: accepted
+            ? (member.insurancePaidAmount ?? plan?.premiumAmount ?? 0)
+            : null,
+          insuranceCoverageAmount: accepted
+            ? (member.insuranceCoverageAmount ?? plan?.coverageAmount ?? null)
+            : null,
+          insurancePlanId: accepted
+            ? (member.insurancePlanId ?? plan?.id ?? null)
+            : null,
+          insurancePaidMethod: accepted
+            ? (member.insurancePaidMethod ??
+              ReservationMemberInsurancePaidMethod.MANAGEMENT)
+            : null,
+          insurancePaidById: accepted
+            ? (member.insurancePaidById ?? actor.id)
+            : null,
+          insuranceVerifiedAt: accepted ? now : null,
+          insuranceVerifiedById: accepted ? actor.id : null,
+        },
+      });
+      return this.maybeFinishAfterInsurance(tx, id, actor);
     });
-    return this.serialize(await this.requireReservation(id), actor);
   }
 
   async getInsurance(id: string, actor: Actor) {
@@ -2492,8 +2561,7 @@ export class ReservationsService {
 
   async payInsurance(
     id: string,
-    memberIds: string[],
-    insurancePlanId: string,
+    dto: PayReservationInsuranceDto,
     actor: Actor,
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -2503,11 +2571,12 @@ export class ReservationsService {
       await this.markMembersPaid(
         tx,
         current,
-        memberIds,
-        insurancePlanId,
+        dto.memberIds,
+        dto.insurancePlanId,
         actor,
+        dto,
       );
-      return this.serialize(await this.requireReservation(id, tx), actor);
+      return this.maybeFinishAfterInsurance(tx, id, actor);
     });
   }
 
@@ -2572,6 +2641,23 @@ export class ReservationsService {
         .filter((item) => item.status === ReservationStationStayStatus.RESERVED)
         .map((item) => [item.walkingStationId, item]),
     );
+    const occupancyRows = await this.prisma.reservationStationStay.groupBy({
+      by: ['walkingStationId'],
+      where: {
+        walkingStationId: { in: stages.map((stage) => stage.walkingStationId) },
+        status: ReservationStationStayStatus.RESERVED,
+      },
+      _sum: { maleCount: true, femaleCount: true },
+    });
+    const occupancyByStation = new Map(
+      occupancyRows.map((row) => [
+        row.walkingStationId,
+        {
+          male: row._sum.maleCount ?? 0,
+          female: row._sum.femaleCount ?? 0,
+        },
+      ]),
+    );
     return {
       walkingRoute: current.walkingRoute,
       maleCount: current.maleCount || current.requestedMaleCount,
@@ -2579,6 +2665,7 @@ export class ReservationsService {
       stages: stages.map((stage) => {
         const station = stage.walkingStation;
         const stay = activeByStation.get(station.id) ?? null;
+        const occupied = occupancyByStation.get(station.id) ?? { male: 0, female: 0 };
         return {
           stageId: stage.id,
           stageNumber: stage.stageNumber,
@@ -2587,13 +2674,18 @@ export class ReservationsService {
           city: station.city,
           maleCount: station.maleCount,
           femaleCount: station.femaleCount,
+          occupiedMaleCount: occupied.male,
+          occupiedFemaleCount: occupied.female,
           managerName: station.managerName,
           managerPhone: station.managerPhone,
+          address: station.address,
           stay: stay
             ? {
                 id: stay.id,
                 stayDate: toDateOnly(stay.stayDate),
+                mealType: stay.mealType,
                 status: stay.status,
+                present: stay.present,
                 maleCount: stay.maleCount,
                 femaleCount: stay.femaleCount,
               }
@@ -2632,37 +2724,106 @@ export class ReservationsService {
     if (!onRoute) {
       throw new BadRequestException('این ایستگاه در مسیر پرونده نیست');
     }
-    const stayDate = parseIsoDate(dto.stayDate);
+    return this.upsertStationStay(
+      this.prisma,
+      current,
+      dto.walkingStationId,
+      parseIsoDate(dto.stayDate),
+      dto.mealType,
+      actor.id,
+    );
+  }
+
+  async autoReserveStationStays(
+    id: string,
+    dto: AutoReserveStationStaysDto,
+    actor: Actor,
+  ) {
+    const current = await this.requireReservation(id);
+    this.assertOwnerOrAdmin(current, actor);
+    this.assertNotCancelled(current);
+    const features = await this.featuresFor(
+      this.prisma,
+      current.year,
+      current.originCountryId,
+    );
+    if (!features.routePlacement) {
+      throw new ForbiddenException('جانمایی مسیر برای این پرونده فعال نیست');
+    }
+    if (!current.walkingRouteId) {
+      throw new BadRequestException('مسیر پیاده‌روی انتخاب نشده است');
+    }
+    const stages = await this.prisma.walkingRouteStage.findMany({
+      where: { walkingRouteId: current.walkingRouteId },
+      orderBy: { stageNumber: 'asc' },
+      select: { walkingStationId: true },
+    });
+    if (!stages.length) {
+      throw new BadRequestException('ایستگاهی در مسیر پرونده نیست');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      let stayDate = dto.stayDate;
+      let mealType: StationMealType = dto.mealType;
+      for (const stage of stages) {
+        await this.upsertStationStay(
+          tx,
+          current,
+          stage.walkingStationId,
+          parseIsoDate(stayDate),
+          mealType,
+          actor.id,
+        );
+        if (mealType === MealType.DINNER) {
+          stayDate = addDaysIso(stayDate, 1);
+          mealType = MealType.LUNCH;
+        } else {
+          mealType = MealType.DINNER;
+        }
+      }
+    });
+    return this.getRoutePlacement(id, actor);
+  }
+
+  private async upsertStationStay(
+    db: Prisma.TransactionClient | PrismaService,
+    current: { id: string; maleCount: number; requestedMaleCount: number; femaleCount: number; requestedFemaleCount: number },
+    walkingStationId: string,
+    stayDate: Date,
+    mealType: StationMealType,
+    actorId: string,
+  ) {
     const maleCount = current.maleCount || current.requestedMaleCount;
     const femaleCount = current.femaleCount || current.requestedFemaleCount;
-    const existing = await this.prisma.reservationStationStay.findFirst({
+    const existing = await db.reservationStationStay.findFirst({
       where: {
-        reservationId: id,
-        walkingStationId: dto.walkingStationId,
+        reservationId: current.id,
+        walkingStationId,
         status: ReservationStationStayStatus.RESERVED,
       },
     });
     if (existing) {
-      const updated = await this.prisma.reservationStationStay.update({
+      const updated = await db.reservationStationStay.update({
         where: { id: existing.id },
         data: {
           stayDate,
+          mealType,
           maleCount,
           femaleCount,
           reservedAt: new Date(),
-          reservedById: actor.id,
+          reservedById: actorId,
         },
       });
       return this.serializeStationStay(updated);
     }
-    const created = await this.prisma.reservationStationStay.create({
+    const created = await db.reservationStationStay.create({
       data: {
-        reservationId: id,
-        walkingStationId: dto.walkingStationId,
+        reservationId: current.id,
+        walkingStationId,
         stayDate,
+        mealType,
         maleCount,
         femaleCount,
-        reservedById: actor.id,
+        reservedById: actorId,
       },
     });
     return this.serializeStationStay(created);
@@ -2695,9 +2856,11 @@ export class ReservationsService {
     id: string;
     walkingStationId: string;
     stayDate: Date;
+    mealType: MealType;
     maleCount: number;
     femaleCount: number;
     status: ReservationStationStayStatus;
+    present: boolean;
     reservedAt: Date;
     cancelledAt: Date | null;
     evacuatedAt: Date | null;
@@ -2706,9 +2869,11 @@ export class ReservationsService {
       id: stay.id,
       walkingStationId: stay.walkingStationId,
       stayDate: toDateOnly(stay.stayDate),
+      mealType: stay.mealType,
       maleCount: stay.maleCount,
       femaleCount: stay.femaleCount,
       status: stay.status,
+      present: stay.present,
       reservedAt: stay.reservedAt.toISOString(),
       cancelledAt: stay.cancelledAt?.toISOString() ?? null,
       evacuatedAt: stay.evacuatedAt?.toISOString() ?? null,
@@ -2863,18 +3028,19 @@ export class ReservationsService {
       });
     }
 
-    const updated = await this.prisma.reservation.update({
-      where: { id },
-      data: {
-        hasPermit: true,
-        permitStatus: ReservationPermitStatus.APPROVED,
-        permitReviewedAt: new Date(),
-        permitReviewedById: actor.id,
-        permitRejectionReason: null,
-      },
-      include: reservationInclude,
+    return this.prisma.$transaction(async (tx) => {
+      await tx.reservation.update({
+        where: { id },
+        data: {
+          hasPermit: true,
+          permitStatus: ReservationPermitStatus.APPROVED,
+          permitReviewedAt: new Date(),
+          permitReviewedById: actor.id,
+          permitRejectionReason: null,
+        },
+      });
+      return this.maybeFinishAfterInsurance(tx, id, actor);
     });
-    return this.serialize(updated, actor);
   }
 
   async rejectPermit(
@@ -3228,11 +3394,15 @@ export class ReservationsService {
     if (current.type === ReservationType.GROUP && !current.groupId) {
       throw new BadRequestException('گروه را انتخاب کنید');
     }
-    const originCountryId = await this.resolveOriginCountryId(tx, {
-      walkingRouteId: current.walkingRouteId,
+    const originCountryId = await this.resolvePilgrimOriginCountryId(tx, {
+      createdById: current.createdById,
       caravanId: current.caravanId,
       groupId: current.groupId,
     });
+    await this.assertWalkingRouteForPilgrimCountry(
+      current.walkingRouteId,
+      originCountryId,
+    );
     const international = await this.isNonIranOrigin(tx, originCountryId);
     const features = await this.featuresFor(tx, current.year, originCountryId);
     const waivePermit =
@@ -3638,15 +3808,14 @@ export class ReservationsService {
     return Boolean(country?.iso2 && country.iso2 !== 'IR');
   }
 
-  private async resolveOriginCountryId(
+  private async resolvePilgrimOriginCountryId(
     db: Tx | PrismaService,
     input: {
-      walkingRouteId?: string | null;
+      createdById?: string | null;
       caravanId?: string | null;
       groupId?: string | null;
     },
   ): Promise<string | null> {
-    let partyCountryId: string | null = null;
     if (input.caravanId) {
       const caravan = await db.caravan.findUnique({
         where: { id: input.caravanId },
@@ -3654,36 +3823,53 @@ export class ReservationsService {
           city: { select: { province: { select: { countryId: true } } } },
         },
       });
-      partyCountryId = caravan?.city.province.countryId ?? null;
-    } else if (input.groupId) {
+      const countryId = caravan?.city.province.countryId ?? null;
+      if (countryId) return countryId;
+    }
+    if (input.groupId) {
       const group = await db.group.findUnique({
         where: { id: input.groupId },
         select: {
           city: { select: { province: { select: { countryId: true } } } },
         },
       });
-      partyCountryId = group?.city.province.countryId ?? null;
+      const countryId = group?.city.province.countryId ?? null;
+      if (countryId) return countryId;
     }
-
-    if (input.walkingRouteId) {
-      const origins = await db.walkingRouteOriginCountry.findMany({
-        where: { walkingRouteId: input.walkingRouteId },
-        include: { country: { select: { id: true, sortOrder: true, nameFa: true } } },
+    if (input.createdById) {
+      const user = await db.user.findUnique({
+        where: { id: input.createdById },
+        select: { countryId: true },
       });
-      if (origins.length) {
-        if (partyCountryId && origins.some((row) => row.countryId === partyCountryId)) {
-          return partyCountryId;
-        }
-        if (origins.length === 1) return origins[0].countryId;
-        const ordered = [...origins].sort(
-          (a, b) =>
-            a.country.sortOrder - b.country.sortOrder ||
-            a.country.nameFa.localeCompare(b.country.nameFa),
-        );
-        return ordered[0]?.countryId ?? partyCountryId;
-      }
+      return user?.countryId ?? null;
     }
-    return partyCountryId;
+    return null;
+  }
+
+  private async assertWalkingRouteForPilgrimCountry(
+    walkingRouteId: string | null | undefined,
+    pilgrimCountryId: string | null | undefined,
+  ) {
+    if (!walkingRouteId || !pilgrimCountryId) return;
+    const origins = await this.prisma.walkingRouteOriginCountry.findMany({
+      where: { walkingRouteId },
+      include: {
+        country: { select: { id: true, sortOrder: true, nameFa: true } },
+      },
+    });
+    if (!origins.length) return;
+    if (origins.some((row) => row.countryId === pilgrimCountryId)) return;
+    const names = [...origins]
+      .sort(
+        (a, b) =>
+          a.country.sortOrder - b.country.sortOrder ||
+          a.country.nameFa.localeCompare(b.country.nameFa, 'fa'),
+      )
+      .map((row) => row.country.nameFa)
+      .join('، ');
+    throw new BadRequestException(
+      `مسیر انتخاب‌شده صرفاً برای زائران از کشورهای ${names} می‌باشد.`,
+    );
   }
 
   private skippedStepStamps(
@@ -3750,6 +3936,9 @@ export class ReservationsService {
     stayStart?: string | null,
     stayEnd?: string | null,
   ) {
+    if (!walkingStart) {
+      throw new BadRequestException('تاریخ شروع پیاده‌روی را وارد کنید');
+    }
     if (!stayStart) {
       throw new BadRequestException('تاریخ رسیدن به مشهد مقدس را وارد کنید');
     }
@@ -3761,9 +3950,9 @@ export class ReservationsService {
         'تاریخ شروع پیاده‌روی باید قبل از تاریخ رسیدن به مشهد باشد',
       );
     }
-    if (stayStart && stayEnd && stayEnd <= stayStart) {
+    if (stayStart && stayEnd && stayEnd < stayStart) {
       throw new BadRequestException(
-        'تاریخ پایان اقامت باید بعد از تاریخ رسیدن به مشهد باشد',
+        'تاریخ پایان اقامت باید مساوی یا بعد از تاریخ رسیدن به مشهد باشد',
       );
     }
   }
@@ -3817,8 +4006,8 @@ export class ReservationsService {
     return {
       total: members.length,
       pending,
-      paid: 0,
-      approved: paid + approved,
+      paid,
+      approved,
       rejected,
       completed: members.length > 0 && pending === 0 && rejected === 0,
     };
@@ -3843,6 +4032,10 @@ export class ReservationsService {
     memberIds: string[],
     insurancePlanId: string,
     actor: Actor,
+    dto?: Pick<
+      PayReservationInsuranceDto,
+      'method' | 'receiptDate' | 'receiptTrackingNo' | 'receiptBankName'
+    >,
   ) {
     const uniqueIds = [...new Set(memberIds)];
     const payable = uniqueIds
@@ -3865,7 +4058,55 @@ export class ReservationsService {
     if (!plan) {
       throw new BadRequestException('پوشش بیمه معتبر نیست');
     }
+
+    const method = dto?.method ?? InsurancePaymentMethod.ONLINE;
     const now = new Date();
+
+    if (method === InsurancePaymentMethod.RECEIPT) {
+      if (isAdmin(actor)) {
+        throw new BadRequestException(
+          'ثبت فیش پرداختی فقط برای زائران امکان‌پذیر است',
+        );
+      }
+      const settings = await tx.receptionSettings.findUnique({
+        where: { year: reservation.year },
+        select: { insuranceBankAccountId: true },
+      });
+      if (!settings?.insuranceBankAccountId) {
+        throw new BadRequestException(
+          'امکان پرداخت بیمه با ثبت فیش برای این سال فعال نیست',
+        );
+      }
+      const receiptDate = parseOptionalIsoDate(dto?.receiptDate);
+      const trackingNo = dto?.receiptTrackingNo?.trim();
+      const bankName = dto?.receiptBankName?.trim();
+      if (!receiptDate || !trackingNo || !bankName) {
+        throw new BadRequestException('اطلاعات فیش پرداختی را کامل وارد کنید');
+      }
+      await tx.reservationMember.updateMany({
+        where: {
+          id: { in: payable.map((item) => item.id) },
+          reservationId: reservation.id,
+        },
+        data: {
+          insuranceStatus: ReservationMemberInsuranceStatus.PAID,
+          insurancePaidAt: now,
+          insurancePaidAmount: plan.premiumAmount,
+          insuranceCoverageAmount: plan.coverageAmount,
+          insurancePlanId: plan.id,
+          insurancePaymentRef: trackingNo,
+          insuranceReceiptDate: receiptDate,
+          insuranceReceiptBankName: bankName,
+          insurancePaidMethod: ReservationMemberInsurancePaidMethod.BANK_RECEIPT,
+          insurancePaidById: actor.id,
+          insuranceManualNote: null,
+          insuranceVerifiedAt: null,
+          insuranceVerifiedById: null,
+        },
+      });
+      return;
+    }
+
     await tx.reservationMember.updateMany({
       where: {
         id: { in: payable.map((item) => item.id) },
@@ -3877,6 +4118,9 @@ export class ReservationsService {
         insurancePaidAmount: plan.premiumAmount,
         insuranceCoverageAmount: plan.coverageAmount,
         insurancePlanId: plan.id,
+        insurancePaymentRef: null,
+        insuranceReceiptDate: null,
+        insuranceReceiptBankName: null,
         insurancePaidMethod: isAdmin(actor)
           ? ReservationMemberInsurancePaidMethod.MANAGEMENT
           : ReservationMemberInsurancePaidMethod.ONLINE_GATEWAY,
@@ -3899,6 +4143,23 @@ export class ReservationsService {
       (item) => item.user.gender === UserGender.FEMALE,
     ).length;
     return male === current.maleCount && female === current.femaleCount;
+  }
+
+  private async maybeFinishAfterInsurance(
+    tx: Tx,
+    reservationId: string,
+    actor: Actor,
+  ) {
+    const current = await this.requireReservation(reservationId, tx);
+    if (current.status !== ReservationStatus.INSURANCE) {
+      return this.serialize(current, actor);
+    }
+    try {
+      this.assertCanComplete(current);
+    } catch {
+      return this.serialize(current, actor);
+    }
+    return this.finishReservation(tx, current, actor);
   }
 
   private async finishReservation(
@@ -4803,6 +5064,8 @@ export class ReservationsService {
       insuranceCoverageAmount: item.insuranceCoverageAmount,
       insurancePlanId: item.insurancePlanId,
       insurancePaymentRef: item.insurancePaymentRef,
+      insuranceReceiptDate: toDateOnly(item.insuranceReceiptDate),
+      insuranceReceiptBankName: item.insuranceReceiptBankName,
       insurancePaidMethod: item.insurancePaidMethod,
       insurancePaidById: item.insurancePaidById,
       insurancePaidBy: item.insurancePaidBy
