@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -16,12 +17,17 @@ export class SetReservationContactDto {
   @IsEnum(CaravanContactRole)
   role: CaravanContactRole;
 
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+
   @Transform(({ value }) =>
     typeof value === 'string' ? normalizeNationalId(value) : value,
   )
+  @ValidateIf((dto: SetReservationContactDto) => !dto.userId)
   @IsString()
   @IsIranianNationalId({ message: 'کد ملی معتبر نیست' })
-  nationalId: string;
+  nationalId?: string;
 
   @IsOptional()
   @IsString()

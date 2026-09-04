@@ -268,6 +268,7 @@ export class AuthService {
                     'dashboard.overview',
                     'honorary-service.apply',
                     'honorary-service.history',
+                    'participations.home',
                     'reservations.mine',
                   ],
                 },

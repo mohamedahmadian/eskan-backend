@@ -176,7 +176,6 @@ export class ReservationsController {
   }
 
   @Post(':id/route-placement')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   reserveStationStay(
     @Param('id') id: string,
     @Body() dto: ReserveStationStayDto,
@@ -186,7 +185,6 @@ export class ReservationsController {
   }
 
   @Post(':id/route-placement/auto')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   autoReserveStationStays(
     @Param('id') id: string,
     @Body() dto: AutoReserveStationStaysDto,
@@ -196,7 +194,6 @@ export class ReservationsController {
   }
 
   @Post(':id/route-placement/:stayId/cancel')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   cancelStationStay(
     @Param('id') id: string,
     @Param('stayId') stayId: string,

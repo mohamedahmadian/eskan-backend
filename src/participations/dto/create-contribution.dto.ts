@@ -1,71 +1,70 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
-  IsLatitude,
-  IsLongitude,
+  IsIn,
+  IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  MinLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
-import { emptyToNull, toOptionalNumber } from '../../common/dto-transform';
+import { emptyToNull, emptyToUndefined, toOptionalNumber } from '../../common/dto-transform';
+import { contributionTypes } from '../participations.constants';
 
-export class CreateBenefactorDto {
-  @IsString()
-  @MinLength(1)
-  firstName: string;
+export class CreateContributionDto {
+  @IsIn([...contributionTypes])
+  type: (typeof contributionTypes)[number];
 
   @IsOptional()
-  @IsString()
-  lastName?: string;
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsUUID()
+  benefactorId?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  amount: number;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsString()
-  nationalId?: string | null;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  quantity?: number | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsUUID()
-  provinceId?: string | null;
+  goodsId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsUUID()
-  cityId?: string | null;
+  unitId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsString()
-  phone?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  address?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
-  @IsString()
-  neshanAddress?: string | null;
+  @IsUUID()
+  campaignId?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => toOptionalNumber(value))
   @ValidateIf((_, value) => value != null)
-  @IsLatitude()
-  latitude?: number | null;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  shareCount?: number | null;
 
   @IsOptional()
-  @Transform(({ value }) => toOptionalNumber(value))
+  @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsLongitude()
-  longitude?: number | null;
+  @IsString()
+  trackingCode?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

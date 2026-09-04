@@ -137,8 +137,19 @@ const CAMPAIGNS = [
   },
 ] as const;
 
+function splitPersonName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return { firstName: 'ناشناس', lastName: '' };
+  }
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' };
+  }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
 const PARTICIPANTS = [
-  { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000001', campaignId: CAMPAIGNS[0].id, fullName: 'علی رضایی', phone: '09121112233', shareCount: 50 },
+  { id: 'a1b2c3d4-e5f6-4a66-8b66-000000000001', campaignId: CAMPAIGNS[0].id, fullName: 'علی رضایی', phone: '09121112233', shareCount: 50 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000002', campaignId: CAMPAIGNS[0].id, fullName: 'زهرا محمدی', phone: '09123334455', shareCount: 120 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000003', campaignId: CAMPAIGNS[0].id, fullName: 'حسین کریمی', phone: '09351112233', shareCount: 80 },
   { id: 'a1b2c3d4-e5f6-4a44-8b44-000000000004', campaignId: CAMPAIGNS[0].id, fullName: 'فاطمه احمدی', phone: '09125556677', shareCount: 200 },
@@ -244,30 +255,47 @@ export async function seedParticipationsData(prisma: PrismaClient) {
   }
 
   for (const item of PARTICIPANTS) {
+    const names = splitPersonName(item.fullName);
+    const benefactorId = item.id.replace('8b66', '8b77').replace('8b44', '8b77');
+    await prisma.benefactor.upsert({
+      where: { id: benefactorId },
+      update: {
+        firstName: names.firstName,
+        lastName: names.lastName,
+        name: item.fullName,
+        phone: item.phone,
+      },
+      create: {
+        id: benefactorId,
+        firstName: names.firstName,
+        lastName: names.lastName,
+        name: item.fullName,
+        phone: item.phone,
+      },
+    });
     const sharePrice = sharePriceByCampaign.get(item.campaignId) ?? 0;
-    const paidAmount = item.shareCount * sharePrice;
-    await prisma.campaignParticipant.upsert({
+    await prisma.contribution.upsert({
       where: { id: item.id },
       update: {
-        campaignId: item.campaignId,
-        fullName: item.fullName,
-        phone: item.phone,
+        type: 'CASH',
+        benefactorId,
+        amount: item.shareCount * sharePrice,
         shareCount: item.shareCount,
-        paidAmount,
+        campaignId: item.campaignId,
       },
       create: {
         id: item.id,
-        campaignId: item.campaignId,
-        fullName: item.fullName,
-        phone: item.phone,
+        type: 'CASH',
+        benefactorId,
+        amount: item.shareCount * sharePrice,
         shareCount: item.shareCount,
-        paidAmount,
+        campaignId: item.campaignId,
       },
     });
   }
 
   const emptyCampaigns = await prisma.participationCampaign.findMany({
-    where: { participants: { none: {} } },
+    where: { contributions: { none: { type: 'CASH' } } },
     select: { id: true, sharePrice: true, totalAmount: true, name: true },
   });
   for (const campaign of emptyCampaigns) {
@@ -282,13 +310,23 @@ export async function seedParticipationsData(prisma: PrismaClient) {
         Math.min(remaining, Math.ceil(targetShares / FILL_NAMES.length) + (index % 3) * 2),
       );
       remaining -= shareCount;
-      await prisma.campaignParticipant.create({
+      const fullName = FILL_NAMES[index];
+      const names = splitPersonName(fullName);
+      const benefactor = await prisma.benefactor.create({
         data: {
-          campaignId: campaign.id,
-          fullName: FILL_NAMES[index],
+          firstName: names.firstName,
+          lastName: names.lastName,
+          name: fullName,
           phone: `0912${String(4000000 + index).slice(-7)}`,
+        },
+      });
+      await prisma.contribution.create({
+        data: {
+          type: 'CASH',
+          benefactorId: benefactor.id,
+          amount: shareCount * campaign.sharePrice,
           shareCount,
-          paidAmount: shareCount * campaign.sharePrice,
+          campaignId: campaign.id,
         },
       });
     }

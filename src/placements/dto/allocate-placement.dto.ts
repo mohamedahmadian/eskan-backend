@@ -26,6 +26,12 @@ export class AllocatePlacementItemDto {
   headcount: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  accommodatedCount?: number;
+
+  @IsOptional()
   @IsBoolean()
   genderOverride?: boolean;
 

@@ -6,6 +6,9 @@ import { sortDirections } from '../../common/sort-query';
 
 export const benefactorSortFields = [
   'name',
+  'firstName',
+  'lastName',
+  'nationalId',
   'phone',
   'province',
   'city',

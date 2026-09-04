@@ -46,6 +46,7 @@ import { FoodsModule } from './foods/foods.module';
 import { RestaurantMealPlansModule } from './restaurant-meal-plans/restaurant-meal-plans.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { WarehouseCalculatorModule } from './warehouse-calculator/warehouse-calculator.module';
+import { DataManagementModule } from './data-management/data-management.module';
 
 @Module({
   imports: [
@@ -95,6 +96,7 @@ import { WarehouseCalculatorModule } from './warehouse-calculator/warehouse-calc
     RestaurantsModule,
     RestaurantMealPlansModule,
     WarehouseCalculatorModule,
+    DataManagementModule,
   ],
   controllers: [AppController],
 })

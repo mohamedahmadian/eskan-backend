@@ -173,6 +173,15 @@ export class AccommodationsController {
     return this.accommodations.removeFromYear(accommodationId, actor, query.year);
   }
 
+  @Get(':id/year-reservations')
+  findYearReservations(
+    @Param('id') id: string,
+    @Query() query: FindAccommodationReportQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.findYearReservations(id, actor, query.year);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
     return this.accommodations.findOne(id, actor);
@@ -203,6 +212,15 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.setYearContacts(id, dto, actor);
+  }
+
+  @Delete(':id/year-contacts/:contactId')
+  removeYearContact(
+    @Param('id') id: string,
+    @Param('contactId') contactId: string,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.removeYearContact(id, contactId, actor);
   }
 
   @Post(':id/activate-year')

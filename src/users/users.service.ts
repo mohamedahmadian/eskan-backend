@@ -2687,11 +2687,14 @@ export class UsersService {
   async findByIdentity(dto: {
     nationalId?: string;
     phone?: string;
+    passportNumber?: string;
     excludeId?: string;
   }) {
     const nationalId = dto.nationalId?.trim() || undefined;
+    const passport = dto.passportNumber?.trim() || undefined;
     const phone = dto.phone?.trim() || undefined;
-    if (!nationalId && !phone) {
+    const identityKey = nationalId || passport;
+    if (!identityKey && !phone) {
       throw new BadRequestException('کد ملی یا شماره تلفن لازم است');
     }
 
@@ -2699,7 +2702,7 @@ export class UsersService {
       where: {
         ...(dto.excludeId ? { NOT: { id: dto.excludeId } } : {}),
         OR: [
-          ...(nationalId ? [{ nationalId }] : []),
+          ...(identityKey ? [{ nationalId: identityKey }] : []),
           ...(phone ? [{ phone }] : []),
         ],
       },

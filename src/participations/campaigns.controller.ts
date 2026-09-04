@@ -17,6 +17,7 @@ import { BankAccountsService } from './bank-accounts.service';
 import { ParticipationCampaignsService } from './campaigns.service';
 import { CryptoWalletsService } from './crypto-wallets.service';
 import { CreateParticipationCampaignDto } from './dto/create-campaign.dto';
+import { FindCampaignReportQueryDto } from './dto/find-campaign-report-query.dto';
 import { FindParticipationCampaignsQueryDto } from './dto/find-campaigns-query.dto';
 import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
 
@@ -63,6 +64,11 @@ export class ParticipationCampaignsController {
   @Get()
   findAll(@Query() query: FindParticipationCampaignsQueryDto) {
     return this.campaigns.findAll(query);
+  }
+
+  @Get('report')
+  report(@Query() query: FindCampaignReportQueryDto) {
+    return this.campaigns.report(query);
   }
 
   @Get(':id')

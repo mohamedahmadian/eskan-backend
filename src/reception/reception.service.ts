@@ -11,8 +11,10 @@ import {
 } from '../common/reservation-code';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-const MATCH_LIMIT = 20;
+import {
+  RECEPTION_SEARCH_PAGE_SIZE,
+  type SearchReceptionQueryDto,
+} from './dto/search-reception.dto';
 
 const geoSelect = {
   id: true,
@@ -93,43 +95,313 @@ const personMatchSelect = {
 
 export type ReceptionKind = 'pilgrim' | 'caravanManager' | 'accommodationManager';
 
+export type ReceptionRecordType =
+  | 'person'
+  | 'reservation'
+  | 'accommodation'
+  | 'walkingStation'
+  | 'benefactor'
+  | 'caravan';
+
+const searchReservationSelect = {
+  id: true,
+  code: true,
+  year: true,
+  type: true,
+  status: true,
+  createdById: true,
+  createdBy: { select: { fullName: true } },
+  caravan: { select: { name: true } },
+  group: { select: { name: true } },
+} satisfies Prisma.ReservationSelect;
+
+const searchPlaceCitySelect = {
+  id: true,
+  nameFa: true,
+  nameEn: true,
+  provinceId: true,
+} satisfies Prisma.CitySelect;
+
 @Injectable()
 export class ReceptionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(q: string) {
+  async search(query: SearchReceptionQueryDto) {
+    const scope = query.scope ?? 'primary';
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const pageSize =
+      query.pageSize && query.pageSize > 0
+        ? Math.min(query.pageSize, 100)
+        : RECEPTION_SEARCH_PAGE_SIZE;
+    if (scope === 'extended') {
+      return this.searchExtended(query.q, page, pageSize);
+    }
+    return this.searchPrimary(query.q, page, pageSize);
+  }
+
+  private pageArgs(page: number, pageSize: number) {
+    return { skip: (page - 1) * pageSize, take: pageSize };
+  }
+
+  private async searchPrimary(q: string, page: number, pageSize: number) {
     const codeQuery = isReservationCodeQuery(q)
       ? normalizeReservationCode(q)
       : '';
     if (codeQuery) {
-      return this.searchByReservationCode(q, codeQuery);
+      return this.searchByReservationCode(q, codeQuery, page, pageSize);
     }
+
     const where = this.searchWhere(q);
+    const reservationWhere = this.reservationSearchWhere(q);
     const digits = normalizeSearchDigits(q);
-    const [total, users] = await Promise.all([
+    const { skip, take } = this.pageArgs(page, pageSize);
+    const [userTotal, users, reservations] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
-        take: MATCH_LIMIT,
+        skip,
+        take,
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
         select: personMatchSelect,
       }),
+      page === 1
+        ? this.prisma.reservation.findMany({
+            where: reservationWhere,
+            take: pageSize,
+            orderBy: [{ year: 'desc' }, { codeSeq: 'asc' }],
+            select: searchReservationSelect,
+          })
+        : Promise.resolve([]),
     ]);
 
     const matches = users
       .map((user) => this.toMatch(user))
       .sort((a, b) => this.matchRank(a, q, digits) - this.matchRank(b, q, digits));
-    const profile = matches.length === 1 ? await this.profile(matches[0].id) : null;
+    const userIds = new Set(users.map((user) => user.id));
+    const extraReservations = reservations.filter(
+      (item) => !userIds.has(item.createdById),
+    );
+    const records = [
+      ...matches.map((item) => this.toPersonRecord(item)),
+      ...extraReservations.map((item) => this.toReservationRecord(item)),
+    ];
+    const profile =
+      page === 1 && userTotal === 1 && extraReservations.length === 0 && matches[0]
+        ? await this.profile(matches[0].id)
+        : null;
 
-    return { q, total, matches, profile };
+    return {
+      q,
+      scope: 'primary' as const,
+      page,
+      pageSize,
+      total: userTotal,
+      matches,
+      records,
+      profile,
+    };
   }
 
-  private async searchByReservationCode(q: string, codeQuery: string) {
+  private async searchExtended(q: string, page: number, pageSize: number) {
+    const text = containsInsensitive(q);
+    const digits = normalizeSearchDigits(q);
+    const placeOr: Prisma.AccommodationWhereInput[] = [
+      { name: text },
+      { phone: text },
+      { address: text },
+      { city: { nameFa: text } },
+      { city: { nameEn: text } },
+    ];
+    if (digits.length >= 4) {
+      placeOr.push({ phone: startsWithInsensitive(digits) });
+    }
+    const stationOr: Prisma.WalkingStationWhereInput[] = [
+      { name: text },
+      { address: text },
+      { managerName: text },
+      { managerPhone: text },
+      { manager: { fullName: text } },
+      { manager: { phone: text } },
+      { city: { nameFa: text } },
+      { city: { nameEn: text } },
+    ];
+    if (digits.length >= 4) {
+      stationOr.push({ managerPhone: startsWithInsensitive(digits) });
+    }
+    const benefactorOr: Prisma.BenefactorWhereInput[] = [
+      { name: text },
+      { firstName: text },
+      { lastName: text },
+      { nationalId: text },
+      { phone: text },
+    ];
+    if (digits.length >= 4) {
+      benefactorOr.push(
+        { nationalId: startsWithInsensitive(digits) },
+        { phone: startsWithInsensitive(digits) },
+      );
+    }
+    const honoraryOr: Prisma.HonoraryServiceAnnouncementWhereInput[] = [
+      { otherDescription: text },
+      { serviceType: { name: text } },
+      { user: { fullName: text } },
+      { user: { firstName: text } },
+      { user: { lastName: text } },
+      { user: { nationalId: text } },
+      { user: { phone: text } },
+    ];
+
+    const caravanOr: Prisma.CaravanWhereInput[] = [
+      { name: text },
+      { description: text },
+      { officeAddress: text },
+      { officePhone: text },
+      { licenseNumber: text },
+      { city: { nameFa: text } },
+      { city: { nameEn: text } },
+      { manager: { fullName: text } },
+    ];
+    if (digits.length >= 4) {
+      caravanOr.push(
+        { officePhone: startsWithInsensitive(digits) },
+        { licenseNumber: startsWithInsensitive(digits) },
+      );
+    }
+
+    const [accommodations, stations, honoraryRows, benefactors, caravans] = await Promise.all([
+      this.prisma.accommodation.findMany({
+        where: { OR: placeOr },
+        take: pageSize,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          type: true,
+          city: { select: searchPlaceCitySelect },
+        },
+      }),
+      this.prisma.walkingStation.findMany({
+        where: { OR: stationOr },
+        take: pageSize,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          managerName: true,
+          managerPhone: true,
+          city: { select: searchPlaceCitySelect },
+        },
+      }),
+      this.prisma.honoraryServiceAnnouncement.findMany({
+        where: { OR: honoraryOr },
+        take: pageSize,
+        orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+        select: { userId: true },
+      }),
+      this.prisma.benefactor.findMany({
+        where: { OR: benefactorOr },
+        take: pageSize,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          nationalId: true,
+          phone: true,
+          city: { select: searchPlaceCitySelect },
+        },
+      }),
+      this.prisma.caravan.findMany({
+        where: { OR: caravanOr },
+        take: pageSize,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          officePhone: true,
+          licenseNumber: true,
+          city: { select: searchPlaceCitySelect },
+        },
+      }),
+    ]);
+
+    const honoraryUserIds = [...new Set(honoraryRows.map((row) => row.userId))];
+    const honoraryUsers = honoraryUserIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: honoraryUserIds } },
+          take: pageSize,
+          orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+          select: personMatchSelect,
+        })
+      : [];
+    const matches = honoraryUsers.map((user) => this.toMatch(user));
+    const records = [
+      ...matches.map((item) => this.toPersonRecord(item)),
+      ...accommodations.map((item) => ({
+        type: 'accommodation' as const,
+        id: item.id,
+        title: item.name,
+        subtitle: item.type,
+        phone: item.phone,
+        nationalId: null,
+        city: item.city,
+      })),
+      ...stations.map((item) => ({
+        type: 'walkingStation' as const,
+        id: item.id,
+        title: item.name,
+        subtitle: item.managerName,
+        phone: item.managerPhone,
+        nationalId: null,
+        city: item.city,
+      })),
+      ...benefactors.map((item) => ({
+        type: 'benefactor' as const,
+        id: item.id,
+        title: item.name,
+        subtitle: null,
+        phone: item.phone,
+        nationalId: item.nationalId,
+        city: item.city,
+      })),
+      ...caravans.map((item) => ({
+        type: 'caravan' as const,
+        id: item.id,
+        title: item.name,
+        subtitle: item.licenseNumber,
+        phone: item.officePhone,
+        nationalId: null,
+        city: item.city,
+      })),
+    ];
+    const profile =
+      page === 1 && matches.length === 1 && records.length === 1
+        ? await this.profile(matches[0].id)
+        : null;
+
+    return {
+      q,
+      scope: 'extended' as const,
+      page,
+      pageSize,
+      total: records.length,
+      matches,
+      records,
+      profile,
+    };
+  }
+
+  private async searchByReservationCode(
+    q: string,
+    codeQuery: string,
+    page: number,
+    pageSize: number,
+  ) {
     const reservations = await this.prisma.reservation.findMany({
       where: {
         OR: [{ code: codeQuery }, { code: { startsWith: codeQuery } }],
       },
-      take: MATCH_LIMIT,
+      take: pageSize,
       orderBy: [{ year: 'desc' }, { codeSeq: 'asc' }],
       select: { createdById: true, code: true },
     });
@@ -140,17 +412,44 @@ export class ReceptionService {
       ),
     ];
     if (!userIds.length) {
-      return { q, total: 0, matches: [], profile: null };
+      return {
+        q,
+        scope: 'primary' as const,
+        page,
+        pageSize,
+        total: 0,
+        matches: [],
+        records: [],
+        profile: null,
+      };
     }
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: userIds } },
-      take: MATCH_LIMIT,
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
-      select: personMatchSelect,
-    });
+    const { skip, take } = this.pageArgs(page, pageSize);
+    const [userTotal, users] = await Promise.all([
+      this.prisma.user.count({ where: { id: { in: userIds } } }),
+      this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        skip,
+        take,
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+        select: personMatchSelect,
+      }),
+    ]);
     const matches = users.map((user) => this.toMatch(user));
-    const profile = matches.length === 1 ? await this.profile(matches[0].id) : null;
-    return { q, total: matches.length, matches, profile };
+    const records = matches.map((item) => this.toPersonRecord(item));
+    const profile =
+      page === 1 && userTotal === 1 && matches[0]
+        ? await this.profile(matches[0].id)
+        : null;
+    return {
+      q,
+      scope: 'primary' as const,
+      page,
+      pageSize,
+      total: userTotal,
+      matches,
+      records,
+      profile,
+    };
   }
 
   async profile(id: string) {
@@ -569,6 +868,57 @@ export class ReceptionService {
       assignedFemaleCapacity: item.assignedFemaleCapacity,
       city: item.city,
     };
+  }
+
+  private toPersonRecord(item: ReturnType<ReceptionService['toMatch']>) {
+    return {
+      type: 'person' as const,
+      id: item.id,
+      title: item.fullName,
+      subtitle: null as string | null,
+      phone: item.phone,
+      nationalId: item.nationalId,
+      city: item.city,
+      code: null as string | null,
+      person: item,
+    };
+  }
+
+  private toReservationRecord(
+    item: Prisma.ReservationGetPayload<{ select: typeof searchReservationSelect }>,
+  ) {
+    return {
+      type: 'reservation' as const,
+      id: item.id,
+      title: item.code,
+      subtitle: item.caravan?.name ?? item.group?.name ?? item.createdBy.fullName,
+      phone: null,
+      nationalId: null,
+      city: null,
+      code: item.code,
+      year: item.year,
+      reservationType: item.type,
+      status: item.status,
+    };
+  }
+
+  private reservationSearchWhere(q: string): Prisma.ReservationWhereInput {
+    const text = containsInsensitive(q);
+    const digits = normalizeSearchDigits(q);
+    const or: Prisma.ReservationWhereInput[] = [
+      { code: text },
+      { createdBy: { fullName: text } },
+      { createdBy: { nationalId: text } },
+      { caravan: { name: text } },
+      { group: { name: text } },
+    ];
+    if (digits.length >= 4) {
+      or.push(
+        { createdBy: { nationalId: startsWithInsensitive(digits) } },
+        { createdBy: { phone: startsWithInsensitive(digits) } },
+      );
+    }
+    return { OR: or };
   }
 
   private searchWhere(q: string): Prisma.UserWhereInput {

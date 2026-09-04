@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -15,25 +16,33 @@ export class AccommodationContactInputDto {
   @IsEnum(AccommodationContactRole)
   role: AccommodationContactRole;
 
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+
+  @ValidateIf((item: AccommodationContactInputDto) => !item.userId)
   @Transform(({ value }) =>
     typeof value === 'string' ? normalizeNationalId(value) : value,
   )
   @IsString()
   @IsIranianNationalId({ message: 'کد ملی معتبر نیست' })
-  nationalId: string;
+  nationalId?: string;
 
+  @ValidateIf((item: AccommodationContactInputDto) => !item.userId)
   @IsString()
   @MinLength(1)
-  firstName: string;
+  firstName?: string;
 
+  @ValidateIf((item: AccommodationContactInputDto) => !item.userId)
   @IsString()
   @MinLength(1)
-  lastName: string;
+  lastName?: string;
 
+  @ValidateIf((item: AccommodationContactInputDto) => !item.userId)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  phone: string;
+  phone?: string;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))

@@ -82,7 +82,11 @@ async function main() {
       update: {},
       create: { roleId: admin.id, menuId: menu.id },
     });
-    if (pilgrim && item.code === 'participations.campaigns') {
+    const pilgrimMenus = new Set([
+      'participations.home',
+      'participations.campaigns',
+    ]);
+    if (pilgrim && pilgrimMenus.has(item.code)) {
       await prisma.roleMenu.upsert({
         where: { roleId_menuId: { roleId: pilgrim.id, menuId: menu.id } },
         update: {},

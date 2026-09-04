@@ -17,6 +17,8 @@ import {
 import {
   Prisma,
   AccommodationStatus,
+  AllocationStatus,
+  UserGender,
   type AccommodationContactRole,
   type AccommodationType,
   type GenderType,
@@ -466,6 +468,19 @@ export class AccommodationsService {
     return this.findOne(id, actor);
   }
 
+  async removeYearContact(id: string, contactId: string, actor: Actor) {
+    await this.findRecord(id, actor);
+    const link = await this.prisma.accommodationYearContact.findFirst({
+      where: { id: contactId, accommodationId: id },
+      select: { id: true },
+    });
+    if (!link) {
+      throw new NotFoundException('این رابط یافت نشد');
+    }
+    await this.prisma.accommodationYearContact.delete({ where: { id: contactId } });
+    return this.findOne(id, actor);
+  }
+
   async remove(id: string, actor: Actor) {
     await this.findRecord(id, actor);
     const distributionCount = await this.prisma.restaurantMealPlanDistribution.count({
@@ -602,12 +617,27 @@ export class AccommodationsService {
     };
 
     await this.prisma.$transaction(async (tx) => {
-      if (userId && !existingAssignment) {
+      const rowToUpdate = existingAssignment ?? existingYear;
+      if (rowToUpdate) {
+        const hasPrimaryThisYear = userId
+          ? await tx.accommodationManager.findFirst({
+              where: { userId, year, isPrimary: true, NOT: { id: rowToUpdate.id } },
+              select: { id: true },
+            })
+          : null;
+        await tx.accommodationManager.update({
+          where: { id: rowToUpdate.id },
+          data: {
+            userId,
+            isPrimary: Boolean(userId) && !hasPrimaryThisYear,
+            ...nextCaps,
+          },
+        });
+      } else if (userId) {
         const hasPrimaryThisYear = await tx.accommodationManager.findFirst({
           where: { userId, year, isPrimary: true },
           select: { id: true },
         });
-        await this.removeUnassignedYear(tx, id, year);
         await tx.accommodationManager.create({
           data: {
             userId,
@@ -617,7 +647,7 @@ export class AccommodationsService {
             ...nextCaps,
           },
         });
-      } else if (!userId && !existingYear) {
+      } else {
         await tx.accommodationManager.create({
           data: {
             userId: null,
@@ -627,6 +657,9 @@ export class AccommodationsService {
             ...nextCaps,
           },
         });
+      }
+      if (userId) {
+        await this.removeUnassignedYear(tx, id, year);
       }
       await this.syncYearCapacities(
         tx,
@@ -666,8 +699,56 @@ export class AccommodationsService {
     if (!link) {
       throw new NotFoundException('این تخصیص یافت نشد');
     }
+    await this.assertYearHasNoPlacements(id, link.year);
     await this.prisma.accommodationManager.delete({ where: { id: assignmentId } });
     return this.findOne(id, actor);
+  }
+
+  async findYearReservations(id: string, actor: Actor, year?: number) {
+    await this.findRecord(id, actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const rows = await this.prisma.reservation.findMany({
+      where: {
+        year: selectedYear,
+        allocations: {
+          some: { accommodationId: id, status: AllocationStatus.ACTIVE },
+        },
+      },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        maleCount: true,
+        femaleCount: true,
+        caravanManager: {
+          select: { id: true, firstName: true, lastName: true, fullName: true },
+        },
+        createdBy: {
+          select: { id: true, firstName: true, lastName: true, fullName: true },
+        },
+        originCity: {
+          select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+        },
+        walkingRoute: { select: { id: true, name: true } },
+        allocations: {
+          where: { accommodationId: id, status: AllocationStatus.ACTIVE },
+          select: { gender: true, headcount: true },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
+    return {
+      year: selectedYear,
+      items: rows.map(({ allocations, ...item }) => ({
+        ...item,
+        placedMaleCount: allocations
+          .filter((row) => row.gender === UserGender.MALE)
+          .reduce((sum, row) => sum + row.headcount, 0),
+        placedFemaleCount: allocations
+          .filter((row) => row.gender === UserGender.FEMALE)
+          .reduce((sum, row) => sum + row.headcount, 0),
+      })),
+    };
   }
 
   async yearStats(actor: Actor, year?: number) {
@@ -803,6 +884,7 @@ export class AccommodationsService {
     this.assertAdmin(actor);
     const selectedYear = year ?? currentJalaliYear();
     await this.findRecord(accommodationId, actor);
+    await this.assertYearHasNoPlacements(accommodationId, selectedYear);
     const result = await this.prisma.accommodationManager.deleteMany({
       where: { accommodationId, year: selectedYear },
     });
@@ -1050,6 +1132,21 @@ export class AccommodationsService {
     }
 
     return 'ok';
+  }
+
+  private async assertYearHasNoPlacements(accommodationId: string, year: number) {
+    const placed = await this.prisma.reservationAllocation.findFirst({
+      where: {
+        accommodationId,
+        reservation: { year },
+      },
+      select: { id: true },
+    });
+    if (placed) {
+      throw new BadRequestException(
+        'در این سال کاروانهایی به این اسکان اختصاص داده شده بودن و در نتیجه امکان حذف ان وجود ندارد.',
+      );
+    }
   }
 
   private async findRecord(id: string, actor: Actor) {
@@ -1331,10 +1428,10 @@ export class AccommodationsService {
 
     for (const contact of contacts) {
       const { user } = await this.users.findOrCreatePilgrim({
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        nationalId: contact.nationalId,
-        phone: contact.phone,
+        firstName: contact.firstName ?? '',
+        lastName: contact.lastName ?? '',
+        nationalId: contact.nationalId ?? '',
+        phone: contact.phone ?? '',
         birthDate: contact.birthDate ?? null,
       });
 
@@ -1404,22 +1501,37 @@ export class AccommodationsService {
       where: { accommodationId, year },
     });
     for (const contact of manualContacts ?? []) {
-      const { user } = await this.users.findOrCreatePilgrim({
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        nationalId: contact.nationalId,
-        phone: contact.phone,
-        birthDate: contact.birthDate ?? null,
-      });
+      const userId = await this.resolveContactUserId(contact);
       await this.prisma.accommodationYearContact.create({
         data: {
           accommodationId,
           year,
           role: contact.role,
-          userId: user.id,
+          userId,
         },
       });
     }
+  }
+
+  private async resolveContactUserId(contact: AccommodationContactInputDto) {
+    if (contact.userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: contact.userId },
+        select: { id: true },
+      });
+      if (!user) {
+        throw new BadRequestException('زائر انتخاب‌شده معتبر نیست');
+      }
+      return user.id;
+    }
+    const { user } = await this.users.findOrCreatePilgrim({
+      firstName: contact.firstName ?? '',
+      lastName: contact.lastName ?? '',
+      nationalId: contact.nationalId ?? '',
+      phone: contact.phone ?? '',
+      birthDate: contact.birthDate ?? null,
+    });
+    return user.id;
   }
 
   private async replaceYearContactsWithUser(

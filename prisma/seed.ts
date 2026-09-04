@@ -371,6 +371,21 @@ async function main() {
     },
   });
 
+  const systemManagement = await prisma.navModule.upsert({
+    where: { code: 'system-management' },
+    update: {
+      nameKey: 'modules.systemManagement',
+      icon: 'settings',
+      sortOrder: 15,
+    },
+    create: {
+      code: 'system-management',
+      nameKey: 'modules.systemManagement',
+      icon: 'settings',
+      sortOrder: 15,
+    },
+  });
+
   const menus = [
     {
       code: 'dashboard.overview',
@@ -1037,12 +1052,68 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'participations.contributions-create',
+      moduleId: participations.id,
+      nameKey: 'menus.contributionsCreate',
+      path: '/participations/contributions/new',
+      icon: 'hand-coins',
+      sortOrder: 2,
+    },
+    {
+      code: 'participations.contributions',
+      moduleId: participations.id,
+      nameKey: 'menus.contributions',
+      path: '/participations/contributions',
+      icon: 'hand-coins',
+      sortOrder: 3,
+    },
+    {
+      code: 'participations.report',
+      moduleId: participations.id,
+      nameKey: 'menus.contributionsReport',
+      path: '/participations/report',
+      icon: 'chart-column',
+      sortOrder: 4,
+    },
+    {
+      code: 'participations.goods-report',
+      moduleId: participations.id,
+      nameKey: 'menus.contributionsGoodsReport',
+      path: '/participations/goods-report',
+      icon: 'package',
+      sortOrder: 5,
+    },
+    {
+      code: 'participations.campaigns-report',
+      moduleId: participations.id,
+      nameKey: 'menus.campaignsReport',
+      path: '/participations/campaigns-report',
+      icon: 'chart-column',
+      sortOrder: 6,
+    },
+    {
       code: 'participations.campaigns',
       moduleId: participations.id,
       nameKey: 'menus.participationCampaigns',
       path: '/participations/campaigns',
       icon: 'megaphone',
-      sortOrder: 2,
+      sortOrder: 7,
+    },
+    {
+      code: 'participations.goods',
+      moduleId: participations.id,
+      nameKey: 'menus.contributionGoods',
+      path: '/participations/goods',
+      icon: 'package',
+      sortOrder: 8,
+    },
+    {
+      code: 'participations.goods-units',
+      moduleId: participations.id,
+      nameKey: 'menus.goodsUnits',
+      path: '/participations/goods-units',
+      icon: 'scale',
+      sortOrder: 9,
     },
     {
       code: 'participations.bank-accounts',
@@ -1050,7 +1121,7 @@ async function main() {
       nameKey: 'menus.bankAccounts',
       path: '/participations/bank-accounts',
       icon: 'landmark',
-      sortOrder: 3,
+      sortOrder: 10,
     },
     {
       code: 'participations.crypto-wallets',
@@ -1058,7 +1129,15 @@ async function main() {
       nameKey: 'menus.cryptoWallets',
       path: '/participations/crypto-wallets',
       icon: 'wallet',
-      sortOrder: 4,
+      sortOrder: 11,
+    },
+    {
+      code: 'system-management.data-management',
+      moduleId: systemManagement.id,
+      nameKey: 'menus.dataManagement',
+      path: '/system-management/data-management',
+      icon: 'database',
+      sortOrder: 1,
     },
   ];
 
@@ -1139,6 +1218,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'accommodation.mine',
     'accommodation.report',
     'logistics.my-vouchers',
@@ -1198,6 +1278,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'caravans.mine',
     'groups.mine',
     'reservations.create',
@@ -1237,6 +1318,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'groups.mine',
     'reservations.create',
     'reservations.mine',
@@ -1269,6 +1351,7 @@ async function main() {
     'evaluations.mine',
     'location.mine',
     'location.history',
+    'participations.home',
     'participations.campaigns',
   ]);
   for (const menu of menuRecords.filter((item) =>
@@ -1301,6 +1384,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'reservations.translator',
   ]);
   for (const menu of menuRecords.filter((item) =>
@@ -1322,6 +1406,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'licenses.issue',
     'licenses.issued',
   ]);
@@ -1357,6 +1442,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'caravans.support-requests',
     'caravans.support-request-report',
   ]);
@@ -1390,6 +1476,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'stations.mine',
     'stations.report',
     'stations.history',
@@ -1424,6 +1511,7 @@ async function main() {
     'dashboard.overview',
     'honorary-service.apply',
     'honorary-service.history',
+    'participations.home',
     'headquarters.accommodation-liaisons',
     'headquarters.caravan-liaisons',
     'evaluations.mine',
@@ -1441,6 +1529,36 @@ async function main() {
       update: {},
       create: { roleId: unitManagerRole.id, menuId: menu.id },
     });
+  }
+
+  const participationsHomeMenus = menuRecords.filter(
+    (item) => item.code === 'participations.home',
+  );
+  for (const role of [
+    adminRole,
+    accommodationManagerRole,
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    honoraryServantRole,
+    licenseIssuerRole,
+    governmentOrgOfficerRole,
+    unitManagerRole,
+    stationManagerRole,
+    headquartersRepresentativeRole,
+  ]) {
+    for (const menu of participationsHomeMenus) {
+      await prisma.roleMenu.upsert({
+        where: {
+          roleId_menuId: {
+            roleId: role.id,
+            menuId: menu.id,
+          },
+        },
+        update: {},
+        create: { roleId: role.id, menuId: menu.id },
+      });
+    }
   }
 
   const honoraryServiceSelfMenus = menuRecords.filter(
@@ -1501,6 +1619,8 @@ async function main() {
   await seedPlaceTypes();
   await seedHonoraryServiceTypes();
   await seedParticipationsData(prisma);
+  await seedGoodsUnits();
+  await seedAnonymousBenefactor();
   await seedHeadquartersContent(prisma);
 
   const systemPasswordHash = await bcrypt.hash(
@@ -1872,6 +1992,40 @@ async function seedHonoraryServiceTypes() {
   await prisma.honoraryServiceType.create({
     data: { name, description, code: 'TRANSLATION' },
   });
+}
+
+const defaultGoodsUnits = [
+  'عدد',
+  'کیلوگرم',
+  'گرم',
+  'لیتر',
+  'متر',
+  'بسته',
+  'کارتن',
+  'جفت',
+];
+
+async function seedAnonymousBenefactor() {
+  await prisma.benefactor.upsert({
+    where: { code: 'ANONYMOUS' },
+    update: {},
+    create: {
+      code: 'ANONYMOUS',
+      firstName: 'ناشناس',
+      lastName: '',
+      name: 'ناشناس',
+    },
+  });
+}
+
+async function seedGoodsUnits() {
+  for (const name of defaultGoodsUnits) {
+    await prisma.goodsUnit.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
 }
 
 async function seedPlaceTypes() {

@@ -15,6 +15,7 @@ import {
 } from '../auth/roles.util';
 import {
   addDaysIso,
+  eachIsoDateInclusive,
   parseIsoDate,
   parseOptionalIsoDate,
 } from '../common/iso-date';
@@ -81,6 +82,7 @@ import { UpdateReservationPermitDto } from './dto/update-reservation-permit.dto'
 import {
   AutoReserveStationStaysDto,
   ReserveStationStayDto,
+  type RoutePlacementAssignBy,
   type StationMealType,
 } from './dto/reserve-station-stay.dto';
 import {
@@ -2315,23 +2317,35 @@ export class ReservationsService {
         contactEditStatuses(current.type),
       );
 
-      const { user } = await this.resolveCompanion(
-        {
-          nationalId: dto.nationalId,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone,
-          birthDate: dto.birthDate,
-        },
-        { requireGender: false },
-      );
+      let userId = dto.userId;
+      if (userId) {
+        const existing = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true },
+        });
+        if (!existing) {
+          throw new NotFoundException('کاربر یافت نشد');
+        }
+      } else {
+        const { user } = await this.resolveCompanion(
+          {
+            nationalId: dto.nationalId,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            phone: dto.phone,
+            birthDate: dto.birthDate,
+          },
+          { requireGender: false },
+        );
+        userId = user.id;
+      }
 
       await tx.reservationCaravanContact.upsert({
         where: {
           reservationId_role: { reservationId: id, role: dto.role },
         },
-        create: { reservationId: id, role: dto.role, userId: user.id },
-        update: { userId: user.id },
+        create: { reservationId: id, role: dto.role, userId },
+        update: { userId },
       });
 
       return this.serialize(await this.requireReservation(id, tx), actor);
@@ -2636,11 +2650,15 @@ export class ReservationsService {
       },
       orderBy: { reservedAt: 'desc' },
     });
-    const activeByStation = new Map(
-      stays
-        .filter((item) => item.status === ReservationStationStayStatus.RESERVED)
-        .map((item) => [item.walkingStationId, item]),
+    const reservedStays = stays.filter(
+      (item) => item.status === ReservationStationStayStatus.RESERVED,
     );
+    const staysByStation = new Map<string, typeof reservedStays>();
+    for (const stay of reservedStays) {
+      const list = staysByStation.get(stay.walkingStationId) ?? [];
+      list.push(stay);
+      staysByStation.set(stay.walkingStationId, list);
+    }
     const occupancyRows = await this.prisma.reservationStationStay.groupBy({
       by: ['walkingStationId'],
       where: {
@@ -2658,40 +2676,105 @@ export class ReservationsService {
         },
       ]),
     );
+    const walkingStartDate = toDateOnly(current.walkingStartDate);
+    const stayStartDate = toDateOnly(current.stayStartDate);
+    const stagePayloads = stages.map((stage) => {
+      const station = stage.walkingStation;
+      const stationStays = staysByStation.get(station.id) ?? [];
+      const stay = stationStays[0] ?? null;
+      const occupied = occupancyByStation.get(station.id) ?? { male: 0, female: 0 };
+      return {
+        stageId: stage.id,
+        stageNumber: stage.stageNumber,
+        stationId: station.id,
+        name: station.name,
+        city: station.city,
+        maleCount: station.maleCount,
+        femaleCount: station.femaleCount,
+        occupiedMaleCount: occupied.male,
+        occupiedFemaleCount: occupied.female,
+        managerName: station.managerName,
+        managerPhone: station.managerPhone,
+        address: station.address,
+        stay: stay
+          ? {
+              id: stay.id,
+              stayDate: toDateOnly(stay.stayDate),
+              mealType: stay.mealType,
+              status: stay.status,
+              present: stay.present,
+              maleCount: stay.maleCount,
+              femaleCount: stay.femaleCount,
+            }
+          : null,
+        stays: stationStays.map((item) => ({
+          id: item.id,
+          stayDate: toDateOnly(item.stayDate),
+          mealType: item.mealType,
+          status: item.status,
+          present: item.present,
+          maleCount: item.maleCount,
+          femaleCount: item.femaleCount,
+        })),
+      };
+    });
+    const stageByStation = new Map(
+      stagePayloads.map((stage) => [stage.stationId, stage]),
+    );
+    const stayBySlot = new Map(
+      reservedStays.map((item) => [
+        `${toDateOnly(item.stayDate)}:${item.mealType}`,
+        item,
+      ]),
+    );
+    const days =
+      walkingStartDate && stayStartDate
+        ? eachIsoDateInclusive(walkingStartDate, stayStartDate).map((stayDate) => {
+            const mealSlot = (mealType: StationMealType) => {
+              const stay = stayBySlot.get(`${stayDate}:${mealType}`) ?? null;
+              if (!stay) return null;
+              const stage = stageByStation.get(stay.walkingStationId);
+              if (!stage) return null;
+              return {
+                stay: {
+                  id: stay.id,
+                  stayDate,
+                  mealType: stay.mealType,
+                  status: stay.status,
+                  present: stay.present,
+                  maleCount: stay.maleCount,
+                  femaleCount: stay.femaleCount,
+                },
+                station: {
+                  stationId: stage.stationId,
+                  stageNumber: stage.stageNumber,
+                  name: stage.name,
+                  city: stage.city,
+                  maleCount: stage.maleCount,
+                  femaleCount: stage.femaleCount,
+                  occupiedMaleCount: stage.occupiedMaleCount,
+                  occupiedFemaleCount: stage.occupiedFemaleCount,
+                  managerName: stage.managerName,
+                  managerPhone: stage.managerPhone,
+                  address: stage.address,
+                },
+              };
+            };
+            return {
+              stayDate,
+              lunch: mealSlot(MealType.LUNCH),
+              dinner: mealSlot(MealType.DINNER),
+            };
+          })
+        : [];
     return {
       walkingRoute: current.walkingRoute,
       maleCount: current.maleCount || current.requestedMaleCount,
       femaleCount: current.femaleCount || current.requestedFemaleCount,
-      stages: stages.map((stage) => {
-        const station = stage.walkingStation;
-        const stay = activeByStation.get(station.id) ?? null;
-        const occupied = occupancyByStation.get(station.id) ?? { male: 0, female: 0 };
-        return {
-          stageId: stage.id,
-          stageNumber: stage.stageNumber,
-          stationId: station.id,
-          name: station.name,
-          city: station.city,
-          maleCount: station.maleCount,
-          femaleCount: station.femaleCount,
-          occupiedMaleCount: occupied.male,
-          occupiedFemaleCount: occupied.female,
-          managerName: station.managerName,
-          managerPhone: station.managerPhone,
-          address: station.address,
-          stay: stay
-            ? {
-                id: stay.id,
-                stayDate: toDateOnly(stay.stayDate),
-                mealType: stay.mealType,
-                status: stay.status,
-                present: stay.present,
-                maleCount: stay.maleCount,
-                femaleCount: stay.femaleCount,
-              }
-            : null,
-        };
-      }),
+      walkingStartDate,
+      stayStartDate,
+      stages: stagePayloads,
+      days,
     };
   }
 
@@ -2701,7 +2784,7 @@ export class ReservationsService {
     actor: Actor,
   ) {
     const current = await this.requireReservation(id);
-    this.assertOwnerOrAdmin(current, actor);
+    this.assertAdmin(actor);
     this.assertNotCancelled(current);
     const features = await this.featuresFor(
       this.prisma,
@@ -2731,6 +2814,7 @@ export class ReservationsService {
       parseIsoDate(dto.stayDate),
       dto.mealType,
       actor.id,
+      dto.assignBy === 'date' ? 'date' : 'station',
     );
   }
 
@@ -2740,7 +2824,7 @@ export class ReservationsService {
     actor: Actor,
   ) {
     const current = await this.requireReservation(id);
-    this.assertOwnerOrAdmin(current, actor);
+    this.assertAdmin(actor);
     this.assertNotCancelled(current);
     const features = await this.featuresFor(
       this.prisma,
@@ -2761,10 +2845,25 @@ export class ReservationsService {
     if (!stages.length) {
       throw new BadRequestException('ایستگاهی در مسیر پرونده نیست');
     }
+    const assignBy: RoutePlacementAssignBy =
+      dto.assignBy === 'date' ? 'date' : 'station';
+    const endDate =
+      assignBy === 'date' ? toDateOnly(current.stayStartDate) : null;
+    if (assignBy === 'date' && !endDate) {
+      throw new BadRequestException('تاریخ رسیدن به مشهد مشخص نشده است');
+    }
+    if (endDate && dto.stayDate > endDate) {
+      throw new BadRequestException(
+        'تاریخ شروع رزرو خودکار نباید بعد از رسیدن به مشهد باشد',
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
       let stayDate = dto.stayDate;
       let mealType: StationMealType = dto.mealType;
       for (const stage of stages) {
+        if (endDate && stayDate > endDate) {
+          break;
+        }
         await this.upsertStationStay(
           tx,
           current,
@@ -2772,6 +2871,7 @@ export class ReservationsService {
           parseIsoDate(stayDate),
           mealType,
           actor.id,
+          assignBy,
         );
         if (mealType === MealType.DINNER) {
           stayDate = addDaysIso(stayDate, 1);
@@ -2791,9 +2891,61 @@ export class ReservationsService {
     stayDate: Date,
     mealType: StationMealType,
     actorId: string,
+    assignBy: RoutePlacementAssignBy = 'station',
   ) {
     const maleCount = current.maleCount || current.requestedMaleCount;
     const femaleCount = current.femaleCount || current.requestedFemaleCount;
+    if (assignBy === 'date') {
+      const slot = await db.reservationStationStay.findFirst({
+        where: {
+          reservationId: current.id,
+          stayDate,
+          mealType,
+          status: ReservationStationStayStatus.RESERVED,
+        },
+      });
+      if (slot) {
+        const updated = await db.reservationStationStay.update({
+          where: { id: slot.id },
+          data: {
+            walkingStationId,
+            maleCount,
+            femaleCount,
+            reservedAt: new Date(),
+            reservedById: actorId,
+          },
+        });
+        return this.serializeStationStay(updated);
+      }
+      const created = await db.reservationStationStay.create({
+        data: {
+          reservationId: current.id,
+          walkingStationId,
+          stayDate,
+          mealType,
+          maleCount,
+          femaleCount,
+          reservedById: actorId,
+        },
+      });
+      return this.serializeStationStay(created);
+    }
+
+    const slotTaken = await db.reservationStationStay.findFirst({
+      where: {
+        reservationId: current.id,
+        stayDate,
+        mealType,
+        status: ReservationStationStayStatus.RESERVED,
+        walkingStationId: { not: walkingStationId },
+      },
+      select: { id: true },
+    });
+    if (slotTaken) {
+      throw new BadRequestException(
+        'این تاریخ و وعده غذایی قبلاً برای ایستگاه دیگری رزرو شده است',
+      );
+    }
     const existing = await db.reservationStationStay.findFirst({
       where: {
         reservationId: current.id,
@@ -2831,7 +2983,7 @@ export class ReservationsService {
 
   async cancelStationStay(id: string, stayId: string, actor: Actor) {
     const current = await this.requireReservation(id);
-    this.assertOwnerOrAdmin(current, actor);
+    this.assertAdmin(actor);
     const stay = await this.prisma.reservationStationStay.findFirst({
       where: { id: stayId, reservationId: id },
     });
@@ -4243,10 +4395,19 @@ export class ReservationsService {
       );
     }
     if (current.type === ReservationType.CARAVAN) {
-      this.assertContactsReady(current);
       if (
-        !current.hasPermit ||
-        current.permitStatus !== ReservationPermitStatus.APPROVED
+        current.caravanContacts.length > 0 ||
+        !current.caravanContactsCompletedAt
+      ) {
+        this.assertContactsReady(current);
+      }
+      const international = Boolean(
+        current.originCountry?.iso2 && current.originCountry.iso2 !== 'IR',
+      );
+      if (
+        !international &&
+        (!current.hasPermit ||
+          current.permitStatus !== ReservationPermitStatus.APPROVED)
       ) {
         throw new BadRequestException(
           'تا تأیید مجوز کاروان امکان ثبت نهایی پرونده وجود ندارد',
@@ -4385,6 +4546,12 @@ export class ReservationsService {
     });
     if (!image) {
       throw new BadRequestException('تصویر مجوز معتبر نیست');
+    }
+  }
+
+  private assertAdmin(actor: Actor) {
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
   }
 
@@ -4885,6 +5052,8 @@ export class ReservationsService {
       maleCount: row.maleCount,
       femaleCount: row.femaleCount,
       totalCount: row.totalCount,
+      accommodatedMaleCount: row.accommodatedMaleCount,
+      accommodatedFemaleCount: row.accommodatedFemaleCount,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       completedAt: row.completedAt?.toISOString() ?? null,
@@ -4957,6 +5126,8 @@ export class ReservationsService {
       maleCount: row.maleCount,
       femaleCount: row.femaleCount,
       totalCount: row.totalCount,
+      accommodatedMaleCount: row.accommodatedMaleCount,
+      accommodatedFemaleCount: row.accommodatedFemaleCount,
       caravanId: row.caravanId,
       groupId: row.groupId,
       caravan: row.caravan,

@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { currentJalaliYear, jalaliMonth, jalaliYearRange } from '../common/jalali-year';
 import {
   containsInsensitive,
   paginatedResult,
@@ -13,13 +14,13 @@ import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateParticipationCampaignDto } from './dto/create-campaign.dto';
+import { FindCampaignReportQueryDto } from './dto/find-campaign-report-query.dto';
 import { FindParticipationCampaignsQueryDto } from './dto/find-campaigns-query.dto';
 import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
 
 const campaignInclude = {
   bankAccount: true,
   cryptoWallet: true,
-  _count: { select: { participants: true } },
 } satisfies Prisma.ParticipationCampaignInclude;
 
 type CampaignRecord = Prisma.ParticipationCampaignGetPayload<{
@@ -101,26 +102,18 @@ export class ParticipationCampaignsService {
     const items = await this.prisma.participationCampaign.findMany({
       where: { isActive: true },
       orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
-      include: { _count: { select: { participants: true } } },
     });
     if (!items.length) {
       return [];
     }
-    const ids = items.map((item) => item.id);
-    const grouped = await this.prisma.campaignParticipant.groupBy({
-      by: ['campaignId'],
-      where: { campaignId: { in: ids } },
-      _sum: { shareCount: true },
-    });
-    const purchasedById = new Map(
-      grouped.map((row) => [row.campaignId, row._sum.shareCount ?? 0]),
-    );
+    const statsById = await this.campaignContributionStats(items.map((item) => item.id));
     return items.map((item) => {
+      const row = statsById.get(item.id);
       const stats = campaignStats(
         item.totalAmount,
         item.sharePrice,
-        purchasedById.get(item.id) ?? 0,
-        item._count.participants,
+        row?.purchasedShares ?? 0,
+        row?.participantCount ?? 0,
       );
       return {
         id: item.id,
@@ -263,25 +256,272 @@ export class ParticipationCampaignsService {
     return { ok: true };
   }
 
+  async report(query: FindCampaignReportQueryDto) {
+    const year = query.year ?? null;
+    const where: Prisma.ParticipationCampaignWhereInput = {};
+    if (year != null) {
+      const range = jalaliYearRange(year);
+      where.startDate = { gte: range.gte, lt: range.lt };
+    }
+
+    const campaigns = await this.prisma.participationCampaign.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        isActive: true,
+        totalAmount: true,
+        sharePrice: true,
+        bankAccountId: true,
+        cryptoWalletId: true,
+      },
+    });
+
+    const contributionRows = campaigns.length
+      ? await this.prisma.contribution.findMany({
+          where: { campaignId: { in: campaigns.map((item) => item.id) }, type: 'CASH' },
+          select: {
+            campaignId: true,
+            amount: true,
+            shareCount: true,
+            benefactorId: true,
+            trackingCode: true,
+          },
+        })
+      : [];
+
+    const contribByCampaign = new Map<
+      string,
+      { amount: number; shares: number; participants: number; benefactors: Set<string>; online: number }
+    >();
+    const allBenefactors = new Set<string>();
+    let onlineCount = 0;
+    for (const row of contributionRows) {
+      if (!row.campaignId) continue;
+      const current = contribByCampaign.get(row.campaignId) ?? {
+        amount: 0,
+        shares: 0,
+        participants: 0,
+        benefactors: new Set<string>(),
+        online: 0,
+      };
+      current.amount += row.amount;
+      current.shares += row.shareCount ?? 0;
+      current.participants += 1;
+      current.benefactors.add(row.benefactorId);
+      if (row.trackingCode) {
+        current.online += 1;
+        onlineCount += 1;
+      }
+      contribByCampaign.set(row.campaignId, current);
+      allBenefactors.add(row.benefactorId);
+    }
+
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tehran',
+    }).format(new Date());
+
+    let activeCount = 0;
+    let targetAmount = 0;
+    let collectedAmount = 0;
+    let purchasedShares = 0;
+    let totalShares = 0;
+    let participantCount = 0;
+    let progressSum = 0;
+    let completedCount = 0;
+    let emptyCount = 0;
+    let inProgressCount = 0;
+    let upcomingCount = 0;
+    let runningCount = 0;
+    let endedCount = 0;
+    let bankOnlyCount = 0;
+    let cryptoOnlyCount = 0;
+    let bothPaymentCount = 0;
+
+    const yearMap = new Map<
+      number,
+      {
+        year: number;
+        count: number;
+        targetAmount: number;
+        collectedAmount: number;
+        purchasedShares: number;
+        participantCount: number;
+      }
+    >();
+    const monthMap = new Map<
+      number,
+      {
+        month: number;
+        count: number;
+        targetAmount: number;
+        collectedAmount: number;
+        purchasedShares: number;
+        participantCount: number;
+      }
+    >();
+    const ranked: {
+      id: string;
+      name: string;
+      count: number;
+      amount: number;
+      purchasedShares: number;
+      progressPercent: number;
+    }[] = [];
+
+    for (const campaign of campaigns) {
+      const contrib = contribByCampaign.get(campaign.id);
+      const shares = contrib?.shares ?? 0;
+      const amount = contrib?.amount ?? 0;
+      const participants = contrib?.participants ?? 0;
+      const stats = campaignStats(
+        campaign.totalAmount,
+        campaign.sharePrice,
+        shares,
+        participants,
+      );
+      if (campaign.isActive) activeCount += 1;
+      targetAmount += campaign.totalAmount;
+      collectedAmount += amount;
+      purchasedShares += shares;
+      totalShares += stats.totalShares;
+      participantCount += participants;
+      progressSum += stats.progressPercent;
+      if (shares <= 0) emptyCount += 1;
+      else if (stats.progressPercent >= 100) completedCount += 1;
+      else inProgressCount += 1;
+
+      const start = dateOnly(campaign.startDate);
+      const end = dateOnly(campaign.endDate);
+      if (start > today) upcomingCount += 1;
+      else if (end < today) endedCount += 1;
+      else runningCount += 1;
+
+      if (campaign.bankAccountId && campaign.cryptoWalletId) bothPaymentCount += 1;
+      else if (campaign.bankAccountId) bankOnlyCount += 1;
+      else if (campaign.cryptoWalletId) cryptoOnlyCount += 1;
+
+      const jalaliYear = currentJalaliYear(campaign.startDate);
+      const yearRow = yearMap.get(jalaliYear) ?? {
+        year: jalaliYear,
+        count: 0,
+        targetAmount: 0,
+        collectedAmount: 0,
+        purchasedShares: 0,
+        participantCount: 0,
+      };
+      yearRow.count += 1;
+      yearRow.targetAmount += campaign.totalAmount;
+      yearRow.collectedAmount += amount;
+      yearRow.purchasedShares += shares;
+      yearRow.participantCount += participants;
+      yearMap.set(jalaliYear, yearRow);
+
+      const month = jalaliMonth(campaign.startDate);
+      const monthRow = monthMap.get(month) ?? {
+        month,
+        count: 0,
+        targetAmount: 0,
+        collectedAmount: 0,
+        purchasedShares: 0,
+        participantCount: 0,
+      };
+      monthRow.count += 1;
+      monthRow.targetAmount += campaign.totalAmount;
+      monthRow.collectedAmount += amount;
+      monthRow.purchasedShares += shares;
+      monthRow.participantCount += participants;
+      monthMap.set(month, monthRow);
+
+      ranked.push({
+        id: campaign.id,
+        name: campaign.name,
+        count: participants,
+        amount,
+        purchasedShares: shares,
+        progressPercent: stats.progressPercent,
+      });
+    }
+
+    const byYear = [...yearMap.values()].sort((a, b) => a.year - b.year);
+    const byMonth = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      return (
+        monthMap.get(month) ?? {
+          month,
+          count: 0,
+          targetAmount: 0,
+          collectedAmount: 0,
+          purchasedShares: 0,
+          participantCount: 0,
+        }
+      );
+    });
+
+    const totalCount = campaigns.length;
+    return {
+      year,
+      totalCount,
+      activeCount,
+      inactiveCount: totalCount - activeCount,
+      targetAmount,
+      collectedAmount,
+      purchasedShares,
+      remainingShares: Math.max(0, totalShares - purchasedShares),
+      totalShares,
+      participantCount,
+      benefactorCount: allBenefactors.size,
+      onlineCount,
+      avgProgress: totalCount ? Math.round(progressSum / totalCount) : 0,
+      completedCount,
+      emptyCount,
+      inProgressCount,
+      upcomingCount,
+      runningCount,
+      endedCount,
+      byActive: [
+        { key: 'active', count: activeCount },
+        { key: 'inactive', count: totalCount - activeCount },
+      ],
+      byProgress: [
+        { key: 'empty', count: emptyCount },
+        { key: 'inProgress', count: inProgressCount },
+        { key: 'completed', count: completedCount },
+      ],
+      byLifecycle: [
+        { key: 'upcoming', count: upcomingCount },
+        { key: 'running', count: runningCount },
+        { key: 'ended', count: endedCount },
+      ],
+      byPayment: [
+        { key: 'bank', count: bankOnlyCount },
+        { key: 'crypto', count: cryptoOnlyCount },
+        { key: 'both', count: bothPaymentCount },
+      ],
+      byYear,
+      byMonth,
+      topByAmount: [...ranked].sort((a, b) => b.amount - a.amount).slice(0, 8),
+      topByParticipants: [...ranked].sort((a, b) => b.count - a.count).slice(0, 8),
+      topByProgress: [...ranked]
+        .sort((a, b) => b.progressPercent - a.progressPercent)
+        .slice(0, 8),
+    };
+  }
+
   private async serializeMany(items: CampaignRecord[]) {
     if (!items.length) {
       return [];
     }
-    const ids = items.map((item) => item.id);
-    const grouped = await this.prisma.campaignParticipant.groupBy({
-      by: ['campaignId'],
-      where: { campaignId: { in: ids } },
-      _sum: { shareCount: true },
-    });
-    const purchasedById = new Map(
-      grouped.map((row) => [row.campaignId, row._sum.shareCount ?? 0]),
-    );
+    const statsById = await this.campaignContributionStats(items.map((item) => item.id));
     return items.map((item) => {
+      const row = statsById.get(item.id);
       const stats = campaignStats(
         item.totalAmount,
         item.sharePrice,
-        purchasedById.get(item.id) ?? 0,
-        item._count.participants,
+        row?.purchasedShares ?? 0,
+        row?.participantCount ?? 0,
       );
       return {
         ...item,
@@ -290,6 +530,30 @@ export class ParticipationCampaignsService {
         ...stats,
       };
     });
+  }
+
+  private async campaignContributionStats(ids: string[]) {
+    const stats = new Map<
+      string,
+      { purchasedShares: number; participantCount: number }
+    >();
+    if (!ids.length) {
+      return stats;
+    }
+    const grouped = await this.prisma.contribution.groupBy({
+      by: ['campaignId'],
+      where: { campaignId: { in: ids }, type: 'CASH' },
+      _sum: { shareCount: true },
+      _count: { _all: true },
+    });
+    for (const row of grouped) {
+      if (!row.campaignId) continue;
+      stats.set(row.campaignId, {
+        purchasedShares: row._sum.shareCount ?? 0,
+        participantCount: row._count._all,
+      });
+    }
+    return stats;
   }
 
   private listWhere(

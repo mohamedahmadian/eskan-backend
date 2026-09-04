@@ -7,10 +7,12 @@ import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
+  wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ANONYMOUS_BENEFACTOR_CODE } from './anonymous-benefactor';
 import { CreateBenefactorDto } from './dto/create-benefactor.dto';
 import { FindBenefactorsQueryDto } from './dto/find-benefactors-query.dto';
 import { UpdateBenefactorDto } from './dto/update-benefactor.dto';
@@ -31,9 +33,17 @@ export class BenefactorsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: FindBenefactorsQueryDto) {
-    const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
     const orderBy = this.listOrderBy(query);
+    if (!wantsPagination(query)) {
+      const items = await this.prisma.benefactor.findMany({
+        where,
+        orderBy,
+        include: benefactorInclude,
+      });
+      return items.map((item) => this.serialize(item));
+    }
+    const { page, pageSize, skip, take } = paginationArgs(query);
     const [items, total] = await Promise.all([
       this.prisma.benefactor.findMany({
         where,
@@ -55,6 +65,9 @@ export class BenefactorsService {
       query.sortDir,
       {
         name: (dir) => ({ name: dir }),
+        firstName: (dir) => ({ firstName: dir }),
+        lastName: (dir) => ({ lastName: dir }),
+        nationalId: (dir) => ({ nationalId: dir }),
         phone: (dir) => ({ phone: dir }),
         province: (dir) => ({ province: { nameFa: dir } }),
         city: (dir) => ({ city: { nameFa: dir } }),
@@ -76,9 +89,14 @@ export class BenefactorsService {
 
   async create(dto: CreateBenefactorDto) {
     const geo = await this.resolveGeo(dto.provinceId, dto.cityId);
+    const firstName = dto.firstName.trim();
+    const lastName = (dto.lastName ?? '').trim();
     const item = await this.prisma.benefactor.create({
       data: {
-        name: dto.name.trim(),
+        firstName,
+        lastName,
+        name: fullName(firstName, lastName),
+        nationalId: dto.nationalId?.trim() || null,
         phone: dto.phone?.trim() || null,
         address: dto.address?.trim() || null,
         neshanAddress: dto.neshanAddress?.trim() || null,
@@ -95,13 +113,22 @@ export class BenefactorsService {
 
   async update(id: string, dto: UpdateBenefactorDto) {
     const current = await this.findOne(id);
-    const provinceId = dto.provinceId ?? current.provinceId;
-    const cityId = dto.cityId ?? current.cityId;
+    const provinceId =
+      dto.provinceId === undefined ? current.provinceId : dto.provinceId;
+    const cityId = dto.cityId === undefined ? current.cityId : dto.cityId;
     const geo = await this.resolveGeo(provinceId, cityId);
+    const firstName = dto.firstName?.trim() ?? current.firstName;
+    const lastName = dto.lastName?.trim() ?? current.lastName;
     const item = await this.prisma.benefactor.update({
       where: { id },
       data: {
-        name: dto.name?.trim(),
+        firstName,
+        lastName,
+        name: fullName(firstName, lastName),
+        nationalId:
+          dto.nationalId === undefined
+            ? undefined
+            : dto.nationalId?.trim() || null,
         phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
         address:
           dto.address === undefined ? undefined : dto.address?.trim() || null,
@@ -124,7 +151,18 @@ export class BenefactorsService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const current = await this.findOne(id);
+    if (current.code === ANONYMOUS_BENEFACTOR_CODE) {
+      throw new BadRequestException('خیر پیش‌فرض «ناشناس» قابل حذف نیست');
+    }
+    const used = await this.prisma.contribution.count({
+      where: { benefactorId: id },
+    });
+    if (used) {
+      throw new BadRequestException(
+        'این خیر در مشارکت‌ها ثبت شده و قابل حذف نیست',
+      );
+    }
     await this.prisma.benefactor.delete({ where: { id } });
     return { ok: true };
   }
@@ -142,6 +180,9 @@ export class BenefactorsService {
       filters.push({
         OR: [
           { name: containsInsensitive(query.q) },
+          { firstName: containsInsensitive(query.q) },
+          { lastName: containsInsensitive(query.q) },
+          { nationalId: containsInsensitive(query.q) },
           { phone: containsInsensitive(query.q) },
           { address: containsInsensitive(query.q) },
           { neshanAddress: containsInsensitive(query.q) },
@@ -155,7 +196,16 @@ export class BenefactorsService {
     return filters.length === 1 ? filters[0] : { AND: filters };
   }
 
-  private async resolveGeo(provinceId: string, cityId: string) {
+  private async resolveGeo(
+    provinceId?: string | null,
+    cityId?: string | null,
+  ) {
+    if (!provinceId && !cityId) {
+      return { provinceId: null, cityId: null };
+    }
+    if (!provinceId || !cityId) {
+      throw new BadRequestException('استان و شهر را با هم انتخاب کنید');
+    }
     const city = await this.prisma.city.findUnique({
       where: { id: cityId },
       select: { id: true, provinceId: true },
@@ -176,6 +226,10 @@ export class BenefactorsService {
       longitude: toCoord(item.longitude),
     };
   }
+}
+
+function fullName(firstName: string, lastName: string) {
+  return `${firstName} ${lastName}`.trim();
 }
 
 function toDecimal(value?: number | null) {

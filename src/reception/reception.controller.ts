@@ -13,7 +13,7 @@ export class ReceptionController {
 
   @Get('search')
   search(@Query() query: SearchReceptionQueryDto) {
-    return this.reception.search(query.q);
+    return this.reception.search(query);
   }
 
   @Get('people/:id')

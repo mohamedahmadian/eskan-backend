@@ -374,6 +374,7 @@ export class PlacementsService {
       for (const item of dto.items) {
         await this.createAllocation(tx, current, item, actor, AllocationSource.MANUAL);
       }
+      await this.applyAccommodatedCounts(tx, current.id, dto.items);
       await this.syncReservationPlacement(tx, current.id, actor.id);
       await this.syncAssigned(
         tx,
@@ -507,6 +508,12 @@ export class PlacementsService {
         actor,
         AllocationSource.HYBRID,
       );
+      await this.applyAccommodatedCounts(tx, current.reservationId, [
+        {
+          gender: dto.gender ?? current.gender,
+          accommodatedCount: dto.accommodatedCount,
+        },
+      ]);
       await this.syncReservationPlacement(tx, current.reservationId, actor.id);
       await this.syncAssigned(tx, [
         current.accommodationId,
@@ -681,6 +688,8 @@ export class PlacementsService {
       maleCount: row.maleCount,
       femaleCount: row.femaleCount,
       totalCount: row.totalCount,
+      accommodatedMaleCount: row.accommodatedMaleCount,
+      accommodatedFemaleCount: row.accommodatedFemaleCount,
       allocatedMale: allocated.male,
       allocatedFemale: allocated.female,
       partyName: this.partyName(row),
@@ -1021,6 +1030,28 @@ export class PlacementsService {
         vacatedAt: new Date(),
         vacatedById: actorId,
       },
+    });
+  }
+
+  private async applyAccommodatedCounts(
+    tx: Db,
+    reservationId: string,
+    items: { gender: UserGender; accommodatedCount?: number }[],
+  ) {
+    const data: Prisma.ReservationUpdateInput = {};
+    for (const item of items) {
+      if (item.accommodatedCount == null) continue;
+      if (item.gender === UserGender.MALE) {
+        data.accommodatedMaleCount = item.accommodatedCount;
+      }
+      if (item.gender === UserGender.FEMALE) {
+        data.accommodatedFemaleCount = item.accommodatedCount;
+      }
+    }
+    if (Object.keys(data).length === 0) return;
+    await tx.reservation.update({
+      where: { id: reservationId },
+      data,
     });
   }
 
