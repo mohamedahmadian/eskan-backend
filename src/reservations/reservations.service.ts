@@ -19,6 +19,7 @@ import {
   parseIsoDate,
   parseOptionalIsoDate,
 } from '../common/iso-date';
+import { currentJalaliYear } from '../common/jalali-year';
 import { toLatinDigits } from '../common/national-id';
 import {
   containsInsensitive,
@@ -42,6 +43,7 @@ import {
   Prisma,
   ReceptionFeature,
   ReceptionSettings,
+  ReservationArrivalPeriod,
   ReservationMemberInsurancePaidMethod,
   ReservationMemberInsuranceStatus,
   ReservationPermitSource,
@@ -50,10 +52,12 @@ import {
   ReservationStatus,
   ReservationType,
   UserGender,
+  WalkingRouteStageKind,
 } from '../generated/prisma/client';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { jalaliYearRange } from '../common/jalali-year';
 import { PrismaService } from '../prisma/prisma.service';
+import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import { PlacementsService } from '../placements/placements.service';
 import { placementStatusFromCounts } from '../placements/placement-capacity';
@@ -108,6 +112,7 @@ import {
   isOccupyingStatus,
   isOwnerCreateDraft,
   nextAfterBasicInfo,
+  openReservationWhere,
   nextAfterCompanions,
   nextAfterContacts,
   nextAfterManagement,
@@ -184,6 +189,7 @@ const reservationInclude = {
       id: true,
       name: true,
       managerUserId: true,
+      manager: { select: userSelect },
       maleCount: true,
       femaleCount: true,
       totalCount: true,
@@ -289,6 +295,7 @@ const LOCKED_FIELDS = [
   'stayStartDate',
   'stayEndDate',
   'walkingStartDate',
+  'arrivalPeriod',
   'maleCount',
   'femaleCount',
 ] as const;
@@ -317,6 +324,7 @@ const emptySettings = (year: number) => ({
   caravanFemaleCapacity: 0,
   caravanAutoApprove: false,
   caravanAutoApproveLicenses: false,
+  caravanMaxPerNationalId: 1,
   caravanPlacementMode: PlacementMode.MANUAL,
   caravanIntro: '',
   caravanRules: '',
@@ -405,6 +413,7 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     caravanFemaleCapacity: row.caravanFemaleCapacity,
     caravanAutoApprove: row.caravanAutoApprove,
     caravanAutoApproveLicenses: row.caravanAutoApproveLicenses,
+    caravanMaxPerNationalId: row.caravanMaxPerNationalId ?? 1,
     caravanPlacementMode: row.caravanPlacementMode,
     caravanIntro: row.caravanIntro ?? '',
     caravanRules: row.caravanRules ?? '',
@@ -476,6 +485,7 @@ export class ReservationsService {
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
     private readonly placements: PlacementsService,
+    private readonly sms: SmsService,
   ) {}
 
   async getSettings(year: number) {
@@ -728,13 +738,16 @@ export class ReservationsService {
     const femaleCount = dto.femaleCount ?? 0;
     this.assertDraftOrFullCounts(asDraft, maleCount, femaleCount);
     this.assertGroupSize(dto.type, maleCount, femaleCount);
+    const settings = await this.requireEnabledSettings(dto.year, dto.type);
     this.assertDraftOrFullTripDates(
       asDraft,
       dto.walkingStartDate,
       dto.stayStartDate,
       dto.stayEndDate,
+      dto.arrivalPeriod,
+      toDateOnly(settings.imamRezaMartyrdomDate),
+      toDateOnly(settings.prophetDemiseDate),
     );
-    const settings = await this.requireEnabledSettings(dto.year, dto.type);
     if (!asDraft && !dto.walkingRouteId) {
       throw new BadRequestException('مسیر پیاده‌روی را انتخاب کنید');
     }
@@ -784,6 +797,7 @@ export class ReservationsService {
 
     const result = await this.withCodeConflictRetry(() =>
       this.prisma.$transaction(async (tx) => {
+        await this.assertNoOpenReservation(tx, createdById);
         const { code, codeSeq } = await this.nextReservationCode(tx, dto.year);
         const created = await tx.reservation.create({
           data: {
@@ -800,6 +814,7 @@ export class ReservationsService {
             stayStartDate: parseOptionalIsoDate(dto.stayStartDate) ?? null,
             stayEndDate: parseOptionalIsoDate(dto.stayEndDate) ?? null,
             walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate) ?? null,
+            arrivalPeriod: dto.arrivalPeriod ?? null,
             requestsAccommodation: dto.requestsAccommodation ?? true,
             requestsBus: dto.requestsBus ?? true,
             requestsSimCard:
@@ -841,6 +856,9 @@ export class ReservationsService {
       }),
     );
     await this.users.ensureRole(createdById, 'PILGRIM');
+    if (!asDraft) {
+      await this.notifyInitialRegistration(result, actor.id);
+    }
     return result;
   }
 
@@ -921,11 +939,22 @@ export class ReservationsService {
       dto.stayEndDate !== undefined
         ? dto.stayEndDate
         : toDateOnly(current.stayEndDate);
+    const arrivalPeriod =
+      dto.arrivalPeriod !== undefined
+        ? dto.arrivalPeriod
+        : current.arrivalPeriod;
+    const occasionSettings = await this.prisma.receptionSettings.findUnique({
+      where: { year },
+      select: { imamRezaMartyrdomDate: true, prophetDemiseDate: true },
+    });
     this.assertDraftOrFullTripDates(
       draftSoft,
       walkingStart,
       stayStart,
       stayEnd,
+      arrivalPeriod,
+      toDateOnly(occasionSettings?.imamRezaMartyrdomDate),
+      toDateOnly(occasionSettings?.prophetDemiseDate),
     );
 
     let placementMode: PlacementMode | undefined;
@@ -1026,6 +1055,8 @@ export class ReservationsService {
       stayStartDate: parseOptionalIsoDate(dto.stayStartDate),
       stayEndDate: parseOptionalIsoDate(dto.stayEndDate),
       walkingStartDate: parseOptionalIsoDate(dto.walkingStartDate),
+      arrivalPeriod:
+        dto.arrivalPeriod === undefined ? undefined : dto.arrivalPeriod,
       requestsAccommodation: dto.requestsAccommodation,
       requestsBus: dto.requestsBus,
       requestsSimCard:
@@ -1122,10 +1153,12 @@ export class ReservationsService {
   }
 
   async submit(id: string, actor: Actor) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await this.requireReservation(id, tx);
       return this.submitDraft(tx, current, actor);
     });
+    await this.notifyInitialRegistration(result, actor.id);
+    return result;
   }
 
   async approve(id: string, actor: Actor, dto?: ApproveReservationDto) {
@@ -1433,13 +1466,15 @@ export class ReservationsService {
     return this.serialize(updated, actor);
   }
 
-  /** Hard-delete an owner create-wizard draft (پیش‌نویس / اطلاعات اولیه). */
+  /** Hard-delete an owner create-wizard draft or a cancelled file. */
   async remove(id: string, actor: Actor) {
     const current = await this.requireReservation(id);
     this.assertOwnerOrAdmin(current, actor);
-    if (!isOwnerCreateDraft(current)) {
+    const draft = isOwnerCreateDraft(current);
+    const cancelled = current.status === ReservationStatus.CANCELLED;
+    if (!draft && !cancelled) {
       throw new BadRequestException(
-        'فقط پرونده پیش‌نویس یا اطلاعات اولیه قابل حذف است',
+        'فقط پرونده پیش‌نویس یا انصراف‌داده‌شده قابل حذف است',
       );
     }
 
@@ -1453,7 +1488,9 @@ export class ReservationsService {
       if (permitImageId) {
         await tx.storedImage.deleteMany({ where: { id: permitImageId } });
       }
-      if (partyMale + partyFemale > 0) {
+      // Cancelled files no longer occupy reception capacity. Drafts still
+      // wrote party headcount onto the group/caravan during the wizard.
+      if (draft && partyMale + partyFemale > 0) {
         await this.syncPartyCapacity(tx, {
           type: current.type,
           groupId: current.groupId,
@@ -1503,6 +1540,24 @@ export class ReservationsService {
         `reservation.purgeAll deleted=${deleted.count} by=${actor.id}`,
       );
       return { deleted: deleted.count };
+    });
+  }
+
+  async findOpen(actor: Actor, userId?: string) {
+    const subjectId = userId || actor.id;
+    if (subjectId !== actor.id && !isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
+    }
+    return this.prisma.reservation.findFirst({
+      where: openReservationWhere(subjectId),
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        returnedToStatus: true,
+        createdById: true,
+      },
     });
   }
 
@@ -1624,13 +1679,27 @@ export class ReservationsService {
   async getMineHome(actor: Actor) {
     const showPilgrim = isPilgrim(actor);
     const showManager = isCaravanManager(actor);
-    const [pilgrim, caravanManager] = await Promise.all([
+    const year = currentJalaliYear();
+    const [pilgrim, caravanManager, currentYearFileCount] = await Promise.all([
       showPilgrim ? this.buildPilgrimHome(actor.id) : Promise.resolve(null),
       showManager
         ? this.buildCaravanManagerHome(actor.id)
         : Promise.resolve(null),
+      this.prisma.reservation.count({
+        where: {
+          year,
+          status: {
+            notIn: [ReservationStatus.CANCELLED, ReservationStatus.REJECTED],
+          },
+          OR: [this.pilgrimHomeWhere(actor.id), this.managerHomeWhere(actor.id)],
+        },
+      }),
     ]);
-    return { pilgrim, caravanManager };
+    return {
+      pilgrim,
+      caravanManager,
+      hasCurrentYearFile: currentYearFileCount > 0,
+    };
   }
 
   private pilgrimHomeWhere(userId: string): Prisma.ReservationWhereInput {
@@ -2633,8 +2702,12 @@ export class ReservationsService {
     if (!current.walkingRouteId) {
       throw new BadRequestException('مسیر پیاده‌روی انتخاب نشده است');
     }
-    const stages = await this.prisma.walkingRouteStage.findMany({
-      where: { walkingRouteId: current.walkingRouteId },
+    const stages = (
+      await this.prisma.walkingRouteStage.findMany({
+      where: {
+        walkingRouteId: current.walkingRouteId,
+        kind: WalkingRouteStageKind.STATION,
+      },
       orderBy: { stageNumber: 'asc' },
       include: {
         walkingStation: {
@@ -2651,7 +2724,15 @@ export class ReservationsService {
           },
         },
       },
-    });
+    })
+    ).filter(
+      (
+        stage,
+      ): stage is typeof stage & {
+        walkingStationId: string;
+        walkingStation: NonNullable<(typeof stage)['walkingStation']>;
+      } => stage.walkingStationId != null && stage.walkingStation != null,
+    );
     const stays = await this.prisma.reservationStationStay.findMany({
       where: {
         reservationId: id,
@@ -2847,11 +2928,18 @@ export class ReservationsService {
       throw new BadRequestException('مسیر پیاده‌روی انتخاب نشده است');
     }
     const stages = await this.prisma.walkingRouteStage.findMany({
-      where: { walkingRouteId: current.walkingRouteId },
+      where: {
+        walkingRouteId: current.walkingRouteId,
+        kind: WalkingRouteStageKind.STATION,
+        walkingStationId: { not: null },
+      },
       orderBy: { stageNumber: 'asc' },
       select: { walkingStationId: true },
     });
-    if (!stages.length) {
+    const stationIds = stages.flatMap((stage) =>
+      stage.walkingStationId ? [stage.walkingStationId] : [],
+    );
+    if (!stationIds.length) {
       throw new BadRequestException('ایستگاهی در مسیر پرونده نیست');
     }
     const assignBy: RoutePlacementAssignBy =
@@ -2869,14 +2957,14 @@ export class ReservationsService {
     await this.prisma.$transaction(async (tx) => {
       let stayDate = dto.stayDate;
       let mealType: StationMealType = dto.mealType;
-      for (const stage of stages) {
+      for (const walkingStationId of stationIds) {
         if (endDate && stayDate > endDate) {
           break;
         }
         await this.upsertStationStay(
           tx,
           current,
-          stage.walkingStationId,
+          walkingStationId,
           parseIsoDate(stayDate),
           mealType,
           actor.id,
@@ -3426,11 +3514,23 @@ export class ReservationsService {
   ) {
     if (originCityId) return originCityId;
     const firstStage = await tx.walkingRouteStage.findFirst({
-      where: { walkingRouteId },
+      where: { walkingRouteId, kind: WalkingRouteStageKind.STATION },
       orderBy: { stageNumber: 'asc' },
       select: { walkingStation: { select: { cityId: true } } },
     });
-    return firstStage?.walkingStation.cityId ?? null;
+    return firstStage?.walkingStation?.cityId ?? null;
+  }
+
+  private async assertNoOpenReservation(tx: Tx, userId: string) {
+    const open = await tx.reservation.findFirst({
+      where: openReservationWhere(userId),
+      select: { id: true },
+    });
+    if (open) {
+      throw new ConflictException(
+        'پرونده زیارتی فعال وجود دارد. تا تکمیل یا انصراف، پرونده جدیدی ساخته نمی‌شود',
+      );
+    }
   }
 
   private async resolveCreatedById(
@@ -3534,10 +3634,18 @@ export class ReservationsService {
     const requestedMale = current.requestedMaleCount || current.maleCount;
     const requestedFemale = current.requestedFemaleCount || current.femaleCount;
     this.assertCounts(requestedMale, requestedFemale);
+    const occasionSettings = await tx.receptionSettings.findUnique({
+      where: { year: current.year },
+      select: { imamRezaMartyrdomDate: true, prophetDemiseDate: true },
+    });
     this.assertTripDates(
       toDateOnly(current.walkingStartDate),
       toDateOnly(current.stayStartDate),
       toDateOnly(current.stayEndDate),
+      current.arrivalPeriod,
+      true,
+      toDateOnly(occasionSettings?.imamRezaMartyrdomDate),
+      toDateOnly(occasionSettings?.prophetDemiseDate),
     );
     if (!current.walkingRouteId) {
       throw new BadRequestException('مسیر پیاده‌روی را انتخاب کنید');
@@ -3671,6 +3779,44 @@ export class ReservationsService {
       this.emitWorkflowEvent('complete', current.id, stampUserId);
     }
     return this.serialize(updated, actor);
+  }
+
+  /** پیامک ثبت‌نام اولیه وقتی پرونده در انتظار بررسی ستاد می‌ماند. */
+  private async notifyInitialRegistration(
+    result: {
+      status: ReservationStatus;
+      year: number;
+      code: string;
+      createdBy: { phone: string | null };
+    },
+    actorId: string,
+  ) {
+    if (result.status !== ReservationStatus.PENDING_MANAGEMENT_REVIEW) {
+      return;
+    }
+    const phone = result.createdBy.phone?.trim();
+    if (!phone) {
+      return;
+    }
+    const year = toPersianDigits(String(result.year));
+    const code = toPersianDigits(result.code);
+    const body = [
+      `زائر گرامی، ثبت‌نام اولیه پرونده زیارتی سال ${year} با موفقیت انجام شد.`,
+      '',
+      `کد پرونده: ${code}`,
+      'وضعیت: در انتظار بررسی',
+      '',
+      'نتیجه بررسی درخواست توسط ستاد جمعیت، از طریق پیامک به شما اطلاع‌رسانی خواهد شد.',
+    ].join('\n');
+    try {
+      await this.sms.send({ phone, body, sentById: actorId });
+    } catch (error) {
+      this.logger.warn(
+        `پیامک ثبت‌نام اولیه پرونده ${result.code} ارسال نشد: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private async ensureApplicantMember(
@@ -4096,6 +4242,10 @@ export class ReservationsService {
     walkingStart?: string | null,
     stayStart?: string | null,
     stayEnd?: string | null,
+    arrivalPeriod?: ReservationArrivalPeriod | null,
+    requireArrival = false,
+    imamRezaMartyrdomDate?: string | null,
+    prophetDemiseDate?: string | null,
   ) {
     if (!walkingStart) {
       throw new BadRequestException('تاریخ شروع پیاده‌روی را وارد کنید');
@@ -4105,6 +4255,9 @@ export class ReservationsService {
     }
     if (!stayEnd) {
       throw new BadRequestException('تاریخ پایان اقامت را وارد کنید');
+    }
+    if (requireArrival && !arrivalPeriod) {
+      throw new BadRequestException('زمان رسیدن را انتخاب کنید');
     }
     if (walkingStart && stayStart && stayStart <= walkingStart) {
       throw new BadRequestException(
@@ -4116,6 +4269,18 @@ export class ReservationsService {
         'تاریخ پایان اقامت باید مساوی یا بعد از تاریخ رسیدن به مشهد باشد',
       );
     }
+    if (
+      imamRezaMartyrdomDate &&
+      stayStart &&
+      stayEnd &&
+      stayStart <= imamRezaMartyrdomDate &&
+      stayEnd > imamRezaMartyrdomDate
+    ) {
+      throw new BadRequestException(
+        'تاریخ پایان اقامت نباید بعد از تاریخ شهادت امام رضا (ع) باشد',
+      );
+    }
+    this.assertProphetArrival(stayStart, arrivalPeriod, prophetDemiseDate);
   }
 
   private assertDraftOrFullTripDates(
@@ -4123,18 +4288,60 @@ export class ReservationsService {
     walkingStart?: string | null,
     stayStart?: string | null,
     stayEnd?: string | null,
+    arrivalPeriod?: ReservationArrivalPeriod | null,
+    imamRezaMartyrdomDate?: string | null,
+    prophetDemiseDate?: string | null,
   ) {
     if (!asDraft) {
-      this.assertTripDates(walkingStart, stayStart, stayEnd);
+      this.assertTripDates(
+        walkingStart,
+        stayStart,
+        stayEnd,
+        arrivalPeriod,
+        true,
+        imamRezaMartyrdomDate,
+        prophetDemiseDate,
+      );
       return;
     }
     if (stayStart && stayEnd) {
-      this.assertTripDates(walkingStart, stayStart, stayEnd);
+      this.assertTripDates(
+        walkingStart,
+        stayStart,
+        stayEnd,
+        arrivalPeriod,
+        false,
+        imamRezaMartyrdomDate,
+        prophetDemiseDate,
+      );
       return;
     }
+    this.assertProphetArrival(stayStart, arrivalPeriod, prophetDemiseDate);
     if (walkingStart && stayStart && stayStart <= walkingStart) {
       throw new BadRequestException(
         'تاریخ شروع پیاده‌روی باید قبل از تاریخ رسیدن به مشهد باشد',
+      );
+    }
+  }
+
+  private assertProphetArrival(
+    stayStart?: string | null,
+    arrivalPeriod?: ReservationArrivalPeriod | null,
+    prophetDemiseDate?: string | null,
+  ) {
+    if (!prophetDemiseDate || !stayStart) return;
+    const earliest = addDaysIso(prophetDemiseDate, -1);
+    if (stayStart < earliest) {
+      throw new BadRequestException(
+        'تاریخ رسیدن به مشهد نمی‌تواند زودتر از یک روز قبل از رحلت حضرت رسول اکرم (ص) باشد',
+      );
+    }
+    if (
+      stayStart === earliest &&
+      arrivalPeriod === ReservationArrivalPeriod.BEFORE_NOON
+    ) {
+      throw new BadRequestException(
+        'اگر تاریخ رسیدن یک روز قبل از رحلت حضرت رسول اکرم (ص) باشد، زمان رسیدن باید بعد از ظهر باشد',
       );
     }
   }
@@ -5063,6 +5270,7 @@ export class ReservationsService {
       stayStartDate: toDateOnly(row.stayStartDate),
       stayEndDate: toDateOnly(row.stayEndDate),
       walkingStartDate: toDateOnly(row.walkingStartDate),
+      arrivalPeriod: row.arrivalPeriod,
       requestsAccommodation: row.requestsAccommodation,
       requestsBus: row.requestsBus,
       requestsSimCard: row.requestsSimCard,
@@ -5128,6 +5336,7 @@ export class ReservationsService {
       stayStartDate: toDateOnly(row.stayStartDate),
       stayEndDate: toDateOnly(row.stayEndDate),
       walkingStartDate: toDateOnly(row.walkingStartDate),
+      arrivalPeriod: row.arrivalPeriod,
       requestsAccommodation: row.requestsAccommodation,
       requestsBus: row.requestsBus,
       requestsSimCard: row.requestsSimCard,
@@ -5333,6 +5542,10 @@ function optionalDigits(value?: string | null) {
   if (value == null || value === '') return null;
   const digits = toLatinDigits(value).replace(/\D/g, '');
   return digits.length ? digits : null;
+}
+
+function toPersianDigits(value: string) {
+  return value.replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
 }
 
 function optionalIban(value?: string | null) {

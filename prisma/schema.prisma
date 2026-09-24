@@ -492,6 +492,11 @@ enum ReservationType {
   CARAVAN
 }
 
+enum ReservationArrivalPeriod {
+  BEFORE_NOON
+  AFTER_NOON
+}
+
 enum PlacementMode {
   MANUAL
   SYSTEM
@@ -586,6 +591,8 @@ model Reservation {
   stayStartDate    DateTime? @db.Date
   stayEndDate      DateTime? @db.Date
   walkingStartDate DateTime? @db.Date
+  /// Arrival time of day in Mashhad; before noon includes the lunch meal.
+  arrivalPeriod    ReservationArrivalPeriod?
 
   requestsAccommodation Boolean @default(true)
   requestsBus           Boolean @default(true)
@@ -810,6 +817,8 @@ model ReceptionSettings {
   caravanFemaleCapacity       Int           @default(0)
   caravanAutoApprove          Boolean       @default(false)
   caravanAutoApproveLicenses  Boolean       @default(false)
+  /// Max caravans one national ID may define in this reception year.
+  caravanMaxPerNationalId     Int           @default(1)
   caravanPlacementMode        PlacementMode @default(MANUAL)
   caravanIntro                String        @default("")
   caravanRules                String        @default("")
@@ -895,6 +904,7 @@ model SmsSettings {
   senderNumber String
   username     String
   password     String
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1348,12 +1358,19 @@ model WalkingStation {
   @@map("walking_stations")
 }
 
+enum WalkingRouteStageKind {
+  STATION
+  DESTINATION
+}
+
 model WalkingRouteStage {
-  id                   String         @id @default(uuid())
+  id                   String                 @id @default(uuid())
   walkingRouteId       String
-  walkingRoute         WalkingRoute   @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
-  walkingStationId     String
-  walkingStation       WalkingStation @relation(fields: [walkingStationId], references: [id], onDelete: Restrict)
+  walkingRoute         WalkingRoute           @relation(fields: [walkingRouteId], references: [id], onDelete: Cascade)
+  walkingStationId     String?
+  walkingStation       WalkingStation?        @relation(fields: [walkingStationId], references: [id], onDelete: Restrict)
+  /// STATION is a real stop. DESTINATION is Mashhad and has no station.
+  kind                 WalkingRouteStageKind  @default(STATION)
   stageNumber          Int
   distanceToNextKm     Decimal?       @db.Decimal(8, 2)
   distanceToPreviousKm Decimal?       @db.Decimal(8, 2)

@@ -1,6 +1,7 @@
 import {
   PlacementGenderPolicy,
   PlacementMode,
+  Prisma,
   ReservationStatus,
   ReservationType,
 } from '../generated/prisma/client';
@@ -15,6 +16,23 @@ export const IN_PROGRESS_STATUSES: ReservationStatus[] = [
   ReservationStatus.CARAVAN_CONTACTS,
   ReservationStatus.INSURANCE,
 ];
+
+/** A file stops blocking a new one only after completion or cancellation. */
+export const CLOSED_RESERVATION_STATUSES: ReservationStatus[] = [
+  ReservationStatus.COMPLETED,
+  ReservationStatus.CANCELLED,
+];
+
+export function openReservationWhere(userId: string): Prisma.ReservationWhereInput {
+  return {
+    status: { notIn: CLOSED_RESERVATION_STATUSES },
+    OR: [
+      { createdById: userId },
+      { caravanManagerId: userId },
+      { members: { some: { userId } } },
+    ],
+  };
+}
 
 export const NON_OCCUPYING_STATUSES: ReservationStatus[] = [
   ReservationStatus.DRAFT,

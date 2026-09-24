@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { UserGender } from '../../generated/prisma/client';
@@ -21,8 +22,8 @@ export class SelfRegisterDto {
   )
   @IsString()
   @MinLength(3)
-  @Matches(/^[A-Za-z][A-Za-z0-9._-]*$/, {
-    message: 'نام کاربری باید با حروف انگلیسی باشد',
+  @Matches(/^[A-Za-z0-9._-]+$/, {
+    message: 'نام کاربری فقط می‌تواند شامل حروف انگلیسی، عدد و . _ - باشد',
   })
   username: string;
 
@@ -83,4 +84,11 @@ export class SelfRegisterDto {
   })
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsString()
+  @MaxLength(300)
+  @Matches(/^https?:\/\/\S+$/i)
+  loginUrl?: string;
 }

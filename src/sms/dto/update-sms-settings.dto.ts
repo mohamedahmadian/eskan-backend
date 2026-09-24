@@ -1,6 +1,9 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UpdateSmsSettingsDto {
+  @IsBoolean()
+  isActive: boolean;
+
   @IsString()
   @MinLength(8)
   endpoint: string;

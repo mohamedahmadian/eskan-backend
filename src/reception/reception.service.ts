@@ -9,7 +9,7 @@ import {
   isReservationCodeQuery,
   normalizeReservationCode,
 } from '../common/reservation-code';
-import { Prisma } from '../generated/prisma/client';
+import { AllocationStatus, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   RECEPTION_SEARCH_PAGE_SIZE,
@@ -59,6 +59,44 @@ const visitReservationSelect = {
     },
   },
   caravanManager: { select: { fullName: true, phone: true } },
+  allocations: {
+    where: { status: AllocationStatus.ACTIVE },
+    orderBy: { placedAt: 'asc' },
+    select: {
+      id: true,
+      gender: true,
+      accommodation: {
+        select: {
+          id: true,
+          name: true,
+          genderType: true,
+          phone: true,
+          address: true,
+          neshanAddress: true,
+          latitude: true,
+          longitude: true,
+          distanceToShrineKm: true,
+          eitaa: true,
+          bale: true,
+          otherSocial: true,
+          managers: {
+            orderBy: [
+              { year: 'desc' as const },
+              { isPrimary: 'desc' as const },
+              { createdAt: 'asc' as const },
+            ],
+            select: {
+              id: true,
+              year: true,
+              isPrimary: true,
+              userId: true,
+              user: { select: { id: true, fullName: true, phone: true } },
+            },
+          },
+        },
+      },
+    },
+  },
   group: {
     select: {
       id: true,
@@ -779,40 +817,9 @@ export class ReceptionService {
     return 4;
   }
 
-  private toVisit(reservation: {
-    id: string;
-    code: string;
-    year: number;
-    type: string;
-    status: string;
-    stayStartDate: Date | null;
-    stayEndDate: Date | null;
-    walkingStartDate: Date | null;
-    requestedMaleCount: number;
-    requestedFemaleCount: number;
-    maleCount: number;
-    femaleCount: number;
-    totalCount: number;
-    originCity: {
-      id: string;
-      nameFa: string;
-      nameEn: string;
-      provinceId: string;
-    } | null;
-    walkingRoute: { id: string; name: string } | null;
-    caravan: {
-      id: string;
-      name: string;
-      walkingRoute: { id: string; name: string } | null;
-      manager: { fullName: string; phone: string | null } | null;
-    } | null;
-    group: {
-      id: string;
-      name: string;
-      walkingRoute: { id: string; name: string } | null;
-    } | null;
-    caravanManager: { fullName: string; phone: string | null } | null;
-  }) {
+  private toVisit(
+    reservation: Prisma.ReservationGetPayload<{ select: typeof visitReservationSelect }>,
+  ) {
     const manager = reservation.caravanManager ?? reservation.caravan?.manager ?? null;
     return {
       id: reservation.id,
@@ -844,7 +851,60 @@ export class ReceptionService {
       groupId: reservation.group?.id ?? null,
       caravanManagerName: manager?.fullName ?? null,
       caravanManagerPhone: manager?.phone ?? null,
+      stays: this.toVisitStays(reservation.allocations),
     };
+  }
+
+  private toVisitStays(
+    allocations: Prisma.ReservationGetPayload<{
+      select: typeof visitReservationSelect;
+    }>['allocations'],
+  ) {
+    const stays: Array<{
+      id: string;
+      gender: (typeof allocations)[number]['gender'];
+      accommodation: {
+        id: string;
+        name: string;
+        genderType: (typeof allocations)[number]['accommodation']['genderType'];
+        phone: string | null;
+        address: string | null;
+        neshanAddress: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        distanceToShrineKm: number | null;
+        eitaa: string | null;
+        bale: string | null;
+        otherSocial: string | null;
+        managers: (typeof allocations)[number]['accommodation']['managers'];
+      };
+    }> = [];
+    const seen = new Set<string>();
+    for (const item of allocations) {
+      const place = item.accommodation;
+      if (seen.has(place.id)) continue;
+      seen.add(place.id);
+      stays.push({
+        id: item.id,
+        gender: item.gender,
+        accommodation: {
+          id: place.id,
+          name: place.name,
+          genderType: place.genderType,
+          phone: place.phone,
+          address: place.address,
+          neshanAddress: place.neshanAddress,
+          latitude: toCoord(place.latitude),
+          longitude: toCoord(place.longitude),
+          distanceToShrineKm: toCoord(place.distanceToShrineKm),
+          eitaa: place.eitaa,
+          bale: place.bale,
+          otherSocial: place.otherSocial,
+          managers: place.managers,
+        },
+      });
+    }
+    return stays;
   }
 
   private toAccommodationSummary(item: {
@@ -958,6 +1018,12 @@ export class ReceptionService {
       ],
     };
   }
+}
+
+function toCoord(value: Prisma.Decimal | null) {
+  if (value == null) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
 }
 
 function toDateOnly(value?: Date | string | null) {

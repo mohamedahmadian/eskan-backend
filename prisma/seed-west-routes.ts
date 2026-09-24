@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Prisma } from '../src/generated/prisma/client';
+import { Prisma, WalkingRouteStageKind } from '../src/generated/prisma/client';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
@@ -57,7 +57,6 @@ const routes: RouteSpec[] = [
       { provinceFa: 'سمنان', cityFa: 'شاهرود', stationName: 'ایستگاه شاهرود', toMashhadKm: 480 },
       { provinceFa: 'خراسان رضوی', cityFa: 'سبزوار', stationName: 'ایستگاه سبزوار', toMashhadKm: 240 },
       { provinceFa: 'خراسان رضوی', cityFa: 'نیشابور', stationName: 'ایستگاه نیشابور', toMashhadKm: 120 },
-      { provinceFa: 'خراسان رضوی', cityFa: 'مشهد', stationName: 'ایستگاه مشهد', toMashhadKm: 0 },
     ],
   },
   {
@@ -79,7 +78,6 @@ const routes: RouteSpec[] = [
       { provinceFa: 'سمنان', cityFa: 'شاهرود', stationName: 'ایستگاه شاهرود', toMashhadKm: 480 },
       { provinceFa: 'خراسان رضوی', cityFa: 'سبزوار', stationName: 'ایستگاه سبزوار', toMashhadKm: 240 },
       { provinceFa: 'خراسان رضوی', cityFa: 'نیشابور', stationName: 'ایستگاه نیشابور', toMashhadKm: 120 },
-      { provinceFa: 'خراسان رضوی', cityFa: 'مشهد', stationName: 'ایستگاه مشهد', toMashhadKm: 0 },
     ],
   },
   {
@@ -99,7 +97,6 @@ const routes: RouteSpec[] = [
       { provinceFa: 'سمنان', cityFa: 'شاهرود', stationName: 'ایستگاه شاهرود', toMashhadKm: 490 },
       { provinceFa: 'خراسان رضوی', cityFa: 'سبزوار', stationName: 'ایستگاه سبزوار', toMashhadKm: 250 },
       { provinceFa: 'خراسان رضوی', cityFa: 'نیشابور', stationName: 'ایستگاه نیشابور', toMashhadKm: 125 },
-      { provinceFa: 'خراسان رضوی', cityFa: 'مشهد', stationName: 'ایستگاه مشهد', toMashhadKm: 0 },
     ],
   },
 ];
@@ -237,20 +234,27 @@ async function upsertRoute(spec: RouteSpec, iraqId: string) {
     resolved.push({ spec: stage, walkingStationId });
   }
 
-  const stages = resolved.map((row, index) => {
-    const prev = resolved[index - 1];
-    const next = resolved[index + 1];
-    return {
-      walkingStationId: row.walkingStationId,
-      stageNumber: index + 1,
-      distanceToPreviousKm: prev
-        ? dec(Math.abs(prev.spec.toMashhadKm - row.spec.toMashhadKm))
-        : null,
-      distanceToNextKm: next
-        ? dec(Math.abs(row.spec.toMashhadKm - next.spec.toMashhadKm))
-        : null,
-    };
-  });
+  const stages = [
+    ...resolved.map((row, index) => {
+      const prev = resolved[index - 1];
+      const next = resolved[index + 1];
+      return {
+        kind: WalkingRouteStageKind.STATION,
+        walkingStationId: row.walkingStationId,
+        stageNumber: index + 1,
+        distanceToPreviousKm: prev
+          ? dec(Math.abs(prev.spec.toMashhadKm - row.spec.toMashhadKm))
+          : null,
+        distanceToNextKm: next
+          ? dec(Math.abs(row.spec.toMashhadKm - next.spec.toMashhadKm))
+          : null,
+      };
+    }),
+    {
+      kind: WalkingRouteStageKind.DESTINATION,
+      stageNumber: resolved.length + 1,
+    },
+  ];
 
   const existing = await prisma.walkingRoute.findFirst({
     where: { name: spec.name },

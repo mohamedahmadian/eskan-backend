@@ -26,6 +26,7 @@ import {
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
 import {
+  AllocationStatus,
   LocationSource,
   Prisma,
   Religion,
@@ -955,6 +956,7 @@ export class UsersService {
       isCaravanManager || isPilgrimUser
         ? await this.findPublicPilgrimages(user.id)
         : [];
+    const currentVisit = await this.findCurrentYearVisit(user.id);
 
     return {
       id: user.id,
@@ -980,7 +982,187 @@ export class UsersService {
           }))
         : [],
       pilgrimages,
+      currentVisit,
     };
+  }
+
+  private async findCurrentYearVisit(userId: string) {
+    const year = currentJalaliYear();
+    const [reservation, caravanYear] = await Promise.all([
+      this.prisma.reservation.findFirst({
+        where: {
+          year,
+          status: {
+            notIn: [ReservationStatus.CANCELLED, ReservationStatus.REJECTED],
+          },
+          OR: [
+            { members: { some: { userId } } },
+            {
+              createdById: userId,
+              type: { in: [ReservationType.INDIVIDUAL, ReservationType.GROUP] },
+            },
+            { caravanManagerId: userId },
+          ],
+        },
+        orderBy: [{ stayStartDate: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          code: true,
+          type: true,
+          status: true,
+          walkingStartDate: true,
+          stayStartDate: true,
+          originCity: { select: { id: true, nameFa: true, nameEn: true } },
+          caravanManager: { select: { fullName: true, phone: true } },
+          caravan: {
+            select: {
+              id: true,
+              name: true,
+              manager: { select: { fullName: true, phone: true } },
+            },
+          },
+          allocations: {
+            where: { status: AllocationStatus.ACTIVE },
+            orderBy: { placedAt: 'desc' },
+            take: 1,
+            select: {
+              accommodation: {
+                select: {
+                  name: true,
+                  phone: true,
+                  address: true,
+                  latitude: true,
+                  longitude: true,
+                  neshanAddress: true,
+                  managers: {
+                    where: { year, userId: { not: null } },
+                    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+                    take: 1,
+                    select: { user: { select: { fullName: true, phone: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.caravanYear.findFirst({
+        where: {
+          year,
+          OR: [
+            { managerUserId: userId },
+            { caravan: { managerUserId: userId } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          caravanId: true,
+          manager: { select: { fullName: true, phone: true } },
+          caravan: {
+            select: {
+              name: true,
+              manager: { select: { fullName: true, phone: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const place = reservation?.allocations[0]?.accommodation ?? null;
+    const lat = place?.latitude == null ? null : Number(place.latitude);
+    const lng = place?.longitude == null ? null : Number(place.longitude);
+    const hasPoint =
+      lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng);
+    const neshan = place?.neshanAddress?.trim() || '';
+    const mapUrl = hasPoint
+      ? `https://maps.google.com/?q=${lat},${lng}`
+      : /^https?:\/\//i.test(neshan)
+        ? neshan
+        : null;
+    const writtenAddress = place?.address?.trim() || '';
+    const address =
+      writtenAddress ||
+      (neshan && !/^https?:\/\//i.test(neshan) ? neshan : '') ||
+      null;
+    const stay = place
+      ? {
+          name: place.name,
+          address,
+          phone: place.phone?.trim() || null,
+          managerName: place.managers[0]?.user?.fullName?.trim() || null,
+          managerPhone: place.managers[0]?.user?.phone?.trim() || null,
+          mapUrl,
+        }
+      : null;
+    const caravanName = reservation?.caravan?.name ?? caravanYear?.caravan.name ?? null;
+    const file = reservation
+      ? { code: reservation.code, type: reservation.type, status: reservation.status }
+      : null;
+    const party =
+      reservation?.type === ReservationType.INDIVIDUAL ||
+      reservation?.type === ReservationType.GROUP;
+    const travel = party
+      ? {
+          originCity: reservation?.originCity ?? null,
+          departureDate: toDateOnly(reservation?.walkingStartDate),
+          arrivalDate: toDateOnly(reservation?.stayStartDate),
+        }
+      : null;
+    const caravan = this.currentVisitCaravan(reservation, caravanYear);
+    if (!file && !caravanName && !stay && !caravan && !travel) return null;
+
+    return {
+      year,
+      file,
+      caravanName,
+      caravan,
+      travel,
+      stay,
+    };
+  }
+
+  private currentVisitCaravan(
+    reservation: {
+      type: ReservationType;
+      caravanManager: { fullName: string; phone: string | null } | null;
+      caravan: {
+        id: string;
+        name: string;
+        manager: { fullName: string; phone: string | null } | null;
+      } | null;
+    } | null,
+    caravanYear: {
+      caravanId: string;
+      manager: { fullName: string; phone: string | null } | null;
+      caravan: {
+        name: string;
+        manager: { fullName: string; phone: string | null } | null;
+      };
+    } | null,
+  ) {
+    const person = (
+      manager: { fullName: string; phone: string | null } | null | undefined,
+    ) => ({
+      managerName: manager?.fullName?.trim() || null,
+      managerPhone: manager?.phone?.trim() || null,
+    });
+
+    if (reservation?.type === ReservationType.CARAVAN && reservation.caravan) {
+      const yearManager =
+        caravanYear?.caravanId === reservation.caravan.id ? caravanYear.manager : null;
+      return {
+        name: reservation.caravan.name,
+        ...person(reservation.caravanManager ?? yearManager ?? reservation.caravan.manager),
+      };
+    }
+
+    if (!reservation && caravanYear?.caravan) {
+      return {
+        name: caravanYear.caravan.name,
+        ...person(caravanYear.manager ?? caravanYear.caravan.manager),
+      };
+    }
+
+    return null;
   }
 
   private async findPublicPilgrimages(userId: string) {
@@ -1694,17 +1876,21 @@ export class UsersService {
     phone?: string;
     passportNumber?: string;
     email?: string;
+    loginUrl?: string;
   }) {
     const username = toLatinDigits(dto.username.trim());
+    const password = toLatinDigits(dto.password);
     if (username.length < 3) {
       throw new BadRequestException('نام کاربری باید حداقل ۳ کاراکتر باشد');
     }
-    if (toLatinDigits(dto.password).length < 8) {
+    if (password.length < 8) {
       throw new BadRequestException('رمز عبور باید حداقل ۸ کاراکتر باشد');
     }
 
-    if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(username)) {
-      throw new BadRequestException('نام کاربری باید با حروف انگلیسی باشد');
+    if (!/^[A-Za-z0-9._-]+$/.test(username)) {
+      throw new BadRequestException(
+        'نام کاربری فقط می‌تواند شامل حروف انگلیسی، عدد و . _ - باشد',
+      );
     }
 
     const iran = await this.prisma.country.findFirst({
@@ -1766,7 +1952,7 @@ export class UsersService {
       email,
     });
 
-    const passwordHash = await bcrypt.hash(toLatinDigits(dto.password), 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     await this.prisma.user.create({
       data: {
@@ -1786,7 +1972,45 @@ export class UsersService {
       select: { id: true },
     });
 
+    if (phone) {
+      await this.sendRegisterWelcomeSms({
+        phone,
+        username,
+        password,
+        loginUrl: dto.loginUrl?.trim(),
+      });
+    }
+
     return { status: 'registered' as const, locale };
+  }
+
+  /** اگر سرویس پیامک فعال باشد، مشخصات ورود برای زائر پیامک می‌شود. */
+  private async sendRegisterWelcomeSms(input: {
+    phone: string;
+    username: string;
+    password: string;
+    loginUrl?: string;
+  }) {
+    const settings = await this.sms.getSettings();
+    if (!settings.isActive) return;
+
+    const lines = [
+      'به سامانه زائرین خوش آمدید',
+      `نام کاربری: ${input.username}`,
+      `رمز عبور: ${input.password}`,
+    ];
+    if (input.loginUrl) {
+      lines.push(`آدرس ورود: ${input.loginUrl}`);
+    }
+
+    try {
+      await this.sms.send({
+        phone: input.phone,
+        body: lines.join('\n'),
+      });
+    } catch {
+      // حساب ساخته شده؛ خطای پیامک مانع ثبت‌نام نمی‌شود
+    }
   }
 
   private async findActiveByIdentifier(identifier: string) {
@@ -2617,6 +2841,7 @@ export class UsersService {
     }
 
     const exclude = dto.excludeId ? { NOT: { id: dto.excludeId } } : {};
+    const phoneVariants = phone ? phoneLookupValues(phone) : [];
     const [nationalIdHit, passportHit, phoneHit, usernameHit, emailHit] =
       await Promise.all([
         nationalId
@@ -2633,7 +2858,10 @@ export class UsersService {
           : Promise.resolve(null),
         phone
           ? this.prisma.user.findFirst({
-              where: { phone, ...exclude },
+              where: {
+                phone: { in: phoneVariants.length ? phoneVariants : [phone] },
+                ...exclude,
+              },
               select: { id: true },
             })
           : Promise.resolve(null),
@@ -3365,11 +3593,12 @@ export class UsersService {
     const username = dto.username?.trim() || undefined;
     const nationalId = dto.nationalId?.trim() || undefined;
     const phone = dto.phone ? normalizePhone(dto.phone) || undefined : undefined;
+    const phoneVariants = phone ? phoneLookupValues(phone) : [];
     const email = dto.email?.trim() || undefined;
     const filters: Prisma.UserWhereInput[] = [];
     if (username) filters.push({ username });
     if (nationalId) filters.push({ nationalId });
-    if (phone) filters.push({ phone });
+    if (phoneVariants.length) filters.push({ phone: { in: phoneVariants } });
     if (email) filters.push({ email });
     if (!filters.length) {
       return;
@@ -3392,7 +3621,7 @@ export class UsersService {
             : 'کد ملی تکراری است',
         );
       }
-      if (phone && row.phone === phone) {
+      if (phoneVariants.length && row.phone && phoneVariants.includes(row.phone)) {
         throw new ConflictException('شماره تلفن تکراری است');
       }
       if (email && row.email === email) {

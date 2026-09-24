@@ -76,6 +76,7 @@ export class SmsService {
       senderNumber: settings.senderNumber,
       username: settings.username,
       hasPassword: Boolean(settings.password),
+      isActive: settings.isActive,
     };
   }
 
@@ -90,6 +91,7 @@ export class SmsService {
     const settings = await this.prisma.smsSettings.update({
       where: { id: SETTINGS_ID },
       data: {
+        isActive: dto.isActive,
         endpoint: dto.endpoint.trim(),
         senderNumber: dto.senderNumber.trim(),
         username: dto.username.trim(),
@@ -98,6 +100,7 @@ export class SmsService {
     });
 
     return {
+      isActive: settings.isActive,
       endpoint: settings.endpoint,
       senderNumber: settings.senderNumber,
       username: settings.username,
@@ -154,6 +157,13 @@ export class SmsService {
 
   async assertConfigured() {
     const settings = await this.ensureSettings();
+    this.assertReady(settings);
+  }
+
+  private assertReady(settings: { isActive: boolean; username: string; password: string; senderNumber: string; endpoint: string }) {
+    if (!settings.isActive) {
+      throw new BadRequestException('سامانه پیامک غیرفعال است');
+    }
     if (!settings.username || !settings.password || !settings.senderNumber || !settings.endpoint) {
       throw new BadRequestException('تنظیمات پیامک کامل نیست');
     }
@@ -161,9 +171,7 @@ export class SmsService {
 
   private async prepareSend(input: SendSmsInput): Promise<PreparedSmsJob> {
     const settings = await this.ensureSettings();
-    if (!settings.username || !settings.password || !settings.senderNumber || !settings.endpoint) {
-      throw new BadRequestException('تنظیمات پیامک کامل نیست');
-    }
+    this.assertReady(settings);
 
     const phones = this.collectPhones(input);
     if (!phones.length) {

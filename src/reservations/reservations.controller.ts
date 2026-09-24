@@ -30,6 +30,7 @@ import { CopyPreviousMembersDto } from './dto/copy-previous-members.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { AssignReservationHonoraryDto } from './dto/assign-reservation-honorary.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
+import { OpenReservationQueryDto } from './dto/open-reservation-query.dto';
 import { ImportReservationMembersDto } from './dto/import-reservation-members.dto';
 import { RejectReservationDto } from './dto/reject-reservation.dto';
 import { RejectReservationPermitDto } from './dto/reject-reservation-permit.dto';
@@ -97,6 +98,15 @@ export class ReservationsController {
   @Roles('AUTHENTICATED')
   mineHome(@CurrentUser() actor: RequestUser) {
     return this.reservations.getMineHome(actor);
+  }
+
+  @Get('open')
+  @Roles('AUTHENTICATED')
+  findOpen(
+    @Query() query: OpenReservationQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.findOpen(actor, query.userId);
   }
 
   @Get('assigned')

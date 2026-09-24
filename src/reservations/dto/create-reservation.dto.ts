@@ -13,7 +13,10 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
-import { ReservationType } from '../../generated/prisma/client';
+import {
+  ReservationArrivalPeriod,
+  ReservationType,
+} from '../../generated/prisma/client';
 
 export class CreateReservationDto {
   @IsEnum(ReservationType)
@@ -59,6 +62,12 @@ export class CreateReservationDto {
   @ValidateIf((_, value) => value != null)
   @IsDateString()
   walkingStartDate?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsEnum(ReservationArrivalPeriod)
+  arrivalPeriod?: ReservationArrivalPeriod | null;
 
   @IsOptional()
   @Type(() => Number)

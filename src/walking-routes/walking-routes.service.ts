@@ -9,10 +9,12 @@ import {
   paginationArgs,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
+import { IMAM_REZA_SHRINE, MASHHAD_CITY_NAME_FA } from '../common/shrine';
 import {
   Prisma,
   ReservationStatus,
   ReservationType,
+  WalkingRouteStageKind,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWalkingRouteDto, type WalkingRouteStageDto } from './dto/create-walking-route.dto';
@@ -61,6 +63,20 @@ type WalkingRouteRecord = Prisma.WalkingRouteGetPayload<{
   include: typeof walkingRouteInclude;
 }>;
 
+const destinationCitySelect = {
+  id: true,
+  nameFa: true,
+  nameEn: true,
+  provinceId: true,
+  latitude: true,
+  longitude: true,
+  province: { select: { ...geoSelect, countryId: true } },
+} satisfies Prisma.CitySelect;
+
+type DestinationCity = Prisma.CityGetPayload<{
+  select: typeof destinationCitySelect;
+}>;
+
 @Injectable()
 export class WalkingRoutesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -69,7 +85,7 @@ export class WalkingRoutesService {
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where = this.listWhere(query);
     const orderBy = this.listOrderBy(query);
-    const [items, total] = await Promise.all([
+    const [items, total, mashhad] = await Promise.all([
       this.prisma.walkingRoute.findMany({
         where,
         orderBy,
@@ -78,9 +94,10 @@ export class WalkingRoutesService {
         include: walkingRouteInclude,
       }),
       this.prisma.walkingRoute.count({ where }),
+      this.destinationCity(),
     ]);
     return paginatedResult(
-      items.map((item) => this.serialize(item)),
+      items.map((item) => this.serialize(item, mashhad)),
       total,
       page,
       pageSize,
@@ -111,7 +128,7 @@ export class WalkingRoutesService {
     if (!item) {
       throw new NotFoundException('مسیر پیاده یافت نشد');
     }
-    return this.serialize(item);
+    return this.serialize(item, await this.destinationCity());
   }
 
   async findActiveForManager(userId: string) {
@@ -164,12 +181,12 @@ export class WalkingRoutesService {
           create: originCountryIds.map((countryId) => ({ countryId })),
         },
         stages: {
-          create: stages.map((stage) => this.stageData(stage)),
+          create: this.stageRows(stages),
         },
       },
       include: walkingRouteInclude,
     });
-    return this.serialize(created);
+    return this.serialize(created, await this.destinationCity());
   }
 
   async update(id: string, dto: UpdateWalkingRouteDto) {
@@ -203,9 +220,9 @@ export class WalkingRoutesService {
           where: { walkingRouteId: id },
         });
         await tx.walkingRouteStage.createMany({
-          data: related.stages.map((stage) => ({
+          data: this.stageRows(related.stages).map((stage) => ({
             walkingRouteId: id,
-            ...this.stageData(stage),
+            ...stage,
           })),
         });
       }
@@ -214,7 +231,7 @@ export class WalkingRoutesService {
         include: walkingRouteInclude,
       });
     });
-    return this.serialize(updated);
+    return this.serialize(updated, await this.destinationCity());
   }
 
   async remove(id: string) {
@@ -336,32 +353,62 @@ export class WalkingRoutesService {
       }
       const stations = await this.prisma.walkingStation.findMany({
         where: { id: { in: stationIds } },
-        select: { id: true },
+        select: { id: true, city: { select: { nameFa: true } } },
       });
       if (stations.length !== stationIds.length) {
         throw new BadRequestException('ایستگاه انتخاب‌شده معتبر نیست');
+      }
+      if (stations.some((station) => station.city.nameFa === MASHHAD_CITY_NAME_FA)) {
+        throw new BadRequestException(
+          'ایستگاه شهر مشهد روی مسیر ثبت نمی‌شود. پایان مسیر مشهد است و اسکان هر پرونده جدا تخصیص می‌شود',
+        );
       }
     }
 
     return { entryBorderId, originCountryIds, stages };
   }
 
-  private stageData(stage: WalkingRouteStageDto) {
+  private stageRows(stages: WalkingRouteStageDto[]) {
     const decimal = (value: number | null | undefined) => {
       if (value === undefined || value == null) {
         return null;
       }
       return new Prisma.Decimal(value);
     };
-    return {
+    const stationRows = stages.map((stage) => ({
+      kind: WalkingRouteStageKind.STATION,
       walkingStationId: stage.walkingStationId,
       stageNumber: stage.stageNumber,
       distanceToNextKm: decimal(stage.distanceToNextKm),
       distanceToPreviousKm: decimal(stage.distanceToPreviousKm),
-    };
+    }));
+    const lastNumber = stationRows.reduce(
+      (max, stage) => Math.max(max, stage.stageNumber),
+      0,
+    );
+    return [
+      ...stationRows,
+      {
+        kind: WalkingRouteStageKind.DESTINATION,
+        walkingStationId: null,
+        stageNumber: lastNumber + 1,
+        distanceToNextKm: null,
+        distanceToPreviousKm: null,
+      },
+    ];
   }
 
-  private serialize(item: WalkingRouteRecord) {
+  private async destinationCity() {
+    return this.prisma.city.findFirst({
+      where: {
+        nameFa: MASHHAD_CITY_NAME_FA,
+        province: { nameFa: 'خراسان رضوی' },
+      },
+      select: destinationCitySelect,
+    });
+  }
+
+  private serialize(item: WalkingRouteRecord, mashhad: DestinationCity | null) {
     const num = (value: Prisma.Decimal | null) =>
       value == null ? null : Number(value);
     return {
@@ -371,45 +418,99 @@ export class WalkingRoutesService {
       entryBorderId: item.entryBorderId,
       entryBorder: item.entryBorder,
       originCountries: item.originCountries.map((row) => row.country),
-      stages: item.stages.map((stage) => {
+      stages: item.stages.flatMap((stage) => {
+        const rows: object[] = [];
+        if (stage.kind === WalkingRouteStageKind.DESTINATION || !stage.walkingStation) {
+          if (stage.kind !== WalkingRouteStageKind.DESTINATION) return rows;
+          rows.push({
+              id: stage.id,
+              kind: WalkingRouteStageKind.DESTINATION,
+              stationId: null,
+              cityId: mashhad?.id ?? '',
+              city: {
+                id: mashhad?.id ?? '',
+                nameFa: mashhad?.nameFa ?? MASHHAD_CITY_NAME_FA,
+                nameEn: mashhad?.nameEn ?? 'Mashhad',
+                provinceId: mashhad?.provinceId ?? '',
+                latitude: mashhad ? num(mashhad.latitude) : IMAM_REZA_SHRINE.latitude,
+                longitude: mashhad ? num(mashhad.longitude) : IMAM_REZA_SHRINE.longitude,
+                province: mashhad?.province ?? {
+                  id: '',
+                  nameFa: 'خراسان رضوی',
+                  nameEn: 'Razavi Khorasan',
+                  countryId: '',
+                },
+              },
+              stageNumber: stage.stageNumber,
+              name: null,
+              latitude: IMAM_REZA_SHRINE.latitude,
+              longitude: IMAM_REZA_SHRINE.longitude,
+              address: null,
+              neshanAddress: null,
+              maleCount: 0,
+              femaleCount: 0,
+              managerName: null,
+              managerPhone: null,
+              managerTelegram: null,
+              managerWhatsapp: null,
+              managerEitaa: null,
+              distanceToNextKm: num(stage.distanceToNextKm),
+              distanceToPreviousKm: num(stage.distanceToPreviousKm),
+              distanceToMashhadKm: 0,
+              description: null,
+              hasLaundry: false,
+              hasInternet: false,
+              hasPrayerRoom: false,
+              hasElevator: false,
+              heatingSystem: null,
+              coolingSystem: null,
+              parkingCapacity: null,
+              bathroomCount: null,
+              toiletCount: null,
+              areaSqm: null,
+            });
+          return rows;
+        }
         const station = stage.walkingStation;
-        return {
-          id: stage.id,
-          stationId: station.id,
-          cityId: station.cityId,
-          city: {
-            ...station.city,
-            latitude: num(station.city.latitude),
-            longitude: num(station.city.longitude),
-          },
-          stageNumber: stage.stageNumber,
-          name: station.name,
-          latitude: num(station.latitude),
-          longitude: num(station.longitude),
-          address: station.address,
-          neshanAddress: station.neshanAddress,
-          maleCount: station.maleCount,
-          femaleCount: station.femaleCount,
-          managerName: station.managerName,
-          managerPhone: station.managerPhone,
-          managerTelegram: station.managerTelegram,
-          managerWhatsapp: station.managerWhatsapp,
-          managerEitaa: station.managerEitaa,
-          distanceToNextKm: num(stage.distanceToNextKm),
-          distanceToPreviousKm: num(stage.distanceToPreviousKm),
-          distanceToMashhadKm: num(station.distanceToMashhadKm),
-          description: station.description,
-          hasLaundry: station.hasLaundry,
-          hasInternet: station.hasInternet,
-          hasPrayerRoom: station.hasPrayerRoom,
-          hasElevator: station.hasElevator,
-          heatingSystem: station.heatingSystem,
-          coolingSystem: station.coolingSystem,
-          parkingCapacity: station.parkingCapacity,
-          bathroomCount: station.bathroomCount,
-          toiletCount: station.toiletCount,
-          areaSqm: num(station.areaSqm),
-        };
+        rows.push({
+            id: stage.id,
+            kind: WalkingRouteStageKind.STATION,
+            stationId: station.id,
+            cityId: station.cityId,
+            city: {
+              ...station.city,
+              latitude: num(station.city.latitude),
+              longitude: num(station.city.longitude),
+            },
+            stageNumber: stage.stageNumber,
+            name: station.name,
+            latitude: num(station.latitude),
+            longitude: num(station.longitude),
+            address: station.address,
+            neshanAddress: station.neshanAddress,
+            maleCount: station.maleCount,
+            femaleCount: station.femaleCount,
+            managerName: station.managerName,
+            managerPhone: station.managerPhone,
+            managerTelegram: station.managerTelegram,
+            managerWhatsapp: station.managerWhatsapp,
+            managerEitaa: station.managerEitaa,
+            distanceToNextKm: num(stage.distanceToNextKm),
+            distanceToPreviousKm: num(stage.distanceToPreviousKm),
+            distanceToMashhadKm: num(station.distanceToMashhadKm),
+            description: station.description,
+            hasLaundry: station.hasLaundry,
+            hasInternet: station.hasInternet,
+            hasPrayerRoom: station.hasPrayerRoom,
+            hasElevator: station.hasElevator,
+            heatingSystem: station.heatingSystem,
+            coolingSystem: station.coolingSystem,
+            parkingCapacity: station.parkingCapacity,
+            bathroomCount: station.bathroomCount,
+            toiletCount: station.toiletCount,
+            areaSqm: num(station.areaSqm),
+          });
+        return rows;
       }),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,

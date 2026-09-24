@@ -491,6 +491,8 @@ export class CaravansService {
       ? dto.managerUserId
       : actor.id;
     const resolved = await this.resolveManager(managerUserId);
+    const year = dto.year ?? currentJalaliYear();
+    await this.assertCaravanPerNationalId(resolved.managerUserId, year);
 
     const caravan = await this.prisma.caravan.create({
       data: {
@@ -514,7 +516,7 @@ export class CaravansService {
         isActive: dto.isActive ?? true,
         years: {
           create: {
-            year: dto.year ?? currentJalaliYear(),
+            year,
             managerUserId: resolved.managerUserId,
             maleCount: dto.maleCount ?? 0,
             femaleCount: dto.femaleCount ?? 0,
@@ -1611,6 +1613,54 @@ export class CaravansService {
     } catch {
       return { error: 'phoneTaken' };
     }
+  }
+
+  async createQuota(
+    actor: RoleBearer & { id: string },
+    year?: number,
+    managerUserId?: string,
+  ) {
+    const selectedYear = year ?? currentJalaliYear();
+    const targetId =
+      isAdmin(actor) && managerUserId ? managerUserId : actor.id;
+    return this.caravanNationalIdQuota(targetId, selectedYear);
+  }
+
+  private async assertCaravanPerNationalId(
+    managerUserId: string | null,
+    year: number,
+  ) {
+    if (!managerUserId) return;
+    const quota = await this.caravanNationalIdQuota(managerUserId, year);
+    if (quota.allowed) return;
+    throw new BadRequestException(
+      `برای این کد ملی حداکثر ${quota.max} کاروان در این سال قابل ثبت است`,
+    );
+  }
+
+  private async caravanNationalIdQuota(managerUserId: string, year: number) {
+    const [manager, settings] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: managerUserId },
+        select: { id: true, nationalId: true },
+      }),
+      this.prisma.receptionSettings.findUnique({
+        where: { year },
+        select: { caravanMaxPerNationalId: true },
+      }),
+    ]);
+    const max = settings?.caravanMaxPerNationalId ?? 1;
+    if (!manager) {
+      return { year, max, used: 0, allowed: true };
+    }
+    const nationalId = manager.nationalId?.trim() || null;
+    const used = await this.prisma.caravanYear.count({
+      where: {
+        year,
+        manager: nationalId ? { nationalId } : { id: manager.id },
+      },
+    });
+    return { year, max, used, allowed: used < max };
   }
 
   private async resolveManager(managerUserId?: string | null) {

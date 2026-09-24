@@ -22,6 +22,7 @@ import { ActivateAllCaravanYearDto } from './dto/activate-all-caravan-year.dto';
 import { ActivateCaravanYearDto } from './dto/activate-caravan-year.dto';
 import { AddCaravanYearDto } from './dto/add-caravan-year.dto';
 import { AssignCaravanYearDto } from './dto/assign-caravan-year.dto';
+import { CaravanCreateQuotaQueryDto } from './dto/caravan-create-quota-query.dto';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
 import { FindCaravanReportQueryDto } from './dto/find-caravan-report-query.dto';
@@ -80,6 +81,15 @@ export class CaravansController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.caravans.findMine(query, actor.id);
+  }
+
+  @Get('create-quota')
+  @Roles('AUTHENTICATED')
+  createQuota(
+    @Query() query: CaravanCreateQuotaQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.caravans.createQuota(actor, query.year, query.managerUserId);
   }
 
   @Get('report')

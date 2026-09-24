@@ -116,6 +116,11 @@ export class UpdateReceptionSettingsDto {
   @IsBoolean()
   caravanAutoApproveLicenses: boolean;
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  caravanMaxPerNationalId: number;
+
   @IsEnum(PlacementMode)
   caravanPlacementMode: PlacementMode;
 

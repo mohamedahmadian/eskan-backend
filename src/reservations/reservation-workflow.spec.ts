@@ -11,6 +11,7 @@ import {
   nextAfterContacts,
   nextAfterCompanions,
   nextAfterManagement,
+  openReservationWhere,
   placementModeFromSettings,
   validRewindStatuses,
   unapprovedCounts,
@@ -192,5 +193,20 @@ describe('canAssignBothGendersTogether', () => {
         femaleCapacity: 8,
       }),
     ).toBe(false);
+  });
+});
+
+describe('openReservationWhere', () => {
+  it('keeps a file open until it is completed or cancelled', () => {
+    expect(openReservationWhere('user-1')).toEqual({
+      status: {
+        notIn: [ReservationStatus.COMPLETED, ReservationStatus.CANCELLED],
+      },
+      OR: [
+        { createdById: 'user-1' },
+        { caravanManagerId: 'user-1' },
+        { members: { some: { userId: 'user-1' } } },
+      ],
+    });
   });
 });
