@@ -1850,6 +1850,7 @@ export class ReservationsService {
       );
 
       const { user } = await this.resolveCompanion(dto);
+      this.assertCanAddGender(current, user.gender);
       try {
         await tx.reservationMember.create({
           data: {
@@ -1895,6 +1896,9 @@ export class ReservationsService {
     }
     if (!dto.firstName?.trim() || !dto.lastName?.trim()) {
       throw new BadRequestException('نام و نام خانوادگی همراه لازم است');
+    }
+    if (dto.gender && dto.gender !== member.user.gender) {
+      this.assertCanAddGender(current, dto.gender);
     }
     await this.users.updatePilgrimIdentity(member.userId, {
       nationalId: dto.nationalId,
@@ -2078,6 +2082,11 @@ export class ReservationsService {
           'همه افراد این پرونده قبلاً اضافه شده‌اند',
         );
       }
+
+      this.assertRemainingForImport(
+        current,
+        toCreate.map((item) => item.user.gender),
+      );
 
       await tx.reservationMember.createMany({
         data: toCreate.map((item) => ({
@@ -4650,6 +4659,20 @@ export class ReservationsService {
       actor,
       companionEditStatuses(reservation.type),
     );
+  }
+
+  private assertCanAddGender(
+    reservation: ReservationRecord,
+    gender: UserGender | null | undefined,
+  ) {
+    if (gender !== UserGender.MALE && gender !== UserGender.FEMALE) return;
+    const slots = this.remainingMemberSlots(reservation);
+    if (gender === UserGender.MALE && slots.male <= 0) {
+      throw new BadRequestException('ظرفیت آقایان این پرونده تکمیل شده است');
+    }
+    if (gender === UserGender.FEMALE && slots.female <= 0) {
+      throw new BadRequestException('ظرفیت خانم‌های این پرونده تکمیل شده است');
+    }
   }
 
   private remainingMemberSlots(reservation: ReservationRecord) {

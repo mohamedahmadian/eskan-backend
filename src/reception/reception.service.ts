@@ -55,8 +55,10 @@ const visitReservationSelect = {
       id: true,
       name: true,
       walkingRoute: { select: { id: true, name: true } },
+      manager: { select: { fullName: true, phone: true } },
     },
   },
+  caravanManager: { select: { fullName: true, phone: true } },
   group: {
     select: {
       id: true,
@@ -802,13 +804,16 @@ export class ReceptionService {
       id: string;
       name: string;
       walkingRoute: { id: string; name: string } | null;
+      manager: { fullName: string; phone: string | null } | null;
     } | null;
     group: {
       id: string;
       name: string;
       walkingRoute: { id: string; name: string } | null;
     } | null;
+    caravanManager: { fullName: string; phone: string | null } | null;
   }) {
+    const manager = reservation.caravanManager ?? reservation.caravan?.manager ?? null;
     return {
       id: reservation.id,
       code: reservation.code,
@@ -837,6 +842,8 @@ export class ReceptionService {
           : null,
       caravanId: reservation.caravan?.id ?? null,
       groupId: reservation.group?.id ?? null,
+      caravanManagerName: manager?.fullName ?? null,
+      caravanManagerPhone: manager?.phone ?? null,
     };
   }
 
