@@ -3,11 +3,13 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { isAdmin, type RoleBearer } from '../auth/roles.util';
+import { isAdmin, isCaravanManager, isPilgrim, type RoleBearer } from '../auth/roles.util';
 import { currentJalaliYear } from '../common/jalali-year';
+import { localizedGeoName } from '../common/request-locale';
 import {
   containsInsensitive,
   paginatedResult,
@@ -18,6 +20,7 @@ import { resolveSortOrder } from '../common/sort-query';
 import { CaravanContactRole, Prisma, UserStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName } from '../users/user-profile.util';
+import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
 import {
   cityLookupKeys,
@@ -169,9 +172,12 @@ function issueFromRow(
 
 @Injectable()
 export class CaravansService {
+  private readonly logger = new Logger(CaravansService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly sms: SmsService,
   ) {}
 
   async findAll(query: FindCaravansQueryDto) {
@@ -229,7 +235,7 @@ export class CaravansService {
     );
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor?: Actor) {
     const caravan = await this.prisma.caravan.findUnique({
       where: { id },
       include: caravanInclude,
@@ -237,11 +243,24 @@ export class CaravansService {
     if (!caravan) {
       throw new NotFoundException('کاروان یافت نشد');
     }
+    if (
+      actor &&
+      !isAdmin(actor) &&
+      !isCaravanManager(actor) &&
+      !isPilgrim(actor) &&
+      caravan.managerUserId !== actor.id
+    ) {
+      throw new ForbiddenException('امکان مشاهده این کاروان وجود ندارد');
+    }
     return caravan;
   }
 
-  async findPilgrimageHistory(id: string, query: FindCaravanHistoryQueryDto) {
-    await this.findOne(id);
+  async findPilgrimageHistory(
+    id: string,
+    query: FindCaravanHistoryQueryDto,
+    actor?: Actor,
+  ) {
+    await this.findOne(id, actor);
     const { page, pageSize, skip, take } = paginationArgs(query);
     const where: Prisma.ReservationWhereInput = { caravanId: id };
     const orderBy = resolveSortOrder<Prisma.ReservationOrderByWithRelationInput>(
@@ -532,6 +551,65 @@ export class CaravansService {
     }
 
     return caravan;
+  }
+
+  async register(dto: CreateCaravanDto, actor: Actor) {
+    if (dto.foundedYear == null) {
+      throw new BadRequestException('سال تأسیس الزامی است');
+    }
+    if (!dto.cityId) {
+      throw new BadRequestException('شهر مبدأ الزامی است');
+    }
+    if (dto.maleCount == null || dto.femaleCount == null) {
+      throw new BadRequestException('تعداد زائرین الزامی است');
+    }
+    if (isAdmin(actor) && !dto.managerUserId) {
+      throw new BadRequestException('مدیر کاروان را انتخاب کنید');
+    }
+    const roles = new Set((dto.contacts ?? []).map((item) => item.role));
+    if (roles.size < caravanContactRoleCount) {
+      throw new BadRequestException('همه رابطین کاروان باید مشخص شوند');
+    }
+
+    const caravan = await this.create({ ...dto, isActive: false }, actor);
+    await this.notifyManagerWelcome(caravan, actor.id);
+    return caravan;
+  }
+
+  private async notifyManagerWelcome(
+    caravan: {
+      name: string;
+      foundedYear: number | null;
+      city: { nameFa: string; nameEn: string | null };
+      manager: { phone: string | null } | null;
+    },
+    actorId: string,
+  ) {
+    const phone = caravan.manager?.phone?.trim();
+    if (!phone) {
+      this.logger.warn(`پیامک خوش‌آمد کاروان «${caravan.name}» ارسال نشد: مدیر شماره همراه ندارد`);
+      return;
+    }
+    const year =
+      caravan.foundedYear == null
+        ? '—'
+        : toPersianDigits(String(caravan.foundedYear));
+    const body = [
+      'به جمعیت مدیران کاروان سامانه زائرین خوش آمدید',
+      `نام کاروان: ${caravan.name}`,
+      `سال تأسیس: ${year}`,
+      `شهر مبدأ: ${localizedGeoName(caravan.city)}`,
+      'وضعیت: در انتظار بررسی',
+    ].join('\n');
+    try {
+      await this.sms.send({ phone, body, sentById: actorId });
+    } catch (error) {
+      this.logger.warn(
+        `پیامک خوش‌آمد کاروان «${caravan.name}» ارسال نشد: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   async update(
@@ -1760,4 +1838,8 @@ export class CaravansService {
       });
     }
   }
+}
+
+function toPersianDigits(value: string) {
+  return value.replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
 }

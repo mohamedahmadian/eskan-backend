@@ -396,6 +396,22 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'dashboard.introduce-accommodation',
+      moduleId: dashboard.id,
+      nameKey: 'menus.introduceAccommodation',
+      path: '/accommodation-introduction',
+      icon: 'building-2',
+      sortOrder: 2,
+    },
+    {
+      code: 'dashboard.new-caravan',
+      moduleId: dashboard.id,
+      nameKey: 'menus.newCaravan',
+      path: '/caravan-registration',
+      icon: 'tent',
+      sortOrder: 2,
+    },
+    {
       code: 'honorary-service.apply',
       moduleId: honoraryService.id,
       nameKey: 'menus.honoraryApply',
@@ -460,6 +476,14 @@ async function main() {
       sortOrder: 4,
     },
     {
+      code: 'caravans.register',
+      moduleId: caravanManagement.id,
+      nameKey: 'menus.caravanRegister',
+      path: '/caravan-registration',
+      icon: 'tent',
+      sortOrder: 5,
+    },
+    {
       code: 'groups.list',
       moduleId: groupManagement.id,
       nameKey: 'menus.groupsList',
@@ -485,11 +509,11 @@ async function main() {
     },
     {
       code: 'caravans.mine',
-      moduleId: caravans.id,
+      moduleId: caravanManagement.id,
       nameKey: 'menus.myCaravans',
       path: '/my-caravans',
       icon: 'tent',
-      sortOrder: 2,
+      sortOrder: 6,
     },
     {
       code: 'groups.mine',
@@ -802,6 +826,14 @@ async function main() {
       path: '/my-accommodations',
       icon: 'building',
       sortOrder: 1,
+    },
+    {
+      code: 'accommodation.introduce',
+      moduleId: accommodation.id,
+      nameKey: 'menus.introduceAccommodation',
+      path: '/accommodation-introduction',
+      icon: 'building-2',
+      sortOrder: 0,
     },
     {
       code: 'accommodation.managers',
@@ -1195,10 +1227,11 @@ async function main() {
     (item) =>
       item.code === 'reservations.create' ||
       item.code === 'reservations.mine' ||
-      item.code === 'caravans.mine' ||
       item.code === 'groups.mine' ||
       item.code === 'evaluations.mine' ||
       item.code === 'accommodation.mine' ||
+      item.code === 'accommodation.introduce' ||
+      item.code === 'dashboard.introduce-accommodation' ||
       item.code === 'stations.mine' ||
       item.code === 'stations.report' ||
       item.code === 'stations.history' ||
@@ -1586,6 +1619,66 @@ async function main() {
             roleId: role.id,
             menuId: menu.id,
           },
+        },
+        update: {},
+        create: { roleId: role.id, menuId: menu.id },
+      });
+    }
+  }
+
+  const introduceAccommodationMenus = menuRecords.filter(
+    (item) =>
+      item.code === 'accommodation.introduce' ||
+      item.code === 'dashboard.introduce-accommodation',
+  );
+  for (const role of [
+    accommodationManagerRole,
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    headquartersRepresentativeRole,
+    licenseIssuerRole,
+    unitManagerRole,
+    governmentOrgOfficerRole,
+    honoraryServantRole,
+    stationManagerRole,
+  ]) {
+    for (const menu of introduceAccommodationMenus) {
+      await prisma.roleMenu.upsert({
+        where: {
+          roleId_menuId: { roleId: role.id, menuId: menu.id },
+        },
+        update: {},
+        create: { roleId: role.id, menuId: menu.id },
+      });
+    }
+  }
+
+  const sharedCaravanMenuCodes = new Set([
+    'dashboard.new-caravan',
+    'caravans.register',
+    'caravans.mine',
+  ]);
+  const sharedCaravanMenus = menuRecords.filter((item) =>
+    sharedCaravanMenuCodes.has(item.code),
+  );
+  for (const role of [
+    adminRole,
+    accommodationManagerRole,
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    honoraryServantRole,
+    licenseIssuerRole,
+    governmentOrgOfficerRole,
+    unitManagerRole,
+    stationManagerRole,
+    headquartersRepresentativeRole,
+  ]) {
+    for (const menu of sharedCaravanMenus) {
+      await prisma.roleMenu.upsert({
+        where: {
+          roleId_menuId: { roleId: role.id, menuId: menu.id },
         },
         update: {},
         create: { roleId: role.id, menuId: menu.id },

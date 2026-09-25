@@ -3,9 +3,12 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { isAdmin } from '../auth/roles.util';
+import { localizedGeoName } from '../common/request-locale';
+import { SmsService } from '../sms/sms.service';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
 import {
@@ -98,9 +101,12 @@ type AccommodationRecord = Prisma.AccommodationGetPayload<{
 
 @Injectable()
 export class AccommodationsService {
+  private readonly logger = new Logger(AccommodationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
+    private readonly sms: SmsService,
   ) {}
 
   async findMine(query: FindAccommodationsQueryDto, actor: Actor) {
@@ -386,6 +392,65 @@ export class AccommodationsService {
     }
 
     return this.findOne(created.id, actor);
+  }
+
+  async introduce(dto: CreateAccommodationDto, actor: Actor) {
+    if (isAdmin(actor)) {
+      throw new ForbiddenException('معرفی اسکان برای مدیر سامانه نیست');
+    }
+    const created = await this.create(
+      {
+        ...dto,
+        status: AccommodationStatus.INACTIVE,
+        yearContactMode: dto.yearContactMode ?? 'fromAccommodation',
+      },
+      actor,
+    );
+    await this.notifyIntroduction(created, actor.id);
+    return created;
+  }
+
+  private async notifyIntroduction(
+    accommodation: {
+      name: string;
+      address: string | null;
+      maleCapacity: number;
+      femaleCapacity: number;
+      city: { nameFa: string; nameEn: string | null } | null;
+    },
+    actorId: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { phone: true },
+    });
+    const phone = user?.phone?.trim();
+    if (!phone) {
+      this.logger.warn(
+        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: کاربر شماره همراه ندارد`,
+      );
+      return;
+    }
+    const capacity = introductionCapacityLine(
+      accommodation.maleCapacity,
+      accommodation.femaleCapacity,
+    );
+    const body = [
+      'اطلاعات اسکان شما با موفقیت در سامانه ثبت شد',
+      `نام اسکان: ${accommodation.name}`,
+      `شهر: ${accommodation.city ? localizedGeoName(accommodation.city) : '—'}`,
+      `آدرس: ${accommodation.address?.trim() || '—'}`,
+      ...(capacity ? [`ظرفیت: ${capacity}`] : []),
+    ].join('\n');
+    try {
+      await this.sms.send({ phone, body, sentById: actorId });
+    } catch (error) {
+      this.logger.warn(
+        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   async update(id: string, dto: UpdateAccommodationDto, actor: Actor) {
@@ -1862,3 +1927,14 @@ const managementTypeLabels: Record<ManagementType, string> = {
   SEMI_SELF_SUFFICIENT: 'نیمه خودکفا',
   NON_SELF_SUFFICIENT: 'غیرخودکفا',
 };
+
+function toPersianDigits(value: string) {
+  return value.replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
+}
+
+function introductionCapacityLine(male: number, female: number) {
+  const parts: string[] = [];
+  if (male > 0) parts.push(`${toPersianDigits(String(male))} تا مرد`);
+  if (female > 0) parts.push(`${toPersianDigits(String(female))} تا خانم`);
+  return parts.join(' و ');
+}

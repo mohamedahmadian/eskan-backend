@@ -15,7 +15,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName, splitFullName } from '../users/user-profile.util';
 import {
   canAccessMyAccommodations,
-  canAccessMyCaravans,
   canAccessMyEvaluations,
   canAccessMyGroups,
   canAccessMyReservations,
@@ -266,10 +265,15 @@ export class AuthService {
                 code: {
                   in: [
                     'dashboard.overview',
+                    'dashboard.new-caravan',
+                    'dashboard.introduce-accommodation',
+                    'accommodation.introduce',
                     'honorary-service.apply',
                     'honorary-service.history',
                     'participations.home',
                     'reservations.mine',
+                    'caravans.register',
+                    'caravans.mine',
                   ],
                 },
               },
@@ -345,9 +349,6 @@ export class AuthService {
       };
     }) => {
       if (retiredMenuCodes.has(menu.code) || retiredMenuNameKeys.has(menu.nameKey)) {
-        return;
-      }
-      if (menu.code === 'caravans.mine' && !canAccessMyCaravans(accessUser)) {
         return;
       }
       if (menu.code === 'groups.mine' && !canAccessMyGroups(accessUser)) {

@@ -188,18 +188,19 @@ export class CaravansController {
   }
 
   @Get(':id/pilgrimage-history')
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   pilgrimageHistory(
     @Param('id') id: string,
     @Query() query: FindCaravanHistoryQueryDto,
+    @CurrentUser() actor: RequestUser,
   ) {
-    return this.caravans.findPilgrimageHistory(id, query);
+    return this.caravans.findPilgrimageHistory(id, query, actor);
   }
 
   @Get(':id')
-  @Roles(...mineRoles)
-  findOne(@Param('id') id: string) {
-    return this.caravans.findOne(id);
+  @Roles('AUTHENTICATED')
+  findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.caravans.findOne(id, actor);
   }
 
   @Post()
@@ -208,8 +209,14 @@ export class CaravansController {
     return this.caravans.create(dto, actor);
   }
 
+  @Post('register')
+  @Roles('AUTHENTICATED')
+  register(@Body() dto: CreateCaravanDto, @CurrentUser() actor: RequestUser) {
+    return this.caravans.register(dto, actor);
+  }
+
   @Post(':id/activate-year')
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   activateYear(
     @Param('id') id: string,
     @Body() dto: ActivateCaravanYearDto = {},
@@ -240,7 +247,7 @@ export class CaravansController {
   }
 
   @Patch(':id')
-  @Roles(...mineRoles)
+  @Roles('AUTHENTICATED')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateCaravanDto,

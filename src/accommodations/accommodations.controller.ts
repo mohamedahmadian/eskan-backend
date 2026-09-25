@@ -196,6 +196,15 @@ export class AccommodationsController {
     return this.accommodations.create(dto, actor);
   }
 
+  @Post('introduce')
+  @Roles('AUTHENTICATED')
+  introduce(
+    @Body() dto: CreateAccommodationDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.introduce(dto, actor);
+  }
+
   @Patch(':id')
   update(
     @Param('id') id: string,
