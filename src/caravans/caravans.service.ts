@@ -17,7 +17,14 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
-import { CaravanContactRole, Prisma, UserStatus } from '../generated/prisma/client';
+import {
+  AllocationStatus,
+  CaravanContactRole,
+  Prisma,
+  ReservationType,
+  UserGender,
+  UserStatus,
+} from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { joinFullName } from '../users/user-profile.util';
 import { SmsService } from '../sms/sms.service';
@@ -33,7 +40,10 @@ import {
 } from './caravan-excel-import.util';
 import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
-import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
+import {
+  FindCaravansQueryDto,
+  FindMineCaravansQueryDto,
+} from './dto/find-caravans-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
 import { TransferCaravansYearDto } from './dto/transfer-caravans-year.dto';
 import { UpdateCaravanDto } from './dto/update-caravan.dto';
@@ -197,7 +207,8 @@ export class CaravansService {
     return paginatedResult(items, total, page, pageSize);
   }
 
-  async findMine(query: FindCaravansQueryDto, managerUserId: string) {
+  async findMine(query: FindMineCaravansQueryDto, actor: RoleBearer & { id: string }) {
+    const managerUserId = this.mineSubjectId(actor, query.userId);
     const { page, pageSize, skip, take } = paginationArgs(query);
     const searchWhere = this.listWhere(query);
     const where: Prisma.CaravanWhereInput = {
@@ -216,6 +227,15 @@ export class CaravansService {
       this.prisma.caravan.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  /** کاروان‌های خود کاربر؛ فقط مدیر می‌تواند برای شخص دیگری بپرسد. */
+  private mineSubjectId(actor: RoleBearer & { id: string }, userId?: string) {
+    if (!userId || userId === actor.id) return actor.id;
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به کاروان‌های این شخص مجاز نیست');
+    }
+    return userId;
   }
 
   private listOrderBy(
@@ -255,6 +275,77 @@ export class CaravansService {
       throw new ForbiddenException('امکان مشاهده این کاروان وجود ندارد');
     }
     return caravan;
+  }
+
+  async findYearPlacements(id: string, actor?: Actor) {
+    await this.findOne(id, actor);
+    const year = currentJalaliYear();
+    const rows = await this.prisma.reservationAllocation.findMany({
+      where: {
+        status: AllocationStatus.ACTIVE,
+        reservation: {
+          year,
+          type: ReservationType.CARAVAN,
+          caravanId: id,
+        },
+      },
+      select: {
+        gender: true,
+        headcount: true,
+        accommodation: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            phone: true,
+            city: {
+              select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+            },
+          },
+        },
+      },
+    });
+
+    const byStay = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        address: string | null;
+        phone: string | null;
+        city: {
+          id: string;
+          nameFa: string;
+          nameEn: string;
+          provinceId: string;
+        } | null;
+        placedMaleCount: number;
+        placedFemaleCount: number;
+      }
+    >();
+    for (const row of rows) {
+      const stay = row.accommodation;
+      let current = byStay.get(stay.id);
+      if (!current) {
+        current = {
+          id: stay.id,
+          name: stay.name,
+          address: stay.address,
+          phone: stay.phone,
+          city: stay.city,
+          placedMaleCount: 0,
+          placedFemaleCount: 0,
+        };
+        byStay.set(stay.id, current);
+      }
+      if (row.gender === UserGender.MALE) current.placedMaleCount += row.headcount;
+      if (row.gender === UserGender.FEMALE) current.placedFemaleCount += row.headcount;
+    }
+
+    return {
+      year,
+      items: [...byStay.values()].sort((a, b) => a.name.localeCompare(b.name, 'fa')),
+    };
   }
 
   async findPilgrimageHistory(

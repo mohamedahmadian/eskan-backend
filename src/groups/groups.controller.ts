@@ -14,7 +14,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
-import { FindGroupsQueryDto } from './dto/find-groups-query.dto';
+import {
+  FindGroupsQueryDto,
+  FindMineGroupsQueryDto,
+} from './dto/find-groups-query.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupsService } from './groups.service';
 
@@ -39,10 +42,10 @@ export class GroupsController {
   @Get('mine')
   @Roles('AUTHENTICATED')
   findMine(
-    @Query() query: FindGroupsQueryDto,
+    @Query() query: FindMineGroupsQueryDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.groups.findMine(query, actor.id);
+    return this.groups.findMine(query, actor);
   }
 
   @Get(':id')

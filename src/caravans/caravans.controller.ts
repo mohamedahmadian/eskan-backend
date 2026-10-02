@@ -27,7 +27,10 @@ import { CreateCaravanDto } from './dto/create-caravan.dto';
 import { FindCaravanHistoryQueryDto } from './dto/find-caravan-history-query.dto';
 import { FindCaravanReportQueryDto } from './dto/find-caravan-report-query.dto';
 import { FindCaravanYearQueryDto } from './dto/find-caravan-year-query.dto';
-import { FindCaravansQueryDto } from './dto/find-caravans-query.dto';
+import {
+  FindCaravansQueryDto,
+  FindMineCaravansQueryDto,
+} from './dto/find-caravans-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
 import { TransferCaravansYearDto } from './dto/transfer-caravans-year.dto';
 import { UpdateCaravanDto } from './dto/update-caravan.dto';
@@ -77,10 +80,10 @@ export class CaravansController {
   @Get('mine')
   @Roles('AUTHENTICATED')
   findMine(
-    @Query() query: FindCaravansQueryDto,
+    @Query() query: FindMineCaravansQueryDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.caravans.findMine(query, actor.id);
+    return this.caravans.findMine(query, actor);
   }
 
   @Get('create-quota')
@@ -185,6 +188,12 @@ export class CaravansController {
   importCaravans(@UploadedFile() file: ExcelUpload) {
     const upload = assertExcelUpload(file);
     return this.caravans.importFromExcel(upload.buffer);
+  }
+
+  @Get(':id/placements')
+  @Roles('AUTHENTICATED')
+  placements(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.caravans.findYearPlacements(id, actor);
   }
 
   @Get(':id/pilgrimage-history')

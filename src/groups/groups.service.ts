@@ -15,7 +15,10 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateGroupDto } from './dto/create-group.dto';
-import { FindGroupsQueryDto } from './dto/find-groups-query.dto';
+import {
+  FindGroupsQueryDto,
+  FindMineGroupsQueryDto,
+} from './dto/find-groups-query.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 
 const groupInclude = {
@@ -85,7 +88,8 @@ export class GroupsService {
     return paginatedResult(items, total, page, pageSize);
   }
 
-  async findMine(query: FindGroupsQueryDto, managerUserId: string) {
+  async findMine(query: FindMineGroupsQueryDto, actor: RoleBearer & { id: string }) {
+    const managerUserId = this.mineSubjectId(actor, query.userId);
     const { page, pageSize, skip, take } = paginationArgs(query);
     const searchWhere = this.listWhere(query);
     const where: Prisma.GroupWhereInput = {
@@ -104,6 +108,14 @@ export class GroupsService {
       this.prisma.group.count({ where }),
     ]);
     return paginatedResult(items, total, page, pageSize);
+  }
+
+  private mineSubjectId(actor: RoleBearer & { id: string }, userId?: string) {
+    if (!userId || userId === actor.id) return actor.id;
+    if (!isAdmin(actor)) {
+      throw new ForbiddenException('دسترسی به گروه‌های این شخص مجاز نیست');
+    }
+    return userId;
   }
 
   private listOrderBy(

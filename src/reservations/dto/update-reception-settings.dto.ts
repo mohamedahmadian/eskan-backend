@@ -121,6 +121,9 @@ export class UpdateReceptionSettingsDto {
   @Min(1)
   caravanMaxPerNationalId: number;
 
+  @IsBoolean()
+  caravanCreateInReception: boolean;
+
   @IsEnum(PlacementMode)
   caravanPlacementMode: PlacementMode;
 

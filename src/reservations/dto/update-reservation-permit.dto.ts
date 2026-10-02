@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { IsBoolean, IsOptional, IsUUID, ValidateIf } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
 
 export class UpdateReservationPermitDto {
@@ -14,4 +14,9 @@ export class UpdateReservationPermitDto {
   @ValidateIf((_, value) => value != null)
   @IsUUID()
   permitImageId?: string | null;
+
+  /** Admin-only: mark the caravan permit approved without inquiry or upload. */
+  @IsOptional()
+  @IsBoolean()
+  permitConfirmed?: boolean;
 }

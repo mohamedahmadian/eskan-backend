@@ -147,6 +147,11 @@ export class CreateReservationDto {
   @IsUUID()
   permitImageId?: string | null;
 
+  /** Admin-only: mark the caravan permit approved without inquiry or upload. */
+  @IsOptional()
+  @IsBoolean()
+  permitConfirmed?: boolean;
+
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)

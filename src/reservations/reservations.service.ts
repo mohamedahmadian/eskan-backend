@@ -325,6 +325,7 @@ const emptySettings = (year: number) => ({
   caravanAutoApprove: false,
   caravanAutoApproveLicenses: false,
   caravanMaxPerNationalId: 1,
+  caravanCreateInReception: false,
   caravanPlacementMode: PlacementMode.MANUAL,
   caravanIntro: '',
   caravanRules: '',
@@ -414,6 +415,7 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     caravanAutoApprove: row.caravanAutoApprove,
     caravanAutoApproveLicenses: row.caravanAutoApproveLicenses,
     caravanMaxPerNationalId: row.caravanMaxPerNationalId ?? 1,
+    caravanCreateInReception: row.caravanCreateInReception ?? false,
     caravanPlacementMode: row.caravanPlacementMode,
     caravanIntro: row.caravanIntro ?? '',
     caravanRules: row.caravanRules ?? '',
@@ -790,8 +792,10 @@ export class ReservationsService {
               managerUserId: caravan.managerUserId,
               issuedLicenseId: dto.issuedLicenseId,
               permitImageId: dto.permitImageId,
+              permitConfirmed: dto.permitConfirmed,
             },
             { required: !asDraft },
+            actor,
           )
         : emptyPermitData();
 
@@ -1008,7 +1012,9 @@ export class ReservationsService {
     if (
       type === ReservationType.CARAVAN &&
       caravan &&
-      (dto.issuedLicenseId !== undefined || dto.permitImageId !== undefined)
+      (dto.issuedLicenseId !== undefined ||
+        dto.permitImageId !== undefined ||
+        dto.permitConfirmed !== undefined)
     ) {
       permitPatch = await this.resolvePermitInput(
         {
@@ -1023,8 +1029,10 @@ export class ReservationsService {
             dto.permitImageId !== undefined
               ? dto.permitImageId
               : current.permitImageId,
+          permitConfirmed: dto.permitConfirmed,
         },
         { required: false },
+        actor,
       );
     }
 
@@ -3223,20 +3231,25 @@ export class ReservationsService {
         managerUserId: current.caravanManagerId,
         issuedLicenseId: dto.issuedLicenseId,
         permitImageId: dto.permitImageId,
+        permitConfirmed: dto.permitConfirmed,
       },
       { required: true },
+      actor,
     );
+    const confirmed = permit.permitSource === ReservationPermitSource.CONFIRMED;
 
     const updated = await this.prisma.reservation.update({
       where: { id },
-      data: {
-        ...permit,
-        hasPermit: false,
-        permitStatus: ReservationPermitStatus.PENDING,
-        permitReviewedAt: null,
-        permitReviewedById: null,
-        permitRejectionReason: null,
-      },
+      data: confirmed
+        ? permit
+        : {
+            ...permit,
+            hasPermit: false,
+            permitStatus: ReservationPermitStatus.PENDING,
+            permitReviewedAt: null,
+            permitReviewedById: null,
+            permitRejectionReason: null,
+          },
       include: reservationInclude,
     });
     return this.serialize(updated, actor);
@@ -3524,12 +3537,26 @@ export class ReservationsService {
   private async assertNoOpenReservation(tx: Tx, userId: string) {
     const open = await tx.reservation.findFirst({
       where: openReservationWhere(userId),
-      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        returnedToStatus: true,
+        createdById: true,
+      },
     });
     if (open) {
-      throw new ConflictException(
-        'پرونده زیارتی فعال وجود دارد. تا تکمیل یا انصراف، پرونده جدیدی ساخته نمی‌شود',
-      );
+      throw new ConflictException({
+        message:
+          'پرونده زیارتی فعال وجود دارد. تا تکمیل یا انصراف، پرونده جدیدی ساخته نمی‌شود',
+        error: 'Conflict',
+        reservationId: open.id,
+        code: open.code,
+        status: open.status,
+        returnedToStatus: open.returnedToStatus,
+        createdById: open.createdById,
+      });
     }
   }
 
@@ -3676,9 +3703,13 @@ export class ReservationsService {
     const features = await this.featuresFor(tx, current.year, originCountryId);
     const waivePermit =
       current.type === ReservationType.CARAVAN && international;
+    const permitConfirmed =
+      current.permitSource === ReservationPermitSource.CONFIRMED &&
+      current.permitStatus === ReservationPermitStatus.APPROVED;
     if (
       current.type === ReservationType.CARAVAN &&
       !waivePermit &&
+      !permitConfirmed &&
       !current.issuedLicenseId &&
       !current.permitImageId
     ) {
@@ -4649,9 +4680,29 @@ export class ReservationsService {
       managerUserId: string | null;
       issuedLicenseId?: string | null;
       permitImageId?: string | null;
+      permitConfirmed?: boolean;
     },
     options: { required: boolean },
+    actor: Actor,
   ) {
+    if (input.permitConfirmed) {
+      if (!isAdmin(actor)) {
+        throw new ForbiddenException(
+          'فقط مدیریت می‌تواند مجوز را بدون استعلام یا بارگذاری تأیید کند',
+        );
+      }
+      return {
+        hasPermit: true,
+        permitStatus: ReservationPermitStatus.APPROVED,
+        permitSource: ReservationPermitSource.CONFIRMED,
+        issuedLicenseId: null as string | null,
+        permitImageId: null as string | null,
+        permitReviewedAt: new Date(),
+        permitReviewedById: actor.id,
+        permitRejectionReason: null as string | null,
+      };
+    }
+
     const issuedLicenseId = input.issuedLicenseId ?? null;
     const permitImageId = input.permitImageId ?? null;
     if (issuedLicenseId && permitImageId) {

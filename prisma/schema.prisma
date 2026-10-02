@@ -559,6 +559,7 @@ enum ReservationPermitStatus {
 enum ReservationPermitSource {
   UPLOAD
   ISSUED_LICENSE
+  CONFIRMED
 }
 
 model Reservation {
@@ -819,6 +820,8 @@ model ReceptionSettings {
   caravanAutoApproveLicenses  Boolean       @default(false)
   /// Max caravans one national ID may define in this reception year.
   caravanMaxPerNationalId     Int           @default(1)
+  /// When true, the reception wizard shows «create a new caravan».
+  caravanCreateInReception    Boolean       @default(false)
   caravanPlacementMode        PlacementMode @default(MANUAL)
   caravanIntro                String        @default("")
   caravanRules                String        @default("")
