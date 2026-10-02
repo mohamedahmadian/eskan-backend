@@ -10,6 +10,8 @@ export const caravanSortFields = [
   'city',
   'walkingRoute',
   'manager',
+  'maleCount',
+  'femaleCount',
 ] as const;
 
 export type CaravanSortField = (typeof caravanSortFields)[number];

@@ -15,11 +15,12 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AllocatePlacementDto } from './dto/allocate-placement.dto';
-import { AllocateSystemDto } from './dto/allocate-system.dto';
 import { FindPlacementDueQueryDto } from './dto/find-placement-due-query.dto';
+import { StartPlacementSolverDto, PlacementSolverQueryDto } from './dto/placement-solver.dto';
 import { FindPlacementQueueQueryDto } from './dto/find-placement-queue-query.dto';
 import { PlacementAvailabilityQueryDto } from './dto/placement-availability-query.dto';
 import { UpdateAllocationDto } from './dto/update-allocation.dto';
+import { PlacementSolverService } from './placement-solver.service';
 import { PlacementsService } from './placements.service';
 
 type RequestUser = {
@@ -31,7 +32,10 @@ type RequestUser = {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class PlacementsController {
-  constructor(private readonly placements: PlacementsService) {}
+  constructor(
+    private readonly placements: PlacementsService,
+    private readonly solver: PlacementSolverService,
+  ) {}
 
   @Get('queue')
   queue(
@@ -87,12 +91,35 @@ export class PlacementsController {
     return this.placements.allocateManual(dto, actor);
   }
 
-  @Post('allocate-system')
-  allocateSystem(
-    @Body() dto: AllocateSystemDto,
+  @Get('system/board')
+  systemBoard(
+    @Query() query: PlacementSolverQueryDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.placements.allocateSystem(dto, actor);
+    return this.solver.board(query.year, actor);
+  }
+
+  @Post('system/start')
+  startSystem(
+    @Body() dto: StartPlacementSolverDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.solver.start(dto, actor);
+  }
+
+  @Get('system/status')
+  systemStatus(@CurrentUser() actor: RequestUser) {
+    return this.solver.status(actor);
+  }
+
+  @Post('system/stop')
+  stopSystem(@CurrentUser() actor: RequestUser) {
+    return this.solver.stop(actor);
+  }
+
+  @Post('system/save')
+  saveSystem(@CurrentUser() actor: RequestUser) {
+    return this.solver.save(actor);
   }
 
   @Patch('allocations/:id')

@@ -317,6 +317,11 @@ export class CaravanManagersController extends RoleScopedUsersController {
     return this.users.checkIdentityTaken(dto);
   }
 
+  @Get(':id/placements')
+  placements(@Param('id') id: string) {
+    return this.users.findCaravanManagerPlacements(id);
+  }
+
   @Get(':id')
   override findOne(@Param('id') id: string) {
     return super.findOne(id);

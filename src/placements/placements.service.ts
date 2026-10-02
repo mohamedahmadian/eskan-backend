@@ -26,16 +26,13 @@ import {
   Prisma,
   ReservationStatus,
   UserGender,
-  type PlacementGenderPolicy,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllocatePlacementDto } from './dto/allocate-placement.dto';
-import { AllocateSystemDto } from './dto/allocate-system.dto';
 import { FindPlacementDueQueryDto } from './dto/find-placement-due-query.dto';
 import { FindPlacementQueueQueryDto } from './dto/find-placement-queue-query.dto';
 import { PlacementAvailabilityQueryDto } from './dto/placement-availability-query.dto';
 import { UpdateAllocationDto } from './dto/update-allocation.dto';
-import { runSystemAllocation } from './placement-algorithm';
 import {
   addOccupancy,
   canShareVenueByPolicy,
@@ -117,7 +114,11 @@ const queueInclude = {
   caravanManager: { select: userSelect },
   allocations: {
     where: { status: AllocationStatus.ACTIVE },
-    select: { gender: true, headcount: true },
+    select: {
+      gender: true,
+      headcount: true,
+      accommodation: { select: { id: true, name: true } },
+    },
   },
 } satisfies Prisma.ReservationInclude;
 
@@ -167,6 +168,7 @@ export class PlacementsService {
         { header: 'زن', key: 'femaleCount', width: 10 },
         { header: 'تخصیص مرد', key: 'allocatedMale', width: 12 },
         { header: 'تخصیص زن', key: 'allocatedFemale', width: 12 },
+        { header: 'اسکان', key: 'accommodation', width: 32 },
         { header: 'شروع اقامت', key: 'stayStartDate', width: 14 },
         { header: 'پایان اقامت', key: 'stayEndDate', width: 14 },
         { header: 'وضعیت', key: 'placementStatus', width: 16 },
@@ -182,6 +184,7 @@ export class PlacementsService {
           femaleCount: row.femaleCount,
           allocatedMale: row.allocatedMale,
           allocatedFemale: row.allocatedFemale,
+          accommodation: row.stays.map((stay) => stay.name).join('، '),
           stayStartDate: row.stayStartDate ?? '',
           stayEndDate: row.stayEndDate ?? '',
           placementStatus: row.placementStatus,
@@ -367,6 +370,96 @@ export class PlacementsService {
     });
   }
 
+  async commitSystem(
+    assignments: { groupId: string; gender: 'men' | 'women'; placeId: string }[],
+    actor: Actor,
+  ) {
+    this.assertAdmin(actor);
+    const byReservation = new Map<string, { gender: UserGender; placeId: string }[]>();
+    for (const row of assignments) {
+      const gender =
+        row.gender === 'men' ? UserGender.MALE : row.gender === 'women' ? UserGender.FEMALE : null;
+      if (!gender || !row.groupId || !row.placeId) continue;
+      const list = byReservation.get(row.groupId) ?? [];
+      const index = list.findIndex((item) => item.gender === gender);
+      if (index >= 0) list[index] = { gender, placeId: row.placeId };
+      else list.push({ gender, placeId: row.placeId });
+      byReservation.set(row.groupId, list);
+    }
+    if (!byReservation.size) {
+      throw new BadRequestException('جوابی برای ذخیره نیست');
+    }
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        const touchedAcc = new Set<string>();
+        const ready: {
+          reservation: Awaited<ReturnType<PlacementsService['requireAllocatable']>>;
+          items: { gender: UserGender; placeId: string; headcount: number }[];
+        }[] = [];
+        for (const [reservationId, items] of byReservation) {
+          const current = await this.requireAllocatable(tx, reservationId);
+          const planned = items.flatMap((item) => {
+            const headcount =
+              item.gender === UserGender.MALE ? current.maleCount : current.femaleCount;
+            return headcount > 0 ? [{ ...item, headcount }] : [];
+          });
+          if (!planned.length) continue;
+          const active = await tx.reservationAllocation.findMany({
+            where: {
+              reservationId,
+              status: AllocationStatus.ACTIVE,
+              gender: { in: planned.map((item) => item.gender) },
+            },
+            select: { id: true, accommodationId: true },
+          });
+          for (const row of active) {
+            touchedAcc.add(row.accommodationId);
+            await this.vacateRow(tx, row.id, actor.id);
+          }
+          ready.push({ reservation: current, items: planned });
+        }
+        if (!ready.length) {
+          throw new BadRequestException('جوابی برای ذخیره نیست');
+        }
+        let saved = 0;
+        for (const row of ready) {
+          const accommodated: { gender: UserGender; accommodatedCount: number }[] = [];
+          for (const item of row.items) {
+            try {
+              await this.createAllocation(
+                tx,
+                row.reservation,
+                {
+                  accommodationId: item.placeId,
+                  gender: item.gender,
+                  headcount: item.headcount,
+                },
+                actor,
+                AllocationSource.SYSTEM,
+                { skipManualOverride: true },
+              );
+            } catch (error) {
+              throw new BadRequestException(`${row.reservation.code}: ${exceptionText(error)}`);
+            }
+            touchedAcc.add(item.placeId);
+            accommodated.push({ gender: item.gender, accommodatedCount: item.headcount });
+            saved += 1;
+          }
+          await this.applyAccommodatedCounts(tx, row.reservation.id, accommodated);
+          await tx.reservation.update({
+            where: { id: row.reservation.id },
+            data: { placementMode: PlacementMode.SYSTEM },
+          });
+          await this.syncReservationPlacement(tx, row.reservation.id, actor.id);
+        }
+        await this.syncAssigned(tx, [...touchedAcc]);
+        return { saved, reservations: ready.length };
+      },
+      { timeout: 120_000, maxWait: 10_000 },
+    );
+  }
+
   async allocateManual(dto: AllocatePlacementDto, actor: Actor) {
     this.assertAdmin(actor);
     const reservationId = await this.prisma.$transaction(async (tx) => {
@@ -383,104 +476,6 @@ export class PlacementsService {
       return current.id;
     });
     return this.getReservation(reservationId, actor);
-  }
-
-  async allocateSystem(dto: AllocateSystemDto, actor: Actor) {
-    this.assertAdmin(actor);
-    return this.prisma.$transaction(async (tx) => {
-      const where = this.queueWhere({
-        ...dto,
-        placementMode: PlacementMode.SYSTEM,
-        placementStatus: dto.placementStatus,
-      });
-      const systemWhere: Prisma.ReservationWhereInput = {
-        ...where,
-        placementMode: PlacementMode.SYSTEM,
-        placementStatus: {
-          in: [PlacementStatus.PENDING, PlacementStatus.PARTIAL],
-        },
-        stayStartDate: { not: null },
-        stayEndDate: { not: null },
-        ...(dto.ids?.length ? { id: { in: dto.ids } } : {}),
-      };
-      const reservations = await tx.reservation.findMany({
-        where: systemWhere,
-        include: {
-          ...queueInclude,
-          allocations: {
-            where: { status: AllocationStatus.ACTIVE },
-            include: allocationInclude,
-          },
-        },
-      });
-      const settingsByYear = new Map<number, PlacementGenderPolicy>();
-      const years = [...new Set(reservations.map((item) => item.year))];
-      if (years.length) {
-        const settings = await tx.receptionSettings.findMany({
-          where: { year: { in: years } },
-          select: { year: true, placementGenderPolicy: true },
-        });
-        for (const row of settings) {
-          settingsByYear.set(row.year, row.placementGenderPolicy);
-        }
-      }
-      const venues = await tx.accommodation.findMany({
-        where: { status: 'ACTIVE' },
-      });
-      const occupants = await this.loadActiveOccupants(tx);
-      const planned = runSystemAllocation({
-        reservations: reservations.map((item) => {
-          const allocated = this.allocatedTotals(item.allocations);
-          return {
-            id: item.id,
-            maleCount: item.maleCount,
-            femaleCount: item.femaleCount,
-            totalCount: item.totalCount,
-            stayStartDate: toIsoDateOnly(item.stayStartDate) ?? '',
-            stayEndDate: toIsoDateOnly(item.stayEndDate) ?? '',
-            allocatedMale: allocated.male,
-            allocatedFemale: allocated.female,
-            policy: settingsByYear.get(item.year) ?? 'SINGLE_GENDER',
-            placementMode: item.placementMode,
-          };
-        }),
-        accommodations: venues.map((item) => ({
-          id: item.id,
-          status: item.status,
-          genderType: item.genderType,
-          maleCapacity: item.maleCapacity,
-          femaleCapacity: item.femaleCapacity,
-          overflowPercent: item.overflowPercent,
-        })),
-        occupants,
-      });
-
-      const touched = new Set<string>();
-      for (const item of planned) {
-        const reservation = reservations.find((row) => row.id === item.reservationId);
-        if (!reservation) continue;
-        await this.createAllocation(
-          tx,
-          reservation,
-          {
-            accommodationId: item.accommodationId,
-            gender: item.gender,
-            headcount: item.headcount,
-          },
-          actor,
-          AllocationSource.SYSTEM,
-          { skipManualOverride: true },
-        );
-        touched.add(item.accommodationId);
-        await this.syncReservationPlacement(tx, item.reservationId, actor.id);
-      }
-
-      await this.syncAssigned(tx, [...touched]);
-      return {
-        created: planned.length,
-        reservationIds: [...new Set(planned.map((item) => item.reservationId))],
-      };
-    });
   }
 
   async updateAllocation(id: string, dto: UpdateAllocationDto, actor: Actor) {
@@ -619,6 +614,14 @@ export class PlacementsService {
               { caravan: { name: containsInsensitive(term) } },
               { group: { name: containsInsensitive(term) } },
               { createdBy: { fullName: containsInsensitive(term) } },
+              {
+                allocations: {
+                  some: {
+                    status: AllocationStatus.ACTIVE,
+                    accommodation: { name: containsInsensitive(term) },
+                  },
+                },
+              },
             ],
           }
         : {}),
@@ -662,6 +665,41 @@ export class PlacementsService {
       );
   }
 
+  private serializeStays(
+    allocations: {
+      gender: UserGender;
+      accommodation: { id: string; name: string };
+    }[],
+  ) {
+    const grouped = new Map<
+      string,
+      { id: string; name: string; genders: UserGender[] }
+    >();
+    for (const item of allocations) {
+      const current = grouped.get(item.accommodation.id);
+      if (!current) {
+        grouped.set(item.accommodation.id, {
+          id: item.accommodation.id,
+          name: item.accommodation.name,
+          genders: [item.gender],
+        });
+        continue;
+      }
+      if (!current.genders.includes(item.gender)) current.genders.push(item.gender);
+    }
+    const rank = (gender: UserGender) => (gender === UserGender.MALE ? 0 : 1);
+    return [...grouped.values()]
+      .map((stay) => ({
+        ...stay,
+        genders: [...stay.genders].sort((a, b) => rank(a) - rank(b)),
+      }))
+      .sort((a, b) => {
+        const genderOrder = rank(a.genders[0] ?? UserGender.MALE) - rank(b.genders[0] ?? UserGender.MALE);
+        if (genderOrder !== 0) return genderOrder;
+        return a.name.localeCompare(b.name, 'fa');
+      });
+  }
+
   private partyName(row: {
     caravan?: { name: string } | null;
     group?: { name: string } | null;
@@ -692,6 +730,7 @@ export class PlacementsService {
       accommodatedFemaleCount: row.accommodatedFemaleCount,
       allocatedMale: allocated.male,
       allocatedFemale: allocated.female,
+      stays: this.serializeStays(row.allocations),
       partyName: this.partyName(row),
       caravan: row.caravan,
       group: row.group,
@@ -912,7 +951,15 @@ export class PlacementsService {
 
   private async createAllocation(
     tx: Db,
-    reservation: Prisma.ReservationGetPayload<{ include: typeof queueInclude }>,
+    reservation: {
+      id: string;
+      code: string;
+      year: number;
+      maleCount: number;
+      femaleCount: number;
+      stayStartDate: Date | null;
+      stayEndDate: Date | null;
+    },
     item: {
       accommodationId: string;
       gender: UserGender;
@@ -1128,4 +1175,20 @@ export class PlacementsService {
       });
     }
   }
+}
+
+function exceptionText(error: unknown) {
+  if (error instanceof BadRequestException) {
+    const response = error.getResponse();
+    if (typeof response === 'string') return response;
+    if (response && typeof response === 'object' && 'message' in response) {
+      const message = (response as { message: unknown }).message;
+      if (typeof message === 'string') return message;
+      if (Array.isArray(message)) {
+        return message.filter((item) => typeof item === 'string').join(' ');
+      }
+    }
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return 'ذخیره جانمایی ناموفق بود';
 }

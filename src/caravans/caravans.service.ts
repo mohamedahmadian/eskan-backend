@@ -230,6 +230,8 @@ export class CaravansService {
         city: (dir) => ({ city: { nameFa: dir } }),
         walkingRoute: (dir) => ({ walkingRoute: { name: dir } }),
         manager: (dir) => ({ manager: { fullName: dir } }),
+        maleCount: (dir) => ({ maleCount: dir }),
+        femaleCount: (dir) => ({ femaleCount: dir }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
     );

@@ -1641,6 +1641,99 @@ export class UsersService {
     return this.findOne(userId);
   }
 
+  async findCaravanManagerPlacements(id: string) {
+    await this.assertHasRole(id, 'CARAVAN_MANAGER', 'مدیر کاروان یافت نشد');
+    const year = currentJalaliYear();
+    const rows = await this.prisma.reservationAllocation.findMany({
+      where: {
+        status: AllocationStatus.ACTIVE,
+        reservation: {
+          year,
+          type: ReservationType.CARAVAN,
+          OR: [
+            { caravanManagerId: id },
+            { caravan: { managerUserId: id } },
+            { caravan: { years: { some: { year, managerUserId: id } } } },
+          ],
+        },
+      },
+      select: {
+        gender: true,
+        headcount: true,
+        accommodation: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            city: {
+              select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+            },
+          },
+        },
+        reservation: {
+          select: {
+            caravan: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    const byStay = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        address: string | null;
+        city: {
+          id: string;
+          nameFa: string;
+          nameEn: string | null;
+          provinceId: string;
+        } | null;
+        caravans: Map<string, { id: string; name: string }>;
+        placedMaleCount: number;
+        placedFemaleCount: number;
+      }
+    >();
+    for (const row of rows) {
+      const stay = row.accommodation;
+      let current = byStay.get(stay.id);
+      if (!current) {
+        current = {
+          id: stay.id,
+          name: stay.name,
+          address: stay.address,
+          city: stay.city,
+          caravans: new Map(),
+          placedMaleCount: 0,
+          placedFemaleCount: 0,
+        };
+        byStay.set(stay.id, current);
+      }
+      if (row.gender === UserGender.MALE) current.placedMaleCount += row.headcount;
+      if (row.gender === UserGender.FEMALE) current.placedFemaleCount += row.headcount;
+      const caravan = row.reservation.caravan;
+      if (caravan) current.caravans.set(caravan.id, caravan);
+    }
+
+    return {
+      year,
+      items: [...byStay.values()]
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          address: item.address,
+          city: item.city,
+          caravans: [...item.caravans.values()].sort((a, b) =>
+            a.name.localeCompare(b.name, 'fa'),
+          ),
+          placedMaleCount: item.placedMaleCount,
+          placedFemaleCount: item.placedFemaleCount,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'fa')),
+    };
+  }
+
   async assertHasRole(id: string, roleCode: string, notFoundMessage = 'کاربر یافت نشد') {
     const user = await this.findOne(id);
     if (!user.roles.some((role) => role.code === roleCode)) {

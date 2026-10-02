@@ -173,6 +173,15 @@ export class AccommodationsController {
     return this.accommodations.removeFromYear(accommodationId, actor, query.year);
   }
 
+  @Get(':id/year-caravan-placements')
+  findYearCaravanPlacements(
+    @Param('id') id: string,
+    @Query() query: FindAccommodationReportQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.findYearCaravanPlacements(id, actor, query.year);
+  }
+
   @Get(':id/year-reservations')
   findYearReservations(
     @Param('id') id: string,

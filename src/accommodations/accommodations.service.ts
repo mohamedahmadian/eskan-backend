@@ -21,6 +21,7 @@ import {
   Prisma,
   AccommodationStatus,
   AllocationStatus,
+  ReservationType,
   UserGender,
   type AccommodationContactRole,
   type AccommodationType,
@@ -767,6 +768,88 @@ export class AccommodationsService {
     await this.assertYearHasNoPlacements(id, link.year);
     await this.prisma.accommodationManager.delete({ where: { id: assignmentId } });
     return this.findOne(id, actor);
+  }
+
+  async findYearCaravanPlacements(id: string, actor: Actor, year?: number) {
+    await this.findRecord(id, actor);
+    const selectedYear = year ?? currentJalaliYear();
+    const rows = await this.prisma.reservation.findMany({
+      where: {
+        year: selectedYear,
+        type: ReservationType.CARAVAN,
+        caravanId: { not: null },
+        allocations: {
+          some: { accommodationId: id, status: AllocationStatus.ACTIVE },
+        },
+      },
+      select: {
+        caravan: {
+          select: {
+            id: true,
+            name: true,
+            manager: { select: { id: true, fullName: true } },
+            city: {
+              select: { id: true, nameFa: true, nameEn: true, provinceId: true },
+            },
+          },
+        },
+        caravanManager: { select: { id: true, fullName: true } },
+        allocations: {
+          where: { accommodationId: id, status: AllocationStatus.ACTIVE },
+          select: { gender: true, headcount: true },
+        },
+      },
+    });
+
+    const byCaravan = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        city: {
+          id: string;
+          nameFa: string;
+          nameEn: string | null;
+          provinceId: string;
+        } | null;
+        manager: { id: string; fullName: string } | null;
+        placedMaleCount: number;
+        placedFemaleCount: number;
+      }
+    >();
+    for (const row of rows) {
+      if (!row.caravan) continue;
+      const placedMaleCount = row.allocations
+        .filter((item) => item.gender === UserGender.MALE)
+        .reduce((sum, item) => sum + item.headcount, 0);
+      const placedFemaleCount = row.allocations
+        .filter((item) => item.gender === UserGender.FEMALE)
+        .reduce((sum, item) => sum + item.headcount, 0);
+      const current = byCaravan.get(row.caravan.id);
+      if (!current) {
+        byCaravan.set(row.caravan.id, {
+          id: row.caravan.id,
+          name: row.caravan.name,
+          city: row.caravan.city,
+          manager: row.caravanManager ?? row.caravan.manager,
+          placedMaleCount,
+          placedFemaleCount,
+        });
+        continue;
+      }
+      current.placedMaleCount += placedMaleCount;
+      current.placedFemaleCount += placedFemaleCount;
+      if (!current.manager) {
+        current.manager = row.caravanManager ?? row.caravan.manager;
+      }
+    }
+
+    return {
+      year: selectedYear,
+      items: [...byCaravan.values()].sort((a, b) =>
+        a.name.localeCompare(b.name, 'fa'),
+      ),
+    };
   }
 
   async findYearReservations(id: string, actor: Actor, year?: number) {

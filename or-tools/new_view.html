@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Event Housing — Assignment Map</title>
+<style>
+  :root {
+    --sidebar-bg: #1b1f24;
+    --sidebar-fg: #e8e6e1;
+    --sidebar-muted: #9aa1a8;
+    --sidebar-border: #2c3138;
+    --map-bg: #f6f5f2;
+    --highlight: #e8a33d;
+    --alert: #d1495b;
+    --ok: #2a9d8f;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: var(--font-ui); background: var(--map-bg); color: #23262b; }
+
+  .app { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100vh; height: 100dvh; overflow: hidden; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: var(--sidebar-bg); color: var(--sidebar-fg);
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
+  header .stats { font-family: var(--font-mono); font-size: 12px; color: var(--sidebar-muted); }
+  .load-btn {
+    background: var(--highlight); color: #1b1f24; border: none; padding: 7px 14px;
+    border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .load-btn:hover { background: #f0b155; }
+
+  .tabbar {
+    display: flex; align-items: center; gap: 2px; padding: 0 16px;
+    background: #15181c; border-bottom: 1px solid var(--sidebar-border);
+  }
+  .tab-btn {
+    background: transparent; color: var(--sidebar-muted); border: none;
+    padding: 10px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent;
+    font-family: var(--font-ui);
+  }
+  .tab-btn:hover { color: var(--sidebar-fg); }
+  .tab-btn.active { color: var(--highlight); border-bottom-color: var(--highlight); font-weight: 600; }
+  .tab-spacer { flex: 1; }
+  .ghost-btn {
+    background: transparent; border: 1px solid var(--sidebar-border); color: var(--sidebar-muted);
+    padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin: 6px 0; font-family: var(--font-ui);
+  }
+  .ghost-btn:hover { color: var(--sidebar-fg); border-color: var(--sidebar-fg); }
+  .ghost-btn.active { background: var(--alert); border-color: var(--alert); color: #fff; }
+
+  .layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; }
+  aside {
+    background: var(--sidebar-bg); color: var(--sidebar-fg); padding: 16px 18px 24px;
+    overflow-y: auto; min-height: 0; border-right: 1px solid var(--sidebar-border);
+  }
+  .view-panel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--sidebar-muted); margin: 0 0 10px; font-weight: 600;
+  }
+  .view-panel h4 { font-size: 11px; margin: 14px 0 6px; color: var(--sidebar-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .view-panel p.hint { font-size: 12px; color: var(--sidebar-muted); margin: 0 0 10px; }
+
+  .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+  input[type="text"], input[type="number"], select {
+    background: #262b32; border: 1px solid var(--sidebar-border); color: var(--sidebar-fg);
+    padding: 6px 8px; border-radius: 4px; font-size: 13px; font-family: var(--font-ui); flex: 1; min-width: 0;
+  }
+  input[type="color"] { width: 32px; height: 28px; border: 1px solid var(--sidebar-border); border-radius: 4px; background: none; padding: 0; cursor: pointer; }
+  button {
+    background: #2c3138; color: var(--sidebar-fg); border: 1px solid var(--sidebar-border);
+    padding: 7px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: var(--font-ui);
+  }
+  button:hover { background: #363c44; }
+  button.primary { background: var(--highlight); color: #1b1f24; border-color: var(--highlight); font-weight: 600; }
+  button.primary:hover { background: #f0b155; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .summary-grid > div { font-size: 11px; color: var(--sidebar-muted); }
+  .summary-grid .mono.big { font-size: 18px; color: var(--sidebar-fg); display: block; margin-top: 2px; }
+  .mono { font-family: var(--font-mono); color: var(--sidebar-fg); }
+
+  .summary-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 4px; }
+  .summary-table th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--sidebar-muted); border-bottom: 1px solid var(--sidebar-border); padding: 4px 6px;
+  }
+  .summary-table td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .summary-table tr.clickable { cursor: pointer; }
+  .summary-table tr.clickable:hover { background: #262b32; }
+  .alert-text { color: var(--alert); font-weight: 600; }
+  .info-empty { color: var(--sidebar-muted); font-size: 12.5px; margin: 0; }
+  hr { border: none; border-top: 1px solid var(--sidebar-border); margin: 10px 0; }
+
+  .jump-card { background: #262b32; border: 1px solid var(--sidebar-border); border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; }
+  .jump-card:hover { border-color: var(--highlight); }
+  .jump-card h4 { margin: 0 0 6px; }
+  .link-btn { background: none; border: none; color: var(--highlight); font-size: 11.5px; cursor: pointer; padding: 4px 0 0; font-family: var(--font-ui); }
+
+  .util-gradient-labeled { height: 14px; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(to right, rgb(222,224,227), rgb(42,90,140)); }
+  .util-ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--sidebar-muted); margin-bottom: 12px; }
+  .legend { font-size: 12px; color: var(--sidebar-muted); line-height: 1.8; }
+  .legend .swatch { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: middle; }
+
+  #infoPanelWrap { background: #262b32; border: 1px solid var(--sidebar-border); border-radius: 6px; padding: 12px 14px; min-height: 50px; }
+  #infoPanelWrap h3 { margin: 0 0 8px; font-size: 13px; color: var(--sidebar-fg); }
+  .info-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 2px 0; color: var(--sidebar-fg); }
+  .info-row span:first-child { color: var(--sidebar-muted); }
+
+  main { position: relative; background: var(--map-bg); min-width: 0; min-height: 0; overflow: hidden; }
+  #mapSvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .place-marker { cursor: pointer; transition: fill 0.15s ease; }
+  .place-marker:hover { filter: brightness(1.08); }
+
+  .floating-status {
+    position: absolute; top: 14px; right: 14px; background: rgba(27,31,36,0.92); color: var(--sidebar-fg);
+    padding: 7px 13px; border-radius: 5px; font-size: 12px; font-family: var(--font-mono); display: none;
+  }
+  .floating-status.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <h1>Event Housing — Assignment Map</h1>
+      <div class="stats" id="statsLine">No data loaded yet. Load the solver input and result files.</div>
+    </div>
+    <label class="load-btn">
+      Load files (.json)
+      <input type="file" id="fileInput" accept="application/json,.json" multiple style="display:none;">
+    </label>
+  </header>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-view="overview">Overview</button>
+    <button class="tab-btn" data-view="utilization">Utilization</button>
+    <button class="tab-btn" data-view="separation">Group Separation</button>
+    <button class="tab-btn" data-view="conflicts">City Conflicts</button>
+    <button class="tab-btn" data-view="fairness">City Distances</button>
+    <div class="tab-spacer"></div>
+    <button id="measureBtn" class="ghost-btn">Measure distance</button>
+    <button id="resetBtn" class="ghost-btn">Reset view</button>
+  </nav>
+
+  <div class="layout">
+    <aside>
+      <div class="view-panel" data-view="overview" id="panel-overview"></div>
+      <div class="view-panel" data-view="utilization" id="panel-utilization" style="display:none;"></div>
+      <div class="view-panel" data-view="separation" id="panel-separation" style="display:none;"></div>
+      <div class="view-panel" data-view="conflicts" id="panel-conflicts" style="display:none;"></div>
+      <div class="view-panel" data-view="fairness" id="panel-fairness" style="display:none;"></div>
+
+      <section style="margin-top:18px;padding-top:14px;border-top:1px solid var(--sidebar-border);">
+        <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--sidebar-muted);margin:0 0 10px;">Shapes</h2>
+        <div class="legend">
+          <span class="swatch" style="background:#9aa1a8;"></span>Men place (square)<br>
+          <span class="swatch" style="border-radius:50%;background:#9aa1a8;"></span>Women place (circle)<br>
+          Marker size ≈ capacity
+        </div>
+      </section>
+
+      <section style="margin-top:16px;">
+        <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--sidebar-muted);margin:0 0 10px;">Details</h2>
+        <div id="infoPanelWrap"><div id="infoPanel"><p class="info-empty">Load a data file to begin.</p></div></div>
+      </section>
+    </aside>
+
+    <main>
+      <svg id="mapSvg" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="floating-status" id="measureStatus"></div>
+    </main>
+  </div>
+</div>
+<datalist id="groupList"></datalist>
+
+<script>
+const SVGNS = 'http://www.w3.org/2000/svg';
+const COLORS = {
+  highlight: '#e8a33d',
+  highlightStroke: '#8a5a12',
+  alert: '#d1495b',
+  compareStroke: '#2b2f33',
+  baseStroke: '#8b929a',
+};
+const UTIL_LOW = [222, 224, 227];
+const UTIL_HIGH = [42, 90, 140];
+
+let DATA = null;
+let venuesById = {};
+let delegationsById = {};
+let placementsByVenue = {};
+let placementsByDelegation = {};
+let venueUsed = {};
+let venueUtilization = {};
+let venueEls = {};
+let bounds = null;
+let measureMode = false;
+let measureSelection = [];
+let activeView = 'overview';
+
+/* ---------- math / geometry helpers ---------- */
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371.0088;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function haversineForVenues(idA, idB) {
+  const a = venuesById[idA], b = venuesById[idB];
+  if (!a || !b) return null;
+  return haversineKm(a.lat, a.lng, b.lat, b.lng);
+}
+function utilizationColor(fraction) {
+  const t = Math.max(0, Math.min(1, fraction || 0));
+  const r = Math.round(UTIL_LOW[0] + (UTIL_HIGH[0] - UTIL_LOW[0]) * t);
+  const g = Math.round(UTIL_LOW[1] + (UTIL_HIGH[1] - UTIL_LOW[1]) * t);
+  const b = Math.round(UTIL_LOW[2] + (UTIL_HIGH[2] - UTIL_LOW[2]) * t);
+  return `rgb(${r},${g},${b})`;
+}
+function project(lat, lng) {
+  const w = 1000, h = 620, pad = 0.06;
+  const latSpan = (bounds.latMax - bounds.latMin) || 0.001;
+  const lngSpan = (bounds.lngMax - bounds.lngMin) || 0.001;
+  const px = pad * w, py = pad * h;
+  const uw = w - 2 * px, uh = h - 2 * py;
+  const x = px + ((lng - bounds.lngMin) / lngSpan) * uw;
+  const y = py + (1 - (lat - bounds.latMin) / latSpan) * uh;
+  return { x, y };
+}
+function markerRadius(capacity) {
+  const minR = Math.sqrt(Math.max(bounds.minCap, 1));
+  const maxR = Math.sqrt(Math.max(bounds.maxCap, 1));
+  const t = maxR > minR ? (Math.sqrt(Math.max(capacity, 1)) - minR) / (maxR - minR) : 0.5;
+  return 4 + t * 14;
+}
+function stats(nums) {
+  if (nums.length === 0) return { mean: 0, median: 0, p90: 0, max: 0 };
+  const s = [...nums].sort((a, b) => a - b);
+  const mean = s.reduce((a, b) => a + b, 0) / s.length;
+  const median = s[Math.floor(s.length / 2)];
+  const p90 = s[Math.min(s.length - 1, Math.floor(s.length * 0.9))];
+  return { mean, median, p90, max: s[s.length - 1] };
+}
+
+/* ---------- map drawing ---------- */
+
+function computeUtilization() {
+  const totals = {};
+  (DATA.placements || []).forEach(({ delegation_id, gender, venue_id }) => {
+    const d = delegationsById[delegation_id];
+    const count = d ? (gender === 'men' ? d.men : d.women) : 0;
+    totals[venue_id] = (totals[venue_id] || 0) + count;
+  });
+  venueUsed = totals;
+  venueUtilization = {};
+  DATA.venues.forEach(v => {
+    venueUtilization[v.id] = v.capacity > 0 ? (totals[v.id] || 0) / v.capacity : 0;
+  });
+}
+
+function drawBaseVenues() {
+  const svg = document.getElementById('mapSvg');
+  const old = document.getElementById('venuesLayer');
+  if (old) old.remove();
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('id', 'venuesLayer');
+  venueEls = {};
+  DATA.venues.forEach(v => {
+    const { x, y } = project(v.lat, v.lng);
+    const r = markerRadius(v.capacity);
+    let el;
+    if (v.gender === 'men') {
+      el = document.createElementNS(SVGNS, 'rect');
+      el.setAttribute('x', x - r); el.setAttribute('y', y - r);
+      el.setAttribute('width', r * 2); el.setAttribute('height', r * 2);
+    } else {
+      el = document.createElementNS(SVGNS, 'circle');
+      el.setAttribute('cx', x); el.setAttribute('cy', y); el.setAttribute('r', r);
+    }
+    el.setAttribute('class', 'place-marker');
+    el.setAttribute('data-venue-id', v.id);
+    g.appendChild(el);
+    venueEls[v.id] = el;
+  });
+  svg.appendChild(g);
+}
+
+function clearOverlayLines() {
+  const old = document.getElementById('overlayLayer');
+  if (old) old.remove();
+  const svg = document.getElementById('mapSvg');
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('id', 'overlayLayer');
+  svg.appendChild(g);
+}
+
+function drawConnector(id1, id2, color, width, dash) {
+  const v1 = venuesById[id1], v2 = venuesById[id2];
+  if (!v1 || !v2) return;
+  const a = project(v1.lat, v1.lng), b = project(v2.lat, v2.lng);
+  const g = document.getElementById('overlayLayer');
+  const line = document.createElementNS(SVGNS, 'line');
+  line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+  line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+  line.setAttribute('stroke', color);
+  line.setAttribute('stroke-width', String(width || 2));
+  if (dash) line.setAttribute('stroke-dasharray', dash);
+  g.appendChild(line);
+}
+
+/* Baseline styling: utilization gradient fill, with a clear marker for
+   completely empty (dashed outline) and completely full (bold white outline)
+   places. This is the "resting state" every view returns to. */
+function resetColors() {
+  Object.entries(venueEls).forEach(([id, el]) => {
+    const vid = id;
+    const frac = venueUtilization[vid] || 0;
+    el.setAttribute('fill', utilizationColor(frac));
+    if (frac >= 0.999) {
+      el.setAttribute('stroke', '#ffffff');
+      el.setAttribute('stroke-width', '2.5');
+      el.removeAttribute('stroke-dasharray');
+    } else if (frac <= 0.0001) {
+      el.setAttribute('stroke', COLORS.baseStroke);
+      el.setAttribute('stroke-width', '1.5');
+      el.setAttribute('stroke-dasharray', '2,2');
+    } else {
+      el.setAttribute('stroke', COLORS.baseStroke);
+      el.setAttribute('stroke-width', '1');
+      el.removeAttribute('stroke-dasharray');
+    }
+  });
+  clearOverlayLines();
+  measureSelection = [];
+  if (measureMode) document.getElementById('measureStatus').textContent = 'Click a place to begin.';
+}
+
+/* ---------- shared click-to-inspect ---------- */
+
+function showPlaceInfo(venueId) {
+  const v = venuesById[venueId];
+  if (!v) return;
+  const here = placementsByVenue[venueId] || [];
+  const used = venueUsed[venueId] || 0;
+  const pct = v.capacity > 0 ? Math.round((used / v.capacity) * 100) : 0;
+  const panel = document.getElementById('infoPanel');
+  const rows = here.map(a => {
+    const d = delegationsById[a.group_id];
+    const count = d ? (a.gender === 'men' ? d.men : d.women) : '?';
+    return `<div class="info-row"><span>Group ${a.group_id} (${a.gender})</span><span class="mono">${count}</span></div>`;
+  }).join('') || '<p class="info-empty">Unused.</p>';
+  panel.innerHTML = `
+    <h3>Place ${v.id}</h3>
+    <div class="info-row"><span>Gender</span><span class="mono">${v.gender}</span></div>
+    <div class="info-row"><span>Capacity</span><span class="mono">${v.capacity}</span></div>
+    <div class="info-row"><span>Used</span><span class="mono">${used} (${pct}%)</span></div>
+    <div class="info-row"><span>Distance to event</span><span class="mono">${v.distance_to_event_km.toFixed(2)} km</span></div>
+    <hr>${rows}
+  `;
+}
+
+/* ---------- measure distance (always available) ---------- */
+
+function toggleMeasure() {
+  if (!DATA) return;
+  measureMode = !measureMode;
+  measureSelection = [];
+  clearOverlayLines();
+  const btn = document.getElementById('measureBtn');
+  btn.classList.toggle('active', measureMode);
+  btn.textContent = measureMode ? 'Measuring… (Esc to cancel)' : 'Measure distance';
+  const status = document.getElementById('measureStatus');
+  if (measureMode) { status.textContent = 'Click a place to begin.'; status.classList.add('visible'); }
+  else { status.classList.remove('visible'); }
+}
+function handleMeasureClick(venueId) {
+  if (measureSelection.length === 2) { measureSelection = []; clearOverlayLines(); }
+  measureSelection.push(venueId);
+  const status = document.getElementById('measureStatus');
+  if (measureSelection.length === 1) {
+    status.textContent = 'Click a second place…';
+  } else {
+    const [id1, id2] = measureSelection;
+    const v1 = venuesById[id1], v2 = venuesById[id2];
+    const d = haversineKm(v1.lat, v1.lng, v2.lat, v2.lng);
+    drawConnector(id1, id2, COLORS.highlight, 2.5, '5,4');
+    status.textContent = `Distance: ${d.toFixed(2)} km (place ${id1} → ${id2})`;
+  }
+}
+
+/* ---------- computations shared across views ---------- */
+
+function computeSeparations() {
+  const rows = [];
+  DATA.delegations.forEach(d => {
+    const pd = placementsByDelegation[d.id];
+    if (!pd || pd.men.length === 0 || pd.women.length === 0) return;
+    const menId = pd.men[0], womenId = pd.women[0];
+    const dist = haversineForVenues(menId, womenId);
+    if (dist == null) return;
+    rows.push({ id: d.id, city: d.home_city, dist, menId, womenId });
+  });
+  return rows;
+}
+
+function computeConflictProximity() {
+  const rows = [];
+  (DATA.city_conflicts || []).forEach(([cityA, cityB]) => {
+    const delsA = DATA.delegations.filter(d => d.home_city === cityA);
+    const delsB = DATA.delegations.filter(d => d.home_city === cityB);
+    let minDist = Infinity, shared = false;
+    delsA.forEach(da => {
+      const pda = placementsByDelegation[da.id] || { men: [], women: [] };
+      const vA = [...pda.men, ...pda.women];
+      delsB.forEach(db => {
+        const pdb = placementsByDelegation[db.id] || { men: [], women: [] };
+        const vB = [...pdb.men, ...pdb.women];
+        vA.forEach(a => vB.forEach(b => {
+          if (a === b) { shared = true; minDist = 0; return; }
+          const d = haversineForVenues(a, b);
+          if (d != null && d < minDist) minDist = d;
+        }));
+      });
+    });
+    if (minDist === Infinity) return;
+    rows.push({ cityA, cityB, minDist, shared });
+  });
+  rows.sort((a, b) => a.minDist - b.minDist);
+  return rows;
+}
+
+function computeCityFairness() {
+  const byCity = {};
+  DATA.delegations.forEach(d => {
+    if (!d.home_city) return;
+    byCity[d.home_city] = byCity[d.home_city] || { city: d.home_city, home_distance: d.home_distance, eventDistances: [] };
+  });
+  (DATA.placements || []).forEach(({ delegation_id, venue_id }) => {
+    const d = delegationsById[delegation_id];
+    const v = venuesById[venue_id];
+    if (!d || !v || !d.home_city) return;
+    byCity[d.home_city].eventDistances.push(v.distance_to_event_km);
+  });
+  return Object.values(byCity)
+    .map(c => ({
+      city: c.city,
+      home_distance: c.home_distance,
+      avgEventKm: c.eventDistances.length ? c.eventDistances.reduce((a, b) => a + b, 0) / c.eventDistances.length : null,
+    }))
+    .filter(c => c.avgEventKm !== null);
+}
+
+/* ---------- view: overview ---------- */
+
+function renderOverview() {
+  const panel = document.getElementById('panel-overview');
+  if (!DATA) { panel.innerHTML = '<p class="info-empty">Load a data file to begin.</p>'; return; }
+
+  const totalCap = DATA.venues.reduce((s, v) => s + v.capacity, 0);
+  const usedCap = DATA.venues.reduce((s, v) => s + (venueUsed[v.id] || 0), 0);
+  const overallPct = totalCap > 0 ? ((usedCap / totalCap) * 100).toFixed(1) : '0.0';
+  const bothCount = DATA.delegations.filter(d => {
+    const pd = placementsByDelegation[d.id];
+    return pd && pd.men.length > 0 && pd.women.length > 0;
+  }).length;
+  const unusedCount = DATA.venues.filter(v => (venueUsed[v.id] || 0) === 0).length;
+
+  const seps = computeSeparations();
+  const worstSep = seps.length ? seps.reduce((a, b) => (b.dist > a.dist ? b : a)) : null;
+  const conflicts = computeConflictProximity();
+  const worstConflict = conflicts.length ? conflicts[0] : null;
+  const fairness = computeCityFairness();
+  const farthestCity = fairness.length ? [...fairness].sort((a, b) => b.home_distance - a.home_distance)[0] : null;
+
+  panel.innerHTML = `
+    <h2>Overview</h2>
+    <div class="summary-grid">
+      <div>Groups<br><span class="mono big">${DATA.delegations.length}</span></div>
+      <div>Places used<br><span class="mono big">${DATA.venues.length - unusedCount}</span> / ${DATA.venues.length}</div>
+      <div>Capacity used<br><span class="mono big">${overallPct}%</span></div>
+      <div>Complete (M+F)<br><span class="mono big">${bothCount}</span></div>
+      <div>Single-gender<br><span class="mono big">${DATA.delegations.length - bothCount}</span></div>
+    </div>
+    <hr>
+    <div class="jump-card" data-goto="separation">
+      <h4>Worst men ↔ women separation</h4>
+      ${worstSep
+        ? `<div class="info-row"><span>Group ${worstSep.id} (${worstSep.city ?? '—'})</span><span class="mono">${worstSep.dist.toFixed(2)} km</span></div>`
+        : '<p class="info-empty">No mixed-gender groups.</p>'}
+      <button class="link-btn">View ranking →</button>
+    </div>
+    <div class="jump-card" data-goto="conflicts">
+      <h4>Closest conflicting-city approach</h4>
+      ${worstConflict
+        ? `<div class="info-row"><span>${worstConflict.cityA} ↔ ${worstConflict.cityB}</span><span class="mono ${worstConflict.shared ? 'alert-text' : ''}">${worstConflict.shared ? 'SHARED VENUE' : worstConflict.minDist.toFixed(2) + ' km'}</span></div>`
+        : '<p class="info-empty">No city_conflicts in this file.</p>'}
+      <button class="link-btn">View ranking →</button>
+    </div>
+    <div class="jump-card" data-goto="fairness">
+      <h4>Farthest home city</h4>
+      ${farthestCity
+        ? `<div class="info-row"><span>${farthestCity.city}</span><span class="mono">${farthestCity.avgEventKm.toFixed(2)} km to event (avg)</span></div>`
+        : '<p class="info-empty">No city data.</p>'}
+      <button class="link-btn">View list →</button>
+    </div>
+  `;
+}
+
+/* ---------- view: utilization ---------- */
+
+function renderUtilizationView() {
+  const panel = document.getElementById('panel-utilization');
+  if (!DATA) { panel.innerHTML = '<p class="info-empty">Load a data file to begin.</p>'; return; }
+
+  const unusedCount = DATA.venues.filter(v => (venueUsed[v.id] || 0) === 0).length;
+  const fullCount = DATA.venues.filter(v => (venueUtilization[v.id] || 0) >= 0.999).length;
+  const used = DATA.venues.filter(v => (venueUsed[v.id] || 0) > 0);
+  const bySorted = [...used].sort((a, b) => venueUtilization[b.id] - venueUtilization[a.id]);
+  const topN = Math.max(1, Number(document.getElementById('utilTopN')?.value) || 8);
+  const mostUsed = bySorted.slice(0, topN);
+  const leastUsed = bySorted.slice(-topN).reverse();
+
+  const row = v => `
+    <tr class="clickable" data-venue-id="${v.id}">
+      <td>${v.id}</td><td>${v.gender}</td><td class="mono">${Math.round(venueUtilization[v.id] * 100)}%</td>
+    </tr>`;
+
+  panel.innerHTML = `
+    <h2>Utilization</h2>
+    <div class="util-gradient-labeled"></div>
+    <div class="util-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+    <div class="legend">
+      <span class="swatch" style="background:#dee0e3;border:2px dashed #8b929a;"></span>Empty (0% used)<br>
+      <span class="swatch" style="background:#2a5a8c;border:2px solid #fff;"></span>Full (100% used)
+    </div>
+    <div class="summary-grid" style="margin-top:12px;">
+      <div>Unused places<br><span class="mono big">${unusedCount}</span></div>
+      <div>Full places<br><span class="mono big">${fullCount}</span></div>
+    </div>
+    <div class="row"><label style="font-size:11px;color:var(--sidebar-muted);">Show top</label>
+      <input type="number" id="utilTopN" value="${topN}" min="1" max="50" style="width:60px;"></div>
+    <h4>Most utilized</h4>
+    <table class="summary-table"><thead><tr><th>Place</th><th>Gender</th><th>Used</th></tr></thead>
+      <tbody>${mostUsed.map(row).join('') || '<tr><td colspan="3" class="info-empty">No placements yet.</td></tr>'}</tbody></table>
+    <h4>Least utilized (still used)</h4>
+    <table class="summary-table"><thead><tr><th>Place</th><th>Gender</th><th>Used</th></tr></thead>
+      <tbody>${leastUsed.map(row).join('') || '<tr><td colspan="3" class="info-empty">No placements yet.</td></tr>'}</tbody></table>
+  `;
+  document.getElementById('utilTopN').addEventListener('input', renderUtilizationView);
+}
+
+/* ---------- view: group separation ---------- */
+
+function drawAllSeparationLines(allSeps, worstSeps) {
+  clearOverlayLines();
+  const worstIds = new Set(worstSeps.map(r => r.id));
+  allSeps.forEach(r => {
+    if (worstIds.has(r.id)) return;
+    drawConnector(r.menId, r.womenId, 'rgba(139,146,154,0.35)', 1, '3,3');
+  });
+  worstSeps.forEach(r => drawConnector(r.menId, r.womenId, '#23262b', 2.5, null));
+}
+
+function renderSeparationView() {
+  const panel = document.getElementById('panel-separation');
+  if (!DATA) { panel.innerHTML = '<p class="info-empty">Load a data file to begin.</p>'; return; }
+
+  const seps = computeSeparations();
+  const sorted = [...seps].sort((a, b) => b.dist - a.dist);
+  const st = stats(seps.map(r => r.dist));
+  const topN = Math.max(1, Number(document.getElementById('sepTopN')?.value) || 10);
+  const worst = sorted.slice(0, topN);
+
+  panel.innerHTML = `
+    <h2>Group Separation</h2>
+    <div class="row"><input type="text" id="groupSearchInput" placeholder="Jump to group ID" list="groupList">
+      <button id="groupSearchBtn" class="primary">Show</button></div>
+    <div class="summary-grid">
+      <div>Mean<br><span class="mono">${st.mean.toFixed(2)} km</span></div>
+      <div>Median<br><span class="mono">${st.median.toFixed(2)} km</span></div>
+      <div>90th pct.<br><span class="mono">${st.p90.toFixed(2)} km</span></div>
+      <div>Max<br><span class="mono">${st.max.toFixed(2)} km</span></div>
+    </div>
+    <div class="row"><label style="font-size:11px;color:var(--sidebar-muted);">Show top</label>
+      <input type="number" id="sepTopN" value="${topN}" min="1" max="100" style="width:60px;"></div>
+    <table class="summary-table"><thead><tr><th>#</th><th>Group</th><th>City</th><th>Distance</th></tr></thead>
+      <tbody>${worst.map((r, i) => `
+        <tr class="clickable" data-group-id="${r.id}">
+          <td>${i + 1}</td><td>${r.id}</td><td>${r.city ?? '—'}</td><td class="mono">${r.dist.toFixed(2)} km</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="info-empty">No mixed-gender groups.</td></tr>'}</tbody></table>
+  `;
+  document.getElementById('sepTopN').addEventListener('input', renderSeparationView);
+  document.getElementById('groupSearchBtn').addEventListener('click', () => {
+    const v = document.getElementById('groupSearchInput').value;
+    if (v.trim() !== '') focusGroup(v.trim());
+  });
+  document.getElementById('groupSearchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('groupSearchBtn').click();
+  });
+
+  resetColors();
+  drawAllSeparationLines(sorted, worst);
+}
+
+function focusGroup(groupId) {
+  const d = delegationsById[groupId];
+  const panel = document.getElementById('infoPanel');
+  if (!d) { panel.innerHTML = `<p class="info-empty">No group with ID ${groupId}.</p>`; return; }
+
+  const seps = computeSeparations();
+  const sorted = [...seps].sort((a, b) => b.dist - a.dist);
+  const topN = Math.max(1, Number(document.getElementById('sepTopN')?.value) || 10);
+  resetColors();
+  drawAllSeparationLines(sorted, sorted.slice(0, topN));
+
+  const pd = placementsByDelegation[groupId] || { men: [], women: [] };
+  [...pd.men, ...pd.women].forEach(vid => {
+    if (venueEls[vid]) {
+      venueEls[vid].setAttribute('fill', COLORS.highlight);
+      venueEls[vid].setAttribute('stroke', COLORS.highlightStroke);
+      venueEls[vid].setAttribute('stroke-width', '2.5');
+    }
+  });
+  const menId = pd.men[0], womenId = pd.women[0];
+  let distRow = '';
+  if (menId !== undefined && womenId !== undefined) {
+    const mv = venuesById[menId], wv = venuesById[womenId];
+    const dist = haversineKm(mv.lat, mv.lng, wv.lat, wv.lng);
+    drawConnector(menId, womenId, COLORS.highlight, 3, null);
+    distRow = `<div class="info-row"><span>Men ↔ women distance</span><span class="mono">${dist.toFixed(2)} km</span></div>`;
+  }
+  panel.innerHTML = `
+    <h3>Group ${d.id}</h3>
+    <div class="info-row"><span>City</span><span class="mono">${d.home_city ?? '—'}</span></div>
+    <div class="info-row"><span>Men / Women</span><span class="mono">${d.men} / ${d.women}</span></div>
+    ${distRow}
+    <div class="info-row"><span>Men place</span><span class="mono">${menId ?? '—'}</span></div>
+    <div class="info-row"><span>Women place</span><span class="mono">${womenId ?? '—'}</span></div>
+  `;
+}
+
+/* ---------- view: city conflicts ---------- */
+
+function populateCitySelects() {
+  const cities = [...new Set(DATA.delegations.map(d => d.home_city).filter(Boolean))].sort();
+  const opts = cities.map(c => `<option value="${c}">${c}</option>`).join('');
+  const a = document.getElementById('cityA'), b = document.getElementById('cityB');
+  if (!a || !b) return;
+  a.innerHTML = opts; b.innerHTML = opts;
+  if (cities.length > 1) { a.value = cities[0]; b.value = cities[1]; }
+}
+
+function compareCities(cityA, colorA, cityB, colorB) {
+  resetColors();
+  const setA = new Set(), setB = new Set();
+  DATA.delegations.forEach(d => {
+    const pd = placementsByDelegation[d.id] || { men: [], women: [] };
+    if (d.home_city === cityA) [...pd.men, ...pd.women].forEach(vid => setA.add(vid));
+    if (d.home_city === cityB) [...pd.men, ...pd.women].forEach(vid => setB.add(vid));
+  });
+  setA.forEach(vid => { if (venueEls[vid]) { venueEls[vid].setAttribute('fill', colorA); venueEls[vid].setAttribute('stroke', COLORS.compareStroke); venueEls[vid].setAttribute('stroke-width', '2'); } });
+  setB.forEach(vid => { if (venueEls[vid]) { venueEls[vid].setAttribute('fill', colorB); venueEls[vid].setAttribute('stroke', COLORS.compareStroke); venueEls[vid].setAttribute('stroke-width', '2'); } });
+  const shared = [...setA].filter(vid => setB.has(vid));
+  shared.forEach(vid => { if (venueEls[vid]) { venueEls[vid].setAttribute('stroke', COLORS.alert); venueEls[vid].setAttribute('stroke-width', '3'); } });
+
+  const panel = document.getElementById('infoPanel');
+  panel.innerHTML = `
+    <h3>${cityA} vs ${cityB}</h3>
+    <div class="info-row"><span>${cityA} places used</span><span class="mono">${setA.size}</span></div>
+    <div class="info-row"><span>${cityB} places used</span><span class="mono">${setB.size}</span></div>
+    <div class="info-row"><span>Shared places</span><span class="mono">${shared.length}</span></div>
+    ${shared.length ? `<p class="alert-text" style="font-size:12px;margin-top:8px;">Both cities land on: ${shared.join(', ')}</p>`
+                    : `<p class="info-empty" style="color:var(--ok);margin-top:8px;">No shared places between these two cities.</p>`}
+  `;
+}
+
+function renderConflictsView() {
+  const panel = document.getElementById('panel-conflicts');
+  if (!DATA) { panel.innerHTML = '<p class="info-empty">Load a data file to begin.</p>'; return; }
+
+  const conflicts = computeConflictProximity();
+  panel.innerHTML = `
+    <h2>City Conflicts</h2>
+    <p class="hint">Ranked by how close the nearest sub-groups of each conflicting pair ended up.</p>
+    <table class="summary-table"><thead><tr><th>#</th><th>City A</th><th>City B</th><th>Closest approach</th></tr></thead>
+      <tbody>${conflicts.map((r, i) => `
+        <tr class="clickable" data-a="${r.cityA}" data-b="${r.cityB}">
+          <td>${i + 1}</td><td>${r.cityA}</td><td>${r.cityB}</td>
+          <td class="mono ${r.shared ? 'alert-text' : ''}">${r.shared ? 'SHARED VENUE' : r.minDist.toFixed(2) + ' km'}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="info-empty">No city_conflicts in this file, or no placements yet.</td></tr>'}</tbody></table>
+    <hr>
+    <h4>Manual comparison</h4>
+    <div class="row"><select id="cityA"></select><input type="color" id="colorA" value="#d1495b"></div>
+    <div class="row"><select id="cityB"></select><input type="color" id="colorB" value="#2a9d8f"></div>
+    <div class="row"><button id="compareBtn" class="primary" style="flex:1;">Compare</button></div>
+  `;
+  populateCitySelects();
+  document.getElementById('compareBtn').addEventListener('click', () => {
+    compareCities(document.getElementById('cityA').value, document.getElementById('colorA').value,
+                  document.getElementById('cityB').value, document.getElementById('colorB').value);
+  });
+
+  if (conflicts.length) {
+    compareCities(conflicts[0].cityA, document.getElementById('colorA').value, conflicts[0].cityB, document.getElementById('colorB').value);
+  }
+}
+
+/* ---------- view: city distances (fairness) ---------- */
+
+function showCity(cityName) {
+  resetColors();
+  const set = new Set();
+  DATA.delegations.forEach(d => {
+    if (d.home_city !== cityName) return;
+    const pd = placementsByDelegation[d.id] || { men: [], women: [] };
+    [...pd.men, ...pd.women].forEach(vid => set.add(vid));
+  });
+  set.forEach(vid => { if (venueEls[vid]) { venueEls[vid].setAttribute('fill', COLORS.highlight); venueEls[vid].setAttribute('stroke', COLORS.highlightStroke); venueEls[vid].setAttribute('stroke-width', '2'); } });
+
+  const cityRow = computeCityFairness().find(r => r.city === cityName);
+  const panel = document.getElementById('infoPanel');
+  panel.innerHTML = `
+    <h3>${cityName}</h3>
+    <div class="info-row"><span>Home distance</span><span class="mono">${cityRow ? cityRow.home_distance : '—'}</span></div>
+    <div class="info-row"><span>Places used</span><span class="mono">${set.size}</span></div>
+    <div class="info-row"><span>Avg. distance to event</span><span class="mono">${cityRow ? cityRow.avgEventKm.toFixed(2) + ' km' : '—'}</span></div>
+  `;
+}
+
+function renderFairnessView() {
+  const panel = document.getElementById('panel-fairness');
+  if (!DATA) { panel.innerHTML = '<p class="info-empty">Load a data file to begin.</p>'; return; }
+
+  const sortDesc = document.getElementById('fairnessSortDesc') ? document.getElementById('fairnessSortDesc').checked : true;
+  const rows = computeCityFairness();
+  const sorted = [...rows].sort((a, b) => sortDesc ? b.home_distance - a.home_distance : a.home_distance - b.home_distance);
+
+  panel.innerHTML = `
+    <h2>City Distances</h2>
+    <p class="hint">Sorted by home-city distance, alongside the average distance-to-event the placed groups actually got. If goal 2 is working, this should trend downward as home-distance goes up.</p>
+    <div class="row"><label style="font-size:12px;"><input type="checkbox" id="fairnessSortDesc" ${sortDesc ? 'checked' : ''}> Farthest cities first</label></div>
+    <table class="summary-table"><thead><tr><th>City</th><th>Home distance</th><th>Avg. to event</th></tr></thead>
+      <tbody>${sorted.map(r => `
+        <tr class="clickable" data-city="${r.city}">
+          <td>${r.city}</td><td class="mono">${r.home_distance}</td><td class="mono">${r.avgEventKm.toFixed(2)} km</td>
+        </tr>`).join('') || '<tr><td colspan="3" class="info-empty">No city data.</td></tr>'}</tbody></table>
+  `;
+  document.getElementById('fairnessSortDesc').addEventListener('change', renderFairnessView);
+}
+
+/* ---------- tab switching ---------- */
+
+function setView(view) {
+  activeView = view;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view-panel').forEach(p => p.style.display = (p.dataset.view === view ? 'block' : 'none'));
+  if (DATA) resetColors();
+  if (view === 'overview') renderOverview();
+  else if (view === 'utilization') renderUtilizationView();
+  else if (view === 'separation') renderSeparationView();
+  else if (view === 'conflicts') renderConflictsView();
+  else if (view === 'fairness') renderFairnessView();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
+
+document.getElementById('panel-overview').addEventListener('click', e => {
+  const card = e.target.closest('.jump-card');
+  if (card) setView(card.dataset.goto);
+});
+document.getElementById('panel-utilization').addEventListener('click', e => {
+  const row = e.target.closest('tr.clickable');
+  if (row) showPlaceInfo(row.dataset.venueId);
+});
+document.getElementById('panel-separation').addEventListener('click', e => {
+  const row = e.target.closest('tr.clickable');
+  if (row) focusGroup(row.dataset.groupId);
+});
+document.getElementById('panel-conflicts').addEventListener('click', e => {
+  const row = e.target.closest('tr.clickable');
+  if (!row) return;
+  document.getElementById('cityA').value = row.dataset.a;
+  document.getElementById('cityB').value = row.dataset.b;
+  compareCities(row.dataset.a, document.getElementById('colorA').value, row.dataset.b, document.getElementById('colorB').value);
+});
+document.getElementById('panel-fairness').addEventListener('click', e => {
+  const row = e.target.closest('tr.clickable');
+  if (row) showCity(row.dataset.city);
+});
+
+document.getElementById('measureBtn').addEventListener('click', toggleMeasure);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && measureMode) toggleMeasure(); });
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!DATA) return;
+  document.getElementById('infoPanel').innerHTML = '<p class="info-empty">Click a place for details.</p>';
+  if (measureMode) toggleMeasure();
+  setView(activeView);
+});
+
+document.getElementById('mapSvg').addEventListener('click', e => {
+  const el = e.target.closest('[data-venue-id]');
+  if (!el) return;
+  const venueId = el.dataset.venueId;
+  if (measureMode) handleMeasureClick(venueId);
+  else showPlaceInfo(venueId);
+});
+
+/* ---------- data loading ---------- */
+
+function initData(json) {
+  DATA = json;
+  venuesById = {}; delegationsById = {}; placementsByVenue = {}; placementsByDelegation = {};
+  DATA.venues.forEach(v => venuesById[v.id] = v);
+  DATA.delegations.forEach(d => delegationsById[d.id] = d);
+  (DATA.placements || []).forEach(({ delegation_id, gender, venue_id }) => {
+    placementsByVenue[venue_id] = placementsByVenue[venue_id] || [];
+    placementsByVenue[venue_id].push({ gender, group_id: delegation_id });
+    placementsByDelegation[delegation_id] = placementsByDelegation[delegation_id] || { men: [], women: [] };
+    placementsByDelegation[delegation_id][gender].push(venue_id);
+  });
+
+  computeUtilization();
+
+  const lats = DATA.venues.map(v => v.lat), lngs = DATA.venues.map(v => v.lng);
+  const caps = DATA.venues.map(v => v.capacity);
+  bounds = {
+    latMin: Math.min(...lats), latMax: Math.max(...lats),
+    lngMin: Math.min(...lngs), lngMax: Math.max(...lngs),
+    minCap: Math.min(...caps), maxCap: Math.max(...caps),
+  };
+
+  drawBaseVenues();
+
+  document.getElementById('groupList').innerHTML =
+    DATA.delegations.map(d => `<option value="${d.id}">`).join('');
+
+  document.getElementById('statsLine').textContent =
+    `${DATA.venues.length} places · ${DATA.delegations.length} groups · ${(DATA.placements || []).length} assignments`;
+
+  setView('overview');
+}
+
+/* ---------- loading: solver input + solver result (legacy single file still works) ---------- */
+
+let loaded = { input: null, result: null };
+
+function normalizeAssignments(raw) {
+  if (Array.isArray(raw)) {
+    // [{group_id, gender, place_id}] or [[gender, place_id, group_id], ...]
+    return raw.map(a => Array.isArray(a) ? { gender: a[0], place_id: a[1], group_id: a[2] } : a);
+  }
+  // checkpoint format: { "groupId:gender": placeId }
+  return Object.entries(raw || {}).map(([key, place_id]) => {
+    const i = key.lastIndexOf(':');
+    return { group_id: key.slice(0, i), gender: key.slice(i + 1), place_id };
+  });
+}
+
+function buildFromSolver(input, result) {
+  const venues = input.places.map(p => ({
+    id: p.id, gender: p.type, capacity: p.capacity, lat: p.lat, lng: p.lng,
+    distance_to_event_km: (p.event_distance || 0) / 1000,
+  }));
+  const delegations = input.groups.map(g => ({
+    id: g.id, men: g.men || 0, women: g.women || 0,
+    home_city: g.origin_city, home_distance: g.origin_city_distance,
+  }));
+  const vIds = new Set(venues.map(v => String(v.id)));
+  const dIds = new Set(delegations.map(d => String(d.id)));
+  const placements = [];
+  let skipped = 0;
+  normalizeAssignments(result && result.assignments).forEach(a => {
+    const ok = vIds.has(String(a.place_id)) && dIds.has(String(a.group_id)) &&
+               (a.gender === 'men' || a.gender === 'women');
+    if (!ok) { skipped++; return; }
+    placements.push({ delegation_id: a.group_id, gender: a.gender, venue_id: a.place_id });
+  });
+  return { data: { venues, delegations, placements, city_conflicts: input.city_conflicts || [] }, skipped };
+}
+
+function tryBuild() {
+  const line = document.getElementById('statsLine');
+  if (!loaded.input) { line.textContent = 'Result loaded. Now load the solver input file (groups + places).'; return; }
+  const { data, skipped } = buildFromSolver(loaded.input, loaded.result);
+  initData(data);
+  const r = loaded.result;
+  const extra = r
+    ? [r.status, r.objective != null ? 'objective ' + Math.round(r.objective) : null].filter(Boolean).join(' · ')
+    : 'no result loaded yet';
+  line.textContent += ' · ' + extra + (skipped ? ` · ${skipped} assignments skipped (unknown ids)` : '');
+}
+
+document.getElementById('fileInput').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  let gotInput = false, gotResult = false;
+  for (const file of files) {
+    try {
+      const json = JSON.parse(await file.text());
+      if (json.venues && json.delegations) { loaded = { input: null, result: null }; initData(json); return; }
+      if (json.groups && json.places) { loaded.input = json; gotInput = true; }
+      else if (json.assignments) { loaded.result = json; gotResult = true; }
+      else throw new Error('expected solver input (groups + places) or solver result (assignments)');
+    } catch (err) { alert(file.name + ': ' + err.message); return; }
+  }
+  if (gotInput && !gotResult) loaded.result = null;  // a new input makes the old result stale
+  tryBuild();
+});
+</script>
+</body>
+</html>

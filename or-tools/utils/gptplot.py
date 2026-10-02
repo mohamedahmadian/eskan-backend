@@ -1,0 +1,1200 @@
+import math
+from collections import defaultdict
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.cm import ScalarMappable
+
+groups = [{'id': 0, 'men': 141, 'women': 135, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 1, 'men': 115, 'women': 148, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 2, 'men': 131, 'women': 216, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 3, 'men': 204, 'women': 165, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 4, 'men': 159, 'women': 106, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 5, 'men': 122, 'women': 162, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 6, 'men': 38, 'women': 52, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 7, 'men': 140, 'women': 90, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 8, 'men': 170, 'women': 151, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 9, 'men': 83, 'women': 165, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 10, 'men': 70, 'women': 105, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 11, 'men': 147, 'women': 151, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 12, 'men': 65, 'women': 179, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 13, 'men': 65, 'women': 96, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 14, 'men': 161, 'women': 55, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 15, 'men': 191, 'women': 156, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 16, 'men': 202, 'women': 34, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 17, 'men': 75, 'women': 135, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 18, 'men': 121, 'women': 164, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 19, 'men': 114, 'women': 86, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 20, 'men': 151, 'women': 82, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 21, 'men': 178, 'women': 61, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 22, 'men': 75, 'women': 192, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 23, 'men': 157, 'women': 25, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 24, 'men': 116, 'women': 182, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 25, 'men': 55, 'women': 114, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 26, 'men': 94, 'women': 109, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 27, 'men': 92, 'women': 63, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 28, 'men': 129, 'women': 123, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 29, 'men': 133, 'women': 129, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 30, 'men': 148, 'women': 102, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 31, 'men': 165, 'women': 64, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 32, 'men': 212, 'women': 72, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 33, 'men': 123, 'women': 174, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 34, 'men': 58, 'women': 90, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 35, 'men': 79, 'women': 132, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 36, 'men': 126, 'women': 46, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 37, 'men': 139, 'women': 111, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 38, 'men': 171, 'women': 140, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 39, 'men': 50, 'women': 115, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 40, 'men': 204, 'women': 174, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 41, 'men': 144, 'women': 131, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 42, 'men': 142, 'women': 78, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 43, 'men': 113, 'women': 229, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 44, 'men': 137, 'women': 206, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 45, 'men': 180, 'women': 47, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 46, 'men': 133, 'women': 106, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 47, 'men': 112, 'women': 21, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 48, 'men': 3, 'women': 84, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 49, 'men': 63, 'women': 116, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 50, 'men': 126, 'women': 159, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 51, 'men': 62, 'women': 104, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 52, 'men': 125, 'women': 162, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 53, 'men': 177, 'women': 73, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 54, 'men': 52, 'women': 155, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 55, 'men': 149, 'women': 177, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 56, 'men': 72, 'women': 148, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 57, 'men': 167, 'women': 33, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 58, 'men': 89, 'women': 83, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 59, 'men': 155, 'women': 226, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 60, 'men': 116, 'women': 42, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 61, 'men': 177, 'women': 181, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 62, 'men': 123, 'women': 57, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 63, 'men': 115, 'women': 145, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 64, 'men': 56, 'women': 131, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 65, 'men': 60, 'women': 125, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 66, 'men': 94, 'women': 84, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 67, 'men': 77, 'women': 50, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 68, 'men': 132, 'women': 89, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 69, 'men': 61, 'women': 104, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 70, 'men': 145, 'women': 190, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 71, 'men': 122, 'women': 92, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 72, 'men': 227, 'women': 170, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 73, 'men': 198, 'women': 61, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 74, 'men': 22, 'women': 82, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 75, 'men': 160, 'women': 55, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 76, 'men': 109, 'women': 98, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 77, 'men': 184, 'women': 106, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 78, 'men': 27, 'women': 168, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 79, 'men': 55, 'women': 91, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 80, 'men': 174, 'women': 104, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 81, 'men': 107, 'women': 101, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 82, 'men': 160, 'women': 103, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 83, 'men': 40, 'women': 121, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 84, 'men': 173, 'women': 211, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 85, 'men': 188, 'women': 210, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 86, 'men': 52, 'women': 128, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 87, 'men': 211, 'women': 157, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 88, 'men': 98, 'women': 149, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 89, 'men': 63, 'women': 112, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 90, 'men': 107, 'women': 134, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 91, 'men': 66, 'women': 97, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 92, 'men': 137, 'women': 155, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 93, 'men': 24, 'women': 74, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 94, 'men': 77, 'women': 63, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 95, 'men': 151, 'women': 189, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 96, 'men': 187, 'women': 181, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 97, 'men': 185, 'women': 67, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 98, 'men': 35, 'women': 33, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 99, 'men': 102, 'women': 57, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 100, 'men': 82, 'women': 75, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 101, 'men': 198, 'women': 77, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 102, 'men': 137, 'women': 146, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 103, 'men': 223, 'women': 151, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 104, 'men': 136, 'women': 104, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 105, 'men': 89, 'women': 78, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 106, 'men': 144, 'women': 144, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 107, 'men': 225, 'women': 163, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 108, 'men': 168, 'women': 37, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 109, 'men': 112, 'women': 50, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 110, 'men': 126, 'women': 45, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 111, 'men': 106, 'women': 181, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 112, 'men': 113, 'women': 211, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 113, 'men': 125, 'women': 210, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 114, 'men': 65, 'women': 205, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 115, 'men': 125, 'women': 196, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 116, 'men': 58, 'women': 213, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 117, 'men': 36, 'women': 49, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 118, 'men': 163, 'women': 93, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 119, 'men': 115, 'women': 62, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 120, 'men': 72, 'women': 74, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 121, 'men': 130, 'women': 19, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 122, 'men': 130, 'women': 41, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 123, 'men': 118, 'women': 147, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 124, 'men': 88, 'women': 145, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 125, 'men': 168, 'women': 13, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 126, 'men': 135, 'women': 43, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 127, 'men': 122, 'women': 77, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 128, 'men': 167, 'women': 167, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 129, 'men': 180, 'women': 45, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 130, 'men': 45, 'women': 91, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 131, 'men': 115, 'women': 104, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 132, 'men': 37, 'women': 33, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 133, 'men': 129, 'women': 109, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 134, 'men': 145, 'women': 53, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 135, 'men': 119, 'women': 167, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 136, 'men': 195, 'women': 152, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 137, 'men': 93, 'women': 109, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 138, 'men': 41, 'women': 170, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 139, 'men': 159, 'women': 87, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 140, 'men': 117, 'women': 86, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 141, 'men': 71, 'women': 141, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 142, 'men': 96, 'women': 123, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 143, 'men': 145, 'women': 122, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 144, 'men': 45, 'women': 210, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 145, 'men': 130, 'women': 126, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 146, 'men': 133, 'women': 105, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 147, 'men': 113, 'women': 162, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 148, 'men': 78, 'women': 111, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 149, 'men': 221, 'women': 64, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 150, 'men': 95, 'women': 23, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 151, 'men': 147, 'women': 144, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 152, 'men': 50, 'women': 149, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 153, 'men': 86, 'women': 213, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 154, 'men': 142, 'women': 165, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 155, 'men': 89, 'women': 11, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 156, 'men': 61, 'women': 212, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 157, 'men': 120, 'women': 10, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 158, 'men': 141, 'women': 195, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 159, 'men': 57, 'women': 88, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 160, 'men': 128, 'women': 93, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 161, 'men': 145, 'women': 88, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 162, 'men': 135, 'women': 116, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 163, 'men': 105, 'women': 122, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 164, 'men': 77, 'women': 87, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 165, 'men': 117, 'women': 127, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 166, 'men': 174, 'women': 73, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 167, 'men': 88, 'women': 125, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 168, 'men': 45, 'women': 169, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 169, 'men': 136, 'women': 13, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 170, 'men': 138, 'women': 51, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 171, 'men': 57, 'women': 179, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 172, 'men': 95, 'women': 124, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 173, 'men': 119, 'women': 151, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 174, 'men': 122, 'women': 114, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 175, 'men': 120, 'women': 166, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 176, 'men': 177, 'women': 106, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 177, 'men': 219, 'women': 102, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 178, 'men': 187, 'women': 121, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 179, 'men': 74, 'women': 93, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 180, 'men': 48, 'women': 37, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 181, 'men': 211, 'women': 36, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 182, 'men': 74, 'women': 104, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 183, 'men': 153, 'women': 227, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 184, 'men': 99, 'women': 149, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 185, 'men': 164, 'women': 131, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 186, 'men': 104, 'women': 79, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 187, 'men': 105, 'women': 37, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 188, 'men': 145, 'women': 99, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 189, 'men': 126, 'women': 54, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 190, 'men': 76, 'women': 59, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 191, 'men': 174, 'women': 97, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 192, 'men': 107, 'women': 32, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 193, 'men': 118, 'women': 198, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 194, 'men': 96, 'women': 174, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 195, 'men': 119, 'women': 160, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 196, 'men': 184, 'women': 146, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 197, 'men': 122, 'women': 118, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 198, 'men': 114, 'women': 138, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 199, 'men': 111, 'women': 73, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 200, 'men': 235, 'women': 109, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 201, 'men': 140, 'women': 174, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 202, 'men': 98, 'women': 130, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 203, 'men': 111, 'women': 67, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 204, 'men': 105, 'women': 18, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 205, 'men': 138, 'women': 71, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 206, 'men': 89, 'women': 127, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 207, 'men': 47, 'women': 69, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 208, 'men': 125, 'women': 37, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 209, 'men': 76, 'women': 116, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 210, 'men': 109, 'women': 134, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 211, 'men': 23, 'women': 93, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 212, 'men': 87, 'women': 116, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 213, 'men': 132, 'women': 150, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 214, 'men': 217, 'women': 59, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 215, 'men': 166, 'women': 203, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 216, 'men': 123, 'women': 128, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 217, 'men': 95, 'women': 238, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 218, 'men': 101, 'women': 104, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 219, 'men': 169, 'women': 105, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 220, 'men': 204, 'women': 96, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 221, 'men': 42, 'women': 103, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 222, 'men': 186, 'women': 117, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 223, 'men': 59, 'women': 56, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 224, 'men': 98, 'women': 120, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 225, 'men': 86, 'women': 144, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 226, 'men': 179, 'women': 142, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 227, 'men': 61, 'women': 121, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 228, 'men': 132, 'women': 179, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 229, 'men': 134, 'women': 47, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 230, 'men': 94, 'women': 66, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 231, 'men': 201, 'women': 7, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 232, 'men': 120, 'women': 99, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 233, 'men': 38, 'women': 116, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 234, 'men': 81, 'women': 102, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 235, 'men': 100, 'women': 159, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 236, 'men': 122, 'women': 71, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 237, 'men': 159, 'women': 100, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 238, 'men': 144, 'women': 150, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 239, 'men': 109, 'women': 109, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 240, 'men': 31, 'women': 114, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 241, 'men': 91, 'women': 100, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 242, 'men': 91, 'women': 225, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 243, 'men': 192, 'women': 42, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 244, 'men': 44, 'women': 81, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 245, 'men': 228, 'women': 206, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 246, 'men': 132, 'women': 168, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 247, 'men': 30, 'women': 175, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 248, 'men': 122, 'women': 77, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 249, 'men': 152, 'women': 77, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 250, 'men': 94, 'women': 114, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 251, 'men': 64, 'women': 202, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 252, 'men': 156, 'women': 205, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 253, 'men': 196, 'women': 117, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 254, 'men': 47, 'women': 125, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 255, 'men': 150, 'women': 61, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 256, 'men': 65, 'women': 39, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 257, 'men': 81, 'women': 17, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 258, 'men': 103, 'women': 61, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 259, 'men': 129, 'women': 82, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 260, 'men': 209, 'women': 206, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 261, 'men': 59, 'women': 157, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 262, 'men': 153, 'women': 153, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 263, 'men': 119, 'women': 60, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 264, 'men': 74, 'women': 178, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 265, 'men': 55, 'women': 111, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 266, 'men': 213, 'women': 117, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 267, 'men': 84, 'women': 124, 'origin_city': 'Ardabil', 'origin_city_distance': 1300}, {'id': 268, 'men': 137, 'women': 156, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 269, 'men': 195, 'women': 143, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 270, 'men': 154, 'women': 76, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 271, 'men': 89, 'women': 105, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 272, 'men': 125, 'women': 143, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 273, 'men': 174, 'women': 131, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 274, 'men': 21, 'women': 120, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 275, 'men': 172, 'women': 109, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 276, 'men': 193, 'women': 45, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 277, 'men': 138, 'women': 146, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 278, 'men': 75, 'women': 146, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 279, 'men': 127, 'women': 80, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 280, 'men': 72, 'women': 83, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 281, 'men': 131, 'women': 212, 'origin_city': 'Qom', 'origin_city_distance': 900}, {'id': 282, 'men': 123, 'women': 128, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 283, 'men': 110, 'women': 60, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 284, 'men': 193, 'women': 142, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 285, 'men': 125, 'women': 34, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 286, 'men': 159, 'women': 117, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 287, 'men': 64, 'women': 134, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 288, 'men': 161, 'women': 104, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 289, 'men': 134, 'women': 88, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 290, 'men': 165, 'women': 81, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 291, 'men': 113, 'women': 65, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 292, 'men': 129, 'women': 72, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 293, 'men': 121, 'women': 71, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 294, 'men': 165, 'women': 124, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 295, 'men': 55, 'women': 98, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 296, 'men': 124, 'women': 163, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 297, 'men': 104, 'women': 54, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 298, 'men': 99, 'women': 139, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 299, 'men': 151, 'women': 95, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 300, 'men': 19, 'women': 217, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 301, 'men': 113, 'women': 244, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 302, 'men': 35, 'women': 224, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 303, 'men': 61, 'women': 60, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 304, 'men': 101, 'women': 143, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 305, 'men': 33, 'women': 154, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 306, 'men': 174, 'women': 117, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 307, 'men': 121, 'women': 190, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 308, 'men': 75, 'women': 189, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 309, 'men': 122, 'women': 192, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 310, 'men': 66, 'women': 25, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 311, 'men': 133, 'women': 85, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 312, 'men': 138, 'women': 216, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 313, 'men': 234, 'women': 151, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 314, 'men': 151, 'women': 123, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 315, 'men': 90, 'women': 85, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 316, 'men': 123, 'women': 67, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 317, 'men': 44, 'women': 127, 'origin_city': 'Birjand', 'origin_city_distance': 250}, {'id': 318, 'men': 204, 'women': 17, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 319, 'men': 194, 'women': 42, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 320, 'men': 142, 'women': 215, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 321, 'men': 164, 'women': 61, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 322, 'men': 205, 'women': 144, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 323, 'men': 90, 'women': 159, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 324, 'men': 187, 'women': 158, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 325, 'men': 149, 'women': 181, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 326, 'men': 82, 'women': 75, 'origin_city': 'Kish', 'origin_city_distance': 1400}, {'id': 327, 'men': 201, 'women': 56, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 328, 'men': 109, 'women': 53, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 329, 'men': 118, 'women': 120, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 330, 'men': 98, 'women': 118, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 331, 'men': 38, 'women': 140, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 332, 'men': 45, 'women': 242, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 333, 'men': 89, 'women': 112, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 334, 'men': 148, 'women': 53, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 335, 'men': 99, 'women': 124, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 336, 'men': 205, 'women': 159, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 337, 'men': 195, 'women': 77, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 338, 'men': 164, 'women': 69, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 339, 'men': 28, 'women': 146, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 340, 'men': 110, 'women': 141, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 341, 'men': 218, 'women': 117, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 342, 'men': 193, 'women': 184, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 343, 'men': 130, 'women': 65, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 344, 'men': 124, 'women': 102, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 345, 'men': 118, 'women': 38, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 346, 'men': 88, 'women': 172, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 347, 'men': 151, 'women': 129, 'origin_city': 'Chabahar', 'origin_city_distance': 1400}, {'id': 348, 'men': 209, 'women': 246, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 349, 'men': 220, 'women': 72, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 350, 'men': 74, 'women': 159, 'origin_city': 'BandarAbbas', 'origin_city_distance': 1300}, {'id': 351, 'men': 121, 'women': 169, 'origin_city': 'Tehran', 'origin_city_distance': 800}, {'id': 352, 'men': 36, 'women': 113, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 353, 'men': 112, 'women': 176, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 354, 'men': 113, 'women': 220, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 355, 'men': 89, 'women': 109, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 356, 'men': 19, 'women': 189, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 357, 'men': 237, 'women': 179, 'origin_city': 'Kashan', 'origin_city_distance': 950}, {'id': 358, 'men': 216, 'women': 42, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 359, 'men': 111, 'women': 200, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 360, 'men': 186, 'women': 152, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 361, 'men': 118, 'women': 55, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 362, 'men': 127, 'women': 79, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 363, 'men': 124, 'women': 184, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 364, 'men': 170, 'women': 83, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 365, 'men': 76, 'women': 186, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 366, 'men': 176, 'women': 70, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 367, 'men': 99, 'women': 211, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 368, 'men': 102, 'women': 159, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 369, 'men': 78, 'women': 80, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 370, 'men': 66, 'women': 38, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 371, 'men': 211, 'women': 79, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 372, 'men': 116, 'women': 27, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 373, 'men': 174, 'women': 75, 'origin_city': 'Bojnord', 'origin_city_distance': 200}, {'id': 374, 'men': 19, 'women': 135, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 375, 'men': 119, 'women': 133, 'origin_city': 'Nain', 'origin_city_distance': 850}, {'id': 376, 'men': 54, 'women': 33, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 377, 'men': 109, 'women': 164, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 378, 'men': 110, 'women': 88, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 379, 'men': 31, 'women': 43, 'origin_city': 'Lorestan', 'origin_city_distance': 1200}, {'id': 380, 'men': 66, 'women': 42, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 381, 'men': 77, 'women': 80, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 382, 'men': 34, 'women': 123, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 383, 'men': 17, 'women': 178, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 384, 'men': 174, 'women': 57, 'origin_city': 'Zahedan', 'origin_city_distance': 1100}, {'id': 385, 'men': 176, 'women': 150, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 386, 'men': 96, 'women': 92, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 387, 'men': 56, 'women': 117, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 388, 'men': 113, 'women': 136, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 389, 'men': 195, 'women': 92, 'origin_city': 'Kermanshah', 'origin_city_distance': 1300}, {'id': 390, 'men': 147, 'women': 132, 'origin_city': 'Shiraz', 'origin_city_distance': 1200}, {'id': 391, 'men': 110, 'women': 16, 'origin_city': 'Qazvin', 'origin_city_distance': 1000}, {'id': 392, 'men': 120, 'women': 94, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 393, 'men': 108, 'women': 105, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 394, 'men': 212, 'women': 102, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 395, 'men': 125, 'women': 128, 'origin_city': 'Yazd', 'origin_city_distance': 900}, {'id': 396, 'men': 114, 'women': 105, 'origin_city': 'Ahvaz', 'origin_city_distance': 1300}, {'id': 397, 'men': 96, 'women': 92, 'origin_city': 'Isfahan', 'origin_city_distance': 1000}, {'id': 398, 'men': 59, 'women': 208, 'origin_city': 'Qeshm', 'origin_city_distance': 1400}, {'id': 399, 'men': 25, 'women': 177, 'origin_city': 'Sanandaj', 'origin_city_distance': 1300}, {'id': 400, 'men': 75, 'women': 54, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 401, 'men': 93, 'women': 68, 'origin_city': 'Meybod', 'origin_city_distance': 850}, {'id': 402, 'men': 85, 'women': 96, 'origin_city': 'Hamadan', 'origin_city_distance': 1100}, {'id': 403, 'men': 49, 'women': 76, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 404, 'men': 133, 'women': 114, 'origin_city': 'Sari', 'origin_city_distance': 500}, {'id': 405, 'men': 99, 'women': 120, 'origin_city': 'Ilam', 'origin_city_distance': 1400}, {'id': 406, 'men': 107, 'women': 138, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 407, 'men': 51, 'women': 101, 'origin_city': 'Rasht', 'origin_city_distance': 1100}, {'id': 408, 'men': 24, 'women': 157, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 409, 'men': 145, 'women': 219, 'origin_city': 'Mashhad', 'origin_city_distance': 0}, {'id': 410, 'men': 76, 'women': 190, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 411, 'men': 159, 'women': 105, 'origin_city': 'Tabriz', 'origin_city_distance': 1200}, {'id': 412, 'men': 92, 'women': 149, 'origin_city': 'Kerman', 'origin_city_distance': 1000}, {'id': 413, 'men': 143, 'women': 111, 'origin_city': 'Gorgan', 'origin_city_distance': 400}, {'id': 414, 'men': 85, 'women': 176, 'origin_city': 'Zanjan', 'origin_city_distance': 1100}, {'id': 415, 'men': 109, 'women': 119, 'origin_city': 'Nain', 'origin_city_distance': 850}]
+places = [{'id': 0, 'type': 'men', 'capacity': 1826, 'lat': 36.273251238511406, 'lng': 59.67626599157985, 'event_distance': 5671.274438271015}, {'id': 1, 'type': 'women', 'capacity': 682, 'lat': 36.313795589344586, 'lng': 59.73976609232021, 'event_distance': 11482.110633004542}, {'id': 2, 'type': 'women', 'capacity': 1060, 'lat': 36.19439160231951, 'lng': 59.63513081733393, 'event_distance': 10553.641863210885}, {'id': 3, 'type': 'women', 'capacity': 247, 'lat': 36.23102628859179, 'lng': 59.61541065034998, 'event_distance': 6335.240781893212}, {'id': 4, 'type': 'women', 'capacity': 1113, 'lat': 36.378784701768275, 'lng': 59.54897368191972, 'event_distance': 11731.623029564058}, {'id': 5, 'type': 'women', 'capacity': 1299, 'lat': 36.39130807659638, 'lng': 59.74921061838094, 'event_distance': 16582.04214627966}, {'id': 6, 'type': 'men', 'capacity': 2265, 'lat': 36.18778070043218, 'lng': 59.68368917311133, 'event_distance': 12703.071091373886}, {'id': 7, 'type': 'men', 'capacity': 368, 'lat': 36.280881733239866, 'lng': 59.40507307145949, 'event_distance': 18895.70670475984}, {'id': 8, 'type': 'women', 'capacity': 1024, 'lat': 36.273676026781615, 'lng': 59.47223734210511, 'event_distance': 12957.843731054463}, {'id': 9, 'type': 'women', 'capacity': 1263, 'lat': 36.28112639615074, 'lng': 59.758538462965625, 'event_distance': 12825.81347897369}, {'id': 10, 'type': 'women', 'capacity': 2456, 'lat': 36.36425560861704, 'lng': 59.48253761846938, 'event_distance': 14635.817706644364}, {'id': 11, 'type': 'men', 'capacity': 296, 'lat': 36.207098586607614, 'lng': 59.69871600014275, 'event_distance': 11676.6989780585}, {'id': 12, 'type': 'women', 'capacity': 1282, 'lat': 36.28107829921598, 'lng': 59.61382479292748, 'event_distance': 787.7971954817605}, {'id': 13, 'type': 'women', 'capacity': 413, 'lat': 36.16506436922034, 'lng': 59.720284240460394, 'event_distance': 16579.19890867809}, {'id': 14, 'type': 'women', 'capacity': 2587, 'lat': 36.22155740093199, 'lng': 59.406534974227874, 'event_distance': 20157.914864835766}, {'id': 15, 'type': 'men', 'capacity': 2407, 'lat': 36.21869870861565, 'lng': 59.4021420627255, 'event_distance': 20641.78744963356}, {'id': 16, 'type': 'men', 'capacity': 682, 'lat': 36.176235609174, 'lng': 59.51072265119149, 'event_distance': 15591.733363535588}, {'id': 17, 'type': 'women', 'capacity': 1626, 'lat': 36.432178118800344, 'lng': 59.42704495005994, 'event_distance': 23289.581562299027}, {'id': 18, 'type': 'women', 'capacity': 1184, 'lat': 36.377111605580886, 'lng': 59.749079078417886, 'event_distance': 15522.021867263134}, {'id': 19, 'type': 'women', 'capacity': 1837, 'lat': 36.2873064483345, 'lng': 59.79244489847237, 'event_distance': 15841.710530172975}, {'id': 20, 'type': 'women', 'capacity': 1741, 'lat': 36.392208941440046, 'lng': 59.796682714158194, 'event_distance': 19926.07901733183}, {'id': 21, 'type': 'women', 'capacity': 598, 'lat': 36.16166555539109, 'lng': 59.560141427046666, 'event_distance': 14905.580469939736}, {'id': 22, 'type': 'women', 'capacity': 815, 'lat': 36.319861787450655, 'lng': 59.76748649045703, 'event_distance': 14055.51884497505}, {'id': 23, 'type': 'women', 'capacity': 1044, 'lat': 36.31361230341708, 'lng': 59.61774592036785, 'event_distance': 2853.8536679882905}, {'id': 24, 'type': 'women', 'capacity': 1854, 'lat': 36.1986059064522, 'lng': 59.62911075913829, 'event_distance': 10012.662562544512}, {'id': 25, 'type': 'women', 'capacity': 2104, 'lat': 36.17791878953562, 'lng': 59.54002776205443, 'event_distance': 13996.257655980533}, {'id': 26, 'type': 'women', 'capacity': 293, 'lat': 36.22336318922163, 'lng': 59.576908613111144, 'event_distance': 7984.69960108037}, {'id': 27, 'type': 'men', 'capacity': 324, 'lat': 36.190424434734865, 'lng': 59.74040855574757, 'event_distance': 15582.456306591628}, {'id': 28, 'type': 'men', 'capacity': 623, 'lat': 36.37117599479779, 'lng': 59.773551356443136, 'event_distance': 16896.53915705505}, {'id': 29, 'type': 'women', 'capacity': 1690, 'lat': 36.39010752971659, 'lng': 59.75702502631727, 'event_distance': 17004.340219936737}, {'id': 30, 'type': 'men', 'capacity': 569, 'lat': 36.4317263742132, 'lng': 59.585037988394795, 'event_distance': 16215.78325033281}, {'id': 31, 'type': 'women', 'capacity': 1236, 'lat': 36.20309969516164, 'lng': 59.60189831756786, 'event_distance': 9521.272459347185}, {'id': 32, 'type': 'women', 'capacity': 1170, 'lat': 36.239403887897716, 'lng': 59.706738719532396, 'event_distance': 9788.8467751954}, {'id': 33, 'type': 'women', 'capacity': 707, 'lat': 36.16797989019215, 'lng': 59.47969762089763, 'event_distance': 18081.039486115573}, {'id': 34, 'type': 'men', 'capacity': 1858, 'lat': 36.37220188436461, 'lng': 59.496160517869576, 'event_distance': 14224.361058907776}, {'id': 35, 'type': 'men', 'capacity': 1217, 'lat': 36.184024342953194, 'lng': 59.56339519417539, 'event_distance': 12477.043737178998}, {'id': 36, 'type': 'women', 'capacity': 2688, 'lat': 36.37829950440508, 'lng': 59.40089736908234, 'event_distance': 21703.664617537932}, {'id': 37, 'type': 'men', 'capacity': 691, 'lat': 36.32587700819986, 'lng': 59.705564693729166, 'event_distance': 9087.450245654492}, {'id': 38, 'type': 'women', 'capacity': 299, 'lat': 36.25134278389471, 'lng': 59.71668087818305, 'event_distance': 9928.249415320686}, {'id': 39, 'type': 'women', 'capacity': 1039, 'lat': 36.196734053629044, 'lng': 59.60040270289981, 'event_distance': 10240.6180593194}, {'id': 40, 'type': 'women', 'capacity': 1829, 'lat': 36.25147707210626, 'lng': 59.41485581938321, 'event_distance': 18457.97037688837}, {'id': 41, 'type': 'men', 'capacity': 1321, 'lat': 36.199583120881805, 'lng': 59.69767362057992, 'event_distance': 12276.038835774272}, {'id': 42, 'type': 'women', 'capacity': 746, 'lat': 36.28049910157587, 'lng': 59.4066737419793, 'event_distance': 18754.25066667454}, {'id': 43, 'type': 'men', 'capacity': 942, 'lat': 36.27718769466194, 'lng': 59.46589828356619, 'event_distance': 13481.212260290562}, {'id': 44, 'type': 'women', 'capacity': 524, 'lat': 36.41520235597406, 'lng': 59.55524448641786, 'event_distance': 15145.062056727953}, {'id': 45, 'type': 'women', 'capacity': 649, 'lat': 36.19005647583643, 'lng': 59.41492211542546, 'event_distance': 21044.10297325264}, {'id': 46, 'type': 'women', 'capacity': 677, 'lat': 36.294400254626204, 'lng': 59.701901453148935, 'event_distance': 7758.535436718906}, {'id': 47, 'type': 'men', 'capacity': 532, 'lat': 36.34139322083177, 'lng': 59.74362324345251, 'event_distance': 12908.102621225747}, {'id': 48, 'type': 'women', 'capacity': 2424, 'lat': 36.26450788645164, 'lng': 59.450116274955946, 'event_distance': 15071.424117997345}, {'id': 49, 'type': 'women', 'capacity': 2390, 'lat': 36.30137259354369, 'lng': 59.632183570270364, 'event_distance': 2096.0472135048026}, {'id': 50, 'type': 'men', 'capacity': 657, 'lat': 36.171867104818, 'lng': 59.48008576810926, 'event_distance': 17740.300157062822}, {'id': 51, 'type': 'men', 'capacity': 1064, 'lat': 36.25513421570465, 'lng': 59.523618868186006, 'event_distance': 9027.641126478837}, {'id': 52, 'type': 'women', 'capacity': 861, 'lat': 36.382413674302256, 'lng': 59.48012899153358, 'event_distance': 16052.563024552364}, {'id': 53, 'type': 'men', 'capacity': 1159, 'lat': 36.155380046410784, 'lng': 59.60951260644786, 'event_distance': 14757.107704705362}, {'id': 54, 'type': 'men', 'capacity': 172, 'lat': 36.318710027525334, 'lng': 59.6887829502589, 'event_distance': 7385.86450499087}, {'id': 55, 'type': 'women', 'capacity': 747, 'lat': 36.20420703530626, 'lng': 59.72552002955158, 'event_distance': 13557.38417146137}, {'id': 56, 'type': 'men', 'capacity': 1780, 'lat': 36.26566425208011, 'lng': 59.54566781488489, 'event_distance': 6751.239932907422}, {'id': 57, 'type': 'women', 'capacity': 1448, 'lat': 36.418160082872824, 'lng': 59.61978104710577, 'event_distance': 14477.754593023925}, {'id': 58, 'type': 'men', 'capacity': 2017, 'lat': 36.199656497777944, 'lng': 59.472040957251465, 'event_distance': 16201.149107158237}, {'id': 59, 'type': 'men', 'capacity': 547, 'lat': 36.29862557569624, 'lng': 59.403292889181245, 'event_distance': 19073.150338484}, {'id': 60, 'type': 'men', 'capacity': 528, 'lat': 36.34617192015029, 'lng': 59.4484873980272, 'event_distance': 16318.2607211009}, {'id': 61, 'type': 'women', 'capacity': 2878, 'lat': 36.44899761247569, 'lng': 59.68694697188368, 'event_distance': 19004.733090038157}, {'id': 62, 'type': 'men', 'capacity': 1796, 'lat': 36.408544782180826, 'lng': 59.43538541700102, 'event_distance': 20986.979738111353}, {'id': 63, 'type': 'women', 'capacity': 2395, 'lat': 36.44728185941558, 'lng': 59.62911664015601, 'event_distance': 17752.027275912427}, {'id': 64, 'type': 'men', 'capacity': 1225, 'lat': 36.243923019972684, 'lng': 59.43357235523339, 'event_distance': 17048.207463488}, {'id': 65, 'type': 'men', 'capacity': 1264, 'lat': 36.396454415018795, 'lng': 59.79306751207681, 'event_distance': 19945.042100628947}, {'id': 66, 'type': 'women', 'capacity': 633, 'lat': 36.3768457267955, 'lng': 59.667110551391886, 'event_distance': 10899.851847898684}, {'id': 67, 'type': 'men', 'capacity': 2239, 'lat': 36.24928061275434, 'lng': 59.49173513508001, 'event_distance': 11918.40533590069}, {'id': 68, 'type': 'women', 'capacity': 992, 'lat': 36.32588911643065, 'lng': 59.70337355304003, 'event_distance': 8914.569079964422}, {'id': 69, 'type': 'women', 'capacity': 785, 'lat': 36.29934625750671, 'lng': 59.73238659153899, 'event_distance': 10533.56138471883}, {'id': 70, 'type': 'men', 'capacity': 2349, 'lat': 36.295502006829786, 'lng': 59.69457022843109, 'event_distance': 7117.764747783033}, {'id': 71, 'type': 'men', 'capacity': 1126, 'lat': 36.34742488308509, 'lng': 59.74187551092619, 'event_distance': 13094.18788539566}, {'id': 72, 'type': 'men', 'capacity': 1400, 'lat': 36.371719480081026, 'lng': 59.589101078699386, 'event_distance': 9609.285555945035}, {'id': 73, 'type': 'women', 'capacity': 1470, 'lat': 36.234191234841404, 'lng': 59.45551863090123, 'event_distance': 15558.327202074699}, {'id': 74, 'type': 'men', 'capacity': 490, 'lat': 36.413033188317236, 'lng': 59.736865165101975, 'event_distance': 17636.419451061873}, {'id': 75, 'type': 'women', 'capacity': 758, 'lat': 36.15950673173957, 'lng': 59.57730543170282, 'event_distance': 14697.04024488141}, {'id': 76, 'type': 'women', 'capacity': 636, 'lat': 36.170963927274435, 'lng': 59.58573971471441, 'event_distance': 13288.383303781444}, {'id': 77, 'type': 'men', 'capacity': 1621, 'lat': 36.2551864219051, 'lng': 59.575701889534244, 'event_distance': 5115.7184045349195}, {'id': 78, 'type': 'women', 'capacity': 917, 'lat': 36.179930984694906, 'lng': 59.581622138155744, 'event_distance': 12399.344554889538}, {'id': 79, 'type': 'men', 'capacity': 1353, 'lat': 36.24507072074337, 'lng': 59.566664603914916, 'event_distance': 6489.455391267802}, {'id': 80, 'type': 'women', 'capacity': 1352, 'lat': 36.265357567272126, 'lng': 59.52503518260418, 'event_distance': 8508.410291746917}, {'id': 81, 'type': 'women', 'capacity': 730, 'lat': 36.331030488450196, 'lng': 59.43904807212109, 'event_distance': 16536.125061459345}, {'id': 82, 'type': 'women', 'capacity': 1391, 'lat': 36.321350211195096, 'lng': 59.628659314559464, 'event_distance': 3885.950798527131}, {'id': 83, 'type': 'women', 'capacity': 326, 'lat': 36.41366040853012, 'lng': 59.53764232008439, 'event_distance': 15623.937006201471}, {'id': 84, 'type': 'men', 'capacity': 452, 'lat': 36.20090123547226, 'lng': 59.44757365630528, 'event_distance': 17919.976131509102}, {'id': 85, 'type': 'women', 'capacity': 521, 'lat': 36.383372302041415, 'lng': 59.65524097381517, 'event_distance': 11180.738998244264}, {'id': 86, 'type': 'women', 'capacity': 1793, 'lat': 36.210508562340394, 'lng': 59.74683213436724, 'event_distance': 14578.143574144868}, {'id': 87, 'type': 'women', 'capacity': 921, 'lat': 36.376595332184976, 'lng': 59.75171535075397, 'event_distance': 15668.392217238697}, {'id': 88, 'type': 'women', 'capacity': 390, 'lat': 36.34213596926382, 'lng': 59.76852297779479, 'event_distance': 14957.38968097089}, {'id': 89, 'type': 'women', 'capacity': 831, 'lat': 36.31790994047644, 'lng': 59.666504050906745, 'event_distance': 5638.057615317253}, {'id': 90, 'type': 'men', 'capacity': 394, 'lat': 36.43565578514417, 'lng': 59.45013058060035, 'event_distance': 22121.75960759538}, {'id': 91, 'type': 'women', 'capacity': 793, 'lat': 36.25539126507403, 'lng': 59.69415032633436, 'event_distance': 7912.574297927959}, {'id': 92, 'type': 'men', 'capacity': 1810, 'lat': 36.42648910173447, 'lng': 59.54860167636681, 'event_distance': 16530.0130960691}, {'id': 93, 'type': 'women', 'capacity': 659, 'lat': 36.27496859243143, 'lng': 59.764567913567625, 'event_distance': 13422.42766591866}, {'id': 94, 'type': 'women', 'capacity': 998, 'lat': 36.400485927869305, 'lng': 59.79766484919496, 'event_distance': 20544.01410872142}, {'id': 95, 'type': 'men', 'capacity': 1586, 'lat': 36.42546241015143, 'lng': 59.482474998479965, 'event_distance': 19389.856204029067}, {'id': 96, 'type': 'women', 'capacity': 665, 'lat': 36.18775990042704, 'lng': 59.67129735219639, 'event_distance': 12210.693144447014}, {'id': 97, 'type': 'men', 'capacity': 500, 'lat': 36.36770535097449, 'lng': 59.481145561390385, 'event_distance': 14961.415284199837}, {'id': 98, 'type': 'men', 'capacity': 698, 'lat': 36.215235917064916, 'lng': 59.796896988537654, 'event_distance': 18151.12923404315}, {'id': 99, 'type': 'women', 'capacity': 451, 'lat': 36.34625298692377, 'lng': 59.510788586174485, 'event_distance': 11415.312997007706}, {'id': 100, 'type': 'men', 'capacity': 500, 'lat': 36.22595425155919, 'lng': 59.57414892521221, 'event_distance': 7840.861219348544}, {'id': 101, 'type': 'men', 'capacity': 1265, 'lat': 36.27317829867785, 'lng': 59.45525030290572, 'event_distance': 14476.418737365942}, {'id': 102, 'type': 'men', 'capacity': 525, 'lat': 36.26641326821458, 'lng': 59.645507681135, 'event_distance': 3591.8228001148227}, {'id': 103, 'type': 'women', 'capacity': 2322, 'lat': 36.22676042428935, 'lng': 59.70832315108522, 'event_distance': 10739.748439159133}, {'id': 104, 'type': 'women', 'capacity': 469, 'lat': 36.44961759345264, 'lng': 59.547816063940886, 'event_distance': 18971.072252541013}, {'id': 105, 'type': 'men', 'capacity': 1125, 'lat': 36.35429329438147, 'lng': 59.705071975684795, 'event_distance': 10883.44017168714}, {'id': 106, 'type': 'women', 'capacity': 2287, 'lat': 36.39983673980633, 'lng': 59.57215335049205, 'event_distance': 13032.956378224262}, {'id': 107, 'type': 'men', 'capacity': 1212, 'lat': 36.309265185758136, 'lng': 59.5967700138826, 'event_distance': 2910.182306799703}, {'id': 108, 'type': 'men', 'capacity': 1842, 'lat': 36.29578119462413, 'lng': 59.79545493752278, 'event_distance': 16133.652843191161}, {'id': 109, 'type': 'women', 'capacity': 2680, 'lat': 36.2349712831652, 'lng': 59.67560274226001, 'event_distance': 7975.897133802566}, {'id': 110, 'type': 'men', 'capacity': 916, 'lat': 36.41541987860314, 'lng': 59.49265282617366, 'event_distance': 17949.25287484203}, {'id': 111, 'type': 'women', 'capacity': 1414, 'lat': 36.2244861629021, 'lng': 59.52045957171364, 'event_distance': 11081.75819920856}, {'id': 112, 'type': 'women', 'capacity': 1272, 'lat': 36.19280637998305, 'lng': 59.54044632982321, 'event_distance': 12553.582529421616}, {'id': 113, 'type': 'men', 'capacity': 848, 'lat': 36.3778771228291, 'lng': 59.47404334432166, 'event_distance': 16152.206200238623}, {'id': 114, 'type': 'women', 'capacity': 1032, 'lat': 36.20284867269893, 'lng': 59.724296540682126, 'event_distance': 13582.809477130479}, {'id': 115, 'type': 'women', 'capacity': 1759, 'lat': 36.2304797778871, 'lng': 59.51539296174871, 'event_distance': 11036.091326448983}, {'id': 116, 'type': 'women', 'capacity': 1213, 'lat': 36.32359538661796, 'lng': 59.46647741201462, 'event_distance': 13945.100791408135}, {'id': 117, 'type': 'men', 'capacity': 2342, 'lat': 36.41011388423443, 'lng': 59.71138384175705, 'event_distance': 16056.381692032952}, {'id': 118, 'type': 'women', 'capacity': 1252, 'lat': 36.32896575659942, 'lng': 59.528960104276166, 'event_distance': 9008.845975676855}, {'id': 119, 'type': 'men', 'capacity': 967, 'lat': 36.23241652265353, 'lng': 59.41685298515246, 'event_distance': 18869.694267169943}, {'id': 120, 'type': 'men', 'capacity': 457, 'lat': 36.30023554399023, 'lng': 59.536085230918964, 'event_distance': 7263.779689523963}, {'id': 121, 'type': 'women', 'capacity': 2106, 'lat': 36.406063738763734, 'lng': 59.78392170471564, 'event_distance': 19983.350385747784}, {'id': 122, 'type': 'men', 'capacity': 385, 'lat': 36.32888575172677, 'lng': 59.481178363607945, 'event_distance': 12882.719910314148}, {'id': 123, 'type': 'women', 'capacity': 1577, 'lat': 36.28047216462854, 'lng': 59.54885637077262, 'event_distance': 6049.601071067677}, {'id': 124, 'type': 'women', 'capacity': 1074, 'lat': 36.26232301636886, 'lng': 59.574202685567414, 'event_distance': 4689.357046286668}, {'id': 125, 'type': 'men', 'capacity': 1936, 'lat': 36.22926505762369, 'lng': 59.688363445264784, 'event_distance': 9225.079638516181}, {'id': 126, 'type': 'women', 'capacity': 1221, 'lat': 36.20535131238193, 'lng': 59.682209816589, 'event_distance': 10955.900867083268}, {'id': 127, 'type': 'men', 'capacity': 729, 'lat': 36.32254121969443, 'lng': 59.67214922007879, 'event_distance': 6351.286442724556}, {'id': 128, 'type': 'women', 'capacity': 542, 'lat': 36.28751905681716, 'lng': 59.645403031752274, 'event_distance': 2662.7959657773567}, {'id': 129, 'type': 'men', 'capacity': 1283, 'lat': 36.3853573863599, 'lng': 59.73430132939585, 'event_distance': 15167.49020147044}, {'id': 130, 'type': 'women', 'capacity': 1842, 'lat': 36.425514484823196, 'lng': 59.42143398214223, 'event_distance': 23161.384161320115}, {'id': 131, 'type': 'men', 'capacity': 683, 'lat': 36.37988980476467, 'lng': 59.502258667908336, 'event_distance': 14410.403545050098}, {'id': 132, 'type': 'women', 'capacity': 747, 'lat': 36.17623882976962, 'lng': 59.70390828157235, 'event_distance': 14731.994052447662}, {'id': 133, 'type': 'men', 'capacity': 1254, 'lat': 36.2248472364762, 'lng': 59.551304646963494, 'event_distance': 9091.289099384267}, {'id': 134, 'type': 'women', 'capacity': 694, 'lat': 36.216756734700986, 'lng': 59.59759775483256, 'event_distance': 8086.482204242431}, {'id': 135, 'type': 'women', 'capacity': 1491, 'lat': 36.30397412512, 'lng': 59.473746214891605, 'event_distance': 12845.263010290519}, {'id': 136, 'type': 'men', 'capacity': 1081, 'lat': 36.365496198144484, 'lng': 59.421508364793816, 'event_distance': 19413.790106832315}, {'id': 137, 'type': 'men', 'capacity': 450, 'lat': 36.23398804838497, 'lng': 59.438955697914636, 'event_distance': 16946.79440656402}, {'id': 138, 'type': 'women', 'capacity': 1865, 'lat': 36.161879457481675, 'lng': 59.428430153125845, 'event_distance': 21882.77184204661}, {'id': 139, 'type': 'women', 'capacity': 1771, 'lat': 36.333102046075716, 'lng': 59.400034873096594, 'event_distance': 19964.409737415805}, {'id': 140, 'type': 'men', 'capacity': 560, 'lat': 36.44174313671787, 'lng': 59.739698703766535, 'event_distance': 20384.53038143869}, {'id': 141, 'type': 'men', 'capacity': 1497, 'lat': 36.38170552558362, 'lng': 59.7245234579092, 'event_distance': 14268.444989916266}, {'id': 142, 'type': 'men', 'capacity': 795, 'lat': 36.346572752107996, 'lng': 59.53362700813538, 'event_distance': 9822.975406113435}, {'id': 143, 'type': 'women', 'capacity': 527, 'lat': 36.25027060519439, 'lng': 59.575340033753925, 'event_distance': 5540.103004891741}, {'id': 144, 'type': 'women', 'capacity': 1498, 'lat': 36.3067236057482, 'lng': 59.66002706788438, 'event_distance': 4485.023816275063}, {'id': 145, 'type': 'men', 'capacity': 465, 'lat': 36.26089853416485, 'lng': 59.6414474664481, 'event_distance': 3795.901267506671}, {'id': 146, 'type': 'men', 'capacity': 848, 'lat': 36.26071029349615, 'lng': 59.66184522236188, 'event_distance': 5130.31035848384}, {'id': 147, 'type': 'women', 'capacity': 1639, 'lat': 36.280410832928645, 'lng': 59.5262557419028, 'event_distance': 8061.472188461732}, {'id': 148, 'type': 'men', 'capacity': 2399, 'lat': 36.24165039678315, 'lng': 59.459195041155695, 'event_distance': 14948.109938861824}, {'id': 149, 'type': 'women', 'capacity': 472, 'lat': 36.2244102201405, 'lng': 59.43276736505775, 'event_distance': 17861.874702285935}, {'id': 150, 'type': 'men', 'capacity': 1206, 'lat': 36.409047470330954, 'lng': 59.62760072141352, 'event_distance': 13501.99717590698}, {'id': 151, 'type': 'women', 'capacity': 500, 'lat': 36.4209471907112, 'lng': 59.780049387229525, 'event_distance': 20860.367535685153}, {'id': 152, 'type': 'men', 'capacity': 976, 'lat': 36.227964229207295, 'lng': 59.664489367486325, 'event_distance': 7981.347422197292}, {'id': 153, 'type': 'women', 'capacity': 462, 'lat': 36.40015204649833, 'lng': 59.794309630374606, 'event_distance': 20283.626380137248}, {'id': 154, 'type': 'men', 'capacity': 2327, 'lat': 36.31323299602329, 'lng': 59.43532543462276, 'event_distance': 16405.867922847057}, {'id': 155, 'type': 'men', 'capacity': 376, 'lat': 36.280355280751216, 'lng': 59.481174943679385, 'event_distance': 12087.851516173188}, {'id': 156, 'type': 'women', 'capacity': 420, 'lat': 36.401290539545, 'lng': 59.5891407191159, 'event_distance': 12819.955293993955}, {'id': 157, 'type': 'women', 'capacity': 1931, 'lat': 36.43902147029719, 'lng': 59.481971339898976, 'event_distance': 20624.82930604328}, {'id': 158, 'type': 'men', 'capacity': 514, 'lat': 36.22552171989255, 'lng': 59.653160902041876, 'event_distance': 7716.663539607374}, {'id': 159, 'type': 'men', 'capacity': 252, 'lat': 36.354405033547664, 'lng': 59.77136560142399, 'event_distance': 15780.318324814281}, {'id': 160, 'type': 'men', 'capacity': 1118, 'lat': 36.36553099831636, 'lng': 59.4688244343316, 'event_distance': 15730.511732300241}, {'id': 161, 'type': 'women', 'capacity': 2045, 'lat': 36.33983999863109, 'lng': 59.553955401113264, 'event_distance': 7989.593153690105}, {'id': 162, 'type': 'men', 'capacity': 576, 'lat': 36.26694351646402, 'lng': 59.62354124831455, 'event_distance': 2444.6058310910785}, {'id': 163, 'type': 'women', 'capacity': 801, 'lat': 36.26837593036978, 'lng': 59.401657979631054, 'event_distance': 19310.448782122865}, {'id': 164, 'type': 'women', 'capacity': 440, 'lat': 36.34378765935949, 'lng': 59.51324463558466, 'event_distance': 11079.146698417535}, {'id': 165, 'type': 'men', 'capacity': 1030, 'lat': 36.24497012042613, 'lng': 59.44014109007415, 'event_distance': 16450.682021841396}, {'id': 166, 'type': 'women', 'capacity': 377, 'lat': 36.441751613808364, 'lng': 59.44048906248137, 'event_distance': 23203.768863304715}, {'id': 167, 'type': 'women', 'capacity': 1048, 'lat': 36.28911162228766, 'lng': 59.473316172142376, 'event_distance': 12762.215471588575}, {'id': 168, 'type': 'men', 'capacity': 1878, 'lat': 36.24580116856734, 'lng': 59.649375312205564, 'event_distance': 5579.658764187209}, {'id': 169, 'type': 'men', 'capacity': 1652, 'lat': 36.219446790900285, 'lng': 59.79694077262751, 'event_distance': 17950.466468320476}, {'id': 170, 'type': 'men', 'capacity': 614, 'lat': 36.27175974624709, 'lng': 59.68404630099118, 'event_distance': 6387.044144950206}, {'id': 171, 'type': 'men', 'capacity': 396, 'lat': 36.375215929533425, 'lng': 59.755407704888995, 'event_distance': 15832.623081500424}, {'id': 172, 'type': 'men', 'capacity': 567, 'lat': 36.376535483108476, 'lng': 59.69294833290248, 'event_distance': 12033.329995884213}, {'id': 173, 'type': 'women', 'capacity': 1171, 'lat': 36.318280042211626, 'lng': 59.795794345761564, 'event_distance': 16486.01371008619}, {'id': 174, 'type': 'men', 'capacity': 474, 'lat': 36.16336595346182, 'lng': 59.5907199635946, 'event_distance': 14038.648738784625}, {'id': 175, 'type': 'men', 'capacity': 2546, 'lat': 36.24268439364565, 'lng': 59.590362045793, 'event_distance': 5527.265336432589}, {'id': 176, 'type': 'women', 'capacity': 644, 'lat': 36.392600350616256, 'lng': 59.71155522995514, 'event_distance': 14456.623329383527}, {'id': 177, 'type': 'women', 'capacity': 1598, 'lat': 36.30390790056742, 'lng': 59.73727934160902, 'event_distance': 11038.562498714926}, {'id': 178, 'type': 'women', 'capacity': 1839, 'lat': 36.447117554304654, 'lng': 59.44202586551857, 'event_distance': 23555.405633918148}, {'id': 179, 'type': 'women', 'capacity': 1318, 'lat': 36.27118515492002, 'lng': 59.48749475144728, 'event_distance': 11643.240233332806}, {'id': 180, 'type': 'men', 'capacity': 1415, 'lat': 36.38301421155714, 'lng': 59.59639740389188, 'event_distance': 10705.643358386273}, {'id': 181, 'type': 'women', 'capacity': 344, 'lat': 36.21741196179804, 'lng': 59.41236742560588, 'event_distance': 19850.41812409127}, {'id': 182, 'type': 'men', 'capacity': 582, 'lat': 36.26630517216182, 'lng': 59.487196056461435, 'event_distance': 11769.155881367305}, {'id': 183, 'type': 'men', 'capacity': 1680, 'lat': 36.42524696219799, 'lng': 59.78319996734635, 'event_distance': 21398.403892890165}, {'id': 184, 'type': 'women', 'capacity': 2044, 'lat': 36.19881142235485, 'lng': 59.50943567101387, 'event_distance': 13753.914450312552}, {'id': 185, 'type': 'women', 'capacity': 743, 'lat': 36.22635795066305, 'lng': 59.696285305254435, 'event_distance': 9959.460274891844}, {'id': 186, 'type': 'women', 'capacity': 1598, 'lat': 36.17592053241356, 'lng': 59.52440141599415, 'event_distance': 14912.26238296961}, {'id': 187, 'type': 'men', 'capacity': 424, 'lat': 36.41601166692, 'lng': 59.488811380486716, 'event_distance': 18213.84158126693}, {'id': 188, 'type': 'women', 'capacity': 912, 'lat': 36.429618421416556, 'lng': 59.682687640500085, 'event_distance': 16851.075943442753}, {'id': 189, 'type': 'men', 'capacity': 566, 'lat': 36.30708760921991, 'lng': 59.643528818200004, 'event_distance': 3274.846510857611}, {'id': 190, 'type': 'men', 'capacity': 1578, 'lat': 36.30717199097557, 'lng': 59.622042165253916, 'event_distance': 2206.2949567240903}, {'id': 191, 'type': 'men', 'capacity': 1376, 'lat': 36.32950023335128, 'lng': 59.59898816767493, 'event_distance': 4851.502529714823}, {'id': 192, 'type': 'women', 'capacity': 477, 'lat': 36.26446578140859, 'lng': 59.513998253342315, 'event_distance': 9484.934417054688}, {'id': 193, 'type': 'women', 'capacity': 1475, 'lat': 36.23744968172291, 'lng': 59.61935418567203, 'event_distance': 5630.479000009071}, {'id': 194, 'type': 'men', 'capacity': 416, 'lat': 36.16392061274185, 'lng': 59.758710894089724, 'event_distance': 18839.240957192604}, {'id': 195, 'type': 'men', 'capacity': 1744, 'lat': 36.290884772255794, 'lng': 59.78652848178956, 'event_distance': 15314.24737141631}, {'id': 196, 'type': 'women', 'capacity': 197, 'lat': 36.32919012993888, 'lng': 59.76213487577557, 'event_distance': 13897.733842706608}, {'id': 197, 'type': 'men', 'capacity': 794, 'lat': 36.401110832908444, 'lng': 59.529573410027744, 'event_distance': 14754.421227066816}, {'id': 198, 'type': 'women', 'capacity': 976, 'lat': 36.18948785010651, 'lng': 59.6843577401704, 'event_distance': 12566.115829200911}, {'id': 199, 'type': 'men', 'capacity': 936, 'lat': 36.270751136550345, 'lng': 59.698449055844556, 'event_distance': 7661.487564327484}, {'id': 200, 'type': 'women', 'capacity': 1081, 'lat': 36.232492881580846, 'lng': 59.55178019921845, 'event_distance': 8422.614667798027}, {'id': 201, 'type': 'women', 'capacity': 737, 'lat': 36.160348528621405, 'lng': 59.53273388881721, 'event_distance': 16026.917476954686}, {'id': 202, 'type': 'men', 'capacity': 1102, 'lat': 36.43469778319834, 'lng': 59.516519001113764, 'event_distance': 18573.022709566325}, {'id': 203, 'type': 'men', 'capacity': 453, 'lat': 36.24552625241281, 'lng': 59.62884785504041, 'event_distance': 4867.741207912107}, {'id': 204, 'type': 'men', 'capacity': 1790, 'lat': 36.31807798236147, 'lng': 59.555642416853544, 'event_distance': 6336.419256909628}, {'id': 205, 'type': 'women', 'capacity': 383, 'lat': 36.215663559157576, 'lng': 59.48655397508198, 'event_distance': 14099.887151795972}, {'id': 206, 'type': 'women', 'capacity': 661, 'lat': 36.350460438114425, 'lng': 59.45699611387229, 'event_distance': 15824.351328853107}, {'id': 207, 'type': 'women', 'capacity': 803, 'lat': 36.22050729378778, 'lng': 59.73313156645534, 'event_distance': 12930.571126585153}, {'id': 208, 'type': 'men', 'capacity': 1417, 'lat': 36.21841310412238, 'lng': 59.65193916995317, 'event_distance': 8392.351536973107}, {'id': 209, 'type': 'women', 'capacity': 1842, 'lat': 36.195782890130964, 'lng': 59.79216531490975, 'event_distance': 18857.35324629757}, {'id': 210, 'type': 'women', 'capacity': 1400, 'lat': 36.401684461335044, 'lng': 59.64480104978229, 'event_distance': 12907.036403531636}, {'id': 211, 'type': 'women', 'capacity': 184, 'lat': 36.24302468692399, 'lng': 59.53180318656861, 'event_distance': 9032.548870044511}, {'id': 212, 'type': 'men', 'capacity': 869, 'lat': 36.36361206571539, 'lng': 59.58223321788809, 'event_distance': 8926.24652351409}, {'id': 213, 'type': 'women', 'capacity': 1302, 'lat': 36.253334403433044, 'lng': 59.479418899123935, 'event_distance': 12811.091203850692}, {'id': 214, 'type': 'women', 'capacity': 1986, 'lat': 36.28403692669451, 'lng': 59.7795660941227, 'event_distance': 14694.12180528204}, {'id': 215, 'type': 'women', 'capacity': 1698, 'lat': 36.43100051797413, 'lng': 59.69902745738967, 'event_distance': 17564.63903904497}, {'id': 216, 'type': 'men', 'capacity': 2223, 'lat': 36.166788630162344, 'lng': 59.49408204983156, 'event_distance': 17339.661387518165}, {'id': 217, 'type': 'women', 'capacity': 1049, 'lat': 36.19289089747539, 'lng': 59.409220844280654, 'event_distance': 21324.916214890574}, {'id': 218, 'type': 'men', 'capacity': 1521, 'lat': 36.24259579256224, 'lng': 59.531544428422, 'event_distance': 9078.329319857323}, {'id': 219, 'type': 'men', 'capacity': 927, 'lat': 36.270840192171725, 'lng': 59.55265678151508, 'event_distance': 5964.553910766651}, {'id': 220, 'type': 'men', 'capacity': 1447, 'lat': 36.23600329663112, 'lng': 59.65986030012007, 'event_distance': 7007.522778966286}, {'id': 221, 'type': 'women', 'capacity': 530, 'lat': 36.17629342294405, 'lng': 59.534214712729224, 'event_distance': 14411.8987207089}, {'id': 222, 'type': 'men', 'capacity': 1928, 'lat': 36.4461018113157, 'lng': 59.41768041584559, 'event_distance': 24968.439466789776}, {'id': 223, 'type': 'women', 'capacity': 1787, 'lat': 36.291912871297114, 'lng': 59.57155685766739, 'event_distance': 3980.2549235266606}, {'id': 224, 'type': 'women', 'capacity': 797, 'lat': 36.34470426872004, 'lng': 59.538453218055395, 'event_distance': 9362.5061698498}, {'id': 225, 'type': 'men', 'capacity': 692, 'lat': 36.37237740795691, 'lng': 59.430426797590435, 'event_distance': 19065.247785746586}, {'id': 226, 'type': 'men', 'capacity': 687, 'lat': 36.447183618109264, 'lng': 59.66575813019395, 'event_distance': 18259.06645137247}, {'id': 227, 'type': 'women', 'capacity': 271, 'lat': 36.36023223642289, 'lng': 59.48254419552643, 'event_distance': 14381.020303384685}, {'id': 228, 'type': 'men', 'capacity': 1639, 'lat': 36.38351829156033, 'lng': 59.63790306062367, 'event_distance': 10805.748864563244}, {'id': 229, 'type': 'men', 'capacity': 1853, 'lat': 36.28864744061008, 'lng': 59.77657854400622, 'event_distance': 14419.488619571985}, {'id': 230, 'type': 'women', 'capacity': 1410, 'lat': 36.25635083039223, 'lng': 59.47681135669635, 'event_distance': 12938.756090795672}, {'id': 231, 'type': 'men', 'capacity': 428, 'lat': 36.3725795251202, 'lng': 59.60491973562894, 'event_distance': 9454.263762677734}, {'id': 232, 'type': 'women', 'capacity': 516, 'lat': 36.35564403715358, 'lng': 59.480793440783835, 'event_distance': 14235.653392593891}, {'id': 233, 'type': 'women', 'capacity': 897, 'lat': 36.422245591717584, 'lng': 59.65653816003239, 'event_distance': 15368.887600498427}, {'id': 234, 'type': 'men', 'capacity': 1495, 'lat': 36.348786105465415, 'lng': 59.7970098560465, 'event_distance': 17594.369921834714}, {'id': 235, 'type': 'men', 'capacity': 402, 'lat': 36.27403498465286, 'lng': 59.683445986613826, 'event_distance': 6267.941048659871}, {'id': 236, 'type': 'women', 'capacity': 1854, 'lat': 36.44779978384862, 'lng': 59.519970516374, 'event_distance': 19728.21291076531}, {'id': 237, 'type': 'men', 'capacity': 323, 'lat': 36.33040570292554, 'lng': 59.612554569305864, 'event_distance': 4723.714795110502}, {'id': 238, 'type': 'women', 'capacity': 1354, 'lat': 36.39892266695491, 'lng': 59.47245306253668, 'event_distance': 17797.067538163647}, {'id': 239, 'type': 'women', 'capacity': 351, 'lat': 36.34735829592776, 'lng': 59.70259445137531, 'event_distance': 10206.628752524482}, {'id': 240, 'type': 'women', 'capacity': 1772, 'lat': 36.43865042700115, 'lng': 59.60588494067176, 'event_distance': 16774.601884042408}, {'id': 241, 'type': 'women', 'capacity': 1767, 'lat': 36.173055321222485, 'lng': 59.74913723032767, 'event_distance': 17510.250595934718}, {'id': 242, 'type': 'women', 'capacity': 537, 'lat': 36.26419548317603, 'lng': 59.67415771877716, 'event_distance': 5870.86498038277}, {'id': 243, 'type': 'women', 'capacity': 231, 'lat': 36.23337636712031, 'lng': 59.66660191650945, 'event_distance': 7597.427507673972}]
+
+
+from utils.assignments import assignment
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+FIGURE_SIZE = (17, 10)
+
+# How many of the worst male/female separations to highlight
+WORST_GROUPS_TO_SHOW = 10
+
+# Set False if even the worst-group labels are too much
+SHOW_WORST_LABELS = True
+
+# Opacity of all normal group connection lines
+CONNECTION_ALPHA = 0.16
+
+# Click tolerance in screen pixels
+CLICK_TOLERANCE = 18
+
+
+# ============================================================
+# LOOKUPS
+# ============================================================
+
+group_by_id = {
+    group["id"]: group
+    for group in groups
+}
+
+place_by_id = {
+    place["id"]: place
+    for place in places
+}
+
+
+# ============================================================
+# VALIDATE ASSIGNMENTS
+# ============================================================
+
+valid_assignment = []
+
+for gender, place_id, group_id in assignment:
+
+    gender = gender.lower()
+
+    if gender not in ("men", "women"):
+        print(
+            f"WARNING: Unknown gender '{gender}' "
+            f"for place {place_id}, group {group_id}"
+        )
+        continue
+
+    if place_id not in place_by_id:
+        print(
+            f"WARNING: Assignment references unknown "
+            f"place {place_id}"
+        )
+        continue
+
+    if group_id not in group_by_id:
+        print(
+            f"WARNING: Assignment references unknown "
+            f"group {group_id}"
+        )
+        continue
+
+    valid_assignment.append(
+        (gender, place_id, group_id)
+    )
+
+
+# ============================================================
+# ORGANIZE ASSIGNMENTS
+# ============================================================
+
+# By physical place:
+#
+# place_assignments[place_id] = [
+#     {"gender": "men", "group_id": 5},
+#     {"gender": "men", "group_id": 8},
+# ]
+
+place_assignments = defaultdict(list)
+
+# By group:
+#
+# group_assignments[group_id]["men"] = [place_id]
+# group_assignments[group_id]["women"] = [place_id]
+
+group_assignments = defaultdict(
+    lambda: {
+        "men": [],
+        "women": [],
+    }
+)
+
+for gender, place_id, group_id in valid_assignment:
+
+    place_assignments[place_id].append({
+        "gender": gender,
+        "group_id": group_id,
+    })
+
+    group_assignments[group_id][gender].append(
+        place_id
+    )
+
+
+# ============================================================
+# GROUP COLORS
+# ============================================================
+#
+# 200 groups => we absolutely do NOT want 200 legend entries.
+#
+# Instead every group gets a distinct position in HSV.
+# The color scale on the right tells us:
+#
+#     group ID -> color
+#
+# ============================================================
+
+group_ids = [
+    group["id"]
+    for group in groups
+]
+
+group_ids_sorted = sorted(group_ids)
+
+number_of_groups = len(group_ids_sorted)
+
+raw_colors = plt.cm.hsv(
+    np.linspace(
+        0,
+        1,
+        max(number_of_groups, 1),
+        endpoint=False,
+    )
+)
+
+GROUP_COLORS = {
+    group_id: raw_colors[index]
+    for index, group_id in enumerate(group_ids_sorted)
+}
+
+
+# ============================================================
+# DISTANCE
+# ============================================================
+
+def haversine_km(lat1, lon1, lat2, lon2):
+    """
+    Great-circle distance between two latitude/longitude points.
+    """
+
+    earth_radius_km = 6371.0088
+
+    lat1 = math.radians(lat1)
+    lon1 = math.radians(lon1)
+
+    lat2 = math.radians(lat2)
+    lon2 = math.radians(lon2)
+
+    d_lat = lat2 - lat1
+    d_lon = lon2 - lon1
+
+    a = (
+        math.sin(d_lat / 2) ** 2
+        +
+        math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(d_lon / 2) ** 2
+    )
+
+    return (
+        2
+        * earth_radius_km
+        * math.asin(math.sqrt(a))
+    )
+
+
+# ============================================================
+# CALCULATE MEN/WOMEN DISTANCE FOR EVERY GROUP
+# ============================================================
+
+group_separations = []
+
+for group in groups:
+
+    group_id = group["id"]
+
+    men_places = group_assignments[group_id]["men"]
+    women_places = group_assignments[group_id]["women"]
+
+    # We need both genders to calculate the distance
+    if not men_places or not women_places:
+        continue
+
+    # Normally there should be exactly one of each.
+    #
+    # If your solver somehow produces several, use the
+    # closest pair. This keeps the visualization robust.
+    best_pair = None
+
+    for men_place_id in men_places:
+
+        for women_place_id in women_places:
+
+            men_place = place_by_id[men_place_id]
+            women_place = place_by_id[women_place_id]
+
+            distance = haversine_km(
+                men_place["lat"],
+                men_place["lng"],
+                women_place["lat"],
+                women_place["lng"],
+            )
+
+            if (
+                best_pair is None
+                or distance < best_pair["distance_km"]
+            ):
+                best_pair = {
+                    "group_id": group_id,
+                    "men_place_id": men_place_id,
+                    "women_place_id": women_place_id,
+                    "distance_km": distance,
+                }
+
+    group_separations.append(best_pair)
+
+
+# Sort farthest first
+group_separations.sort(
+    key=lambda x: x["distance_km"],
+    reverse=True,
+)
+
+worst_groups = group_separations[
+    :WORST_GROUPS_TO_SHOW
+]
+
+
+# ============================================================
+# MAP BOUNDS
+# ============================================================
+
+lats = np.array([
+    place["lat"]
+    for place in places
+])
+
+lngs = np.array([
+    place["lng"]
+    for place in places
+])
+
+lat_range = max(
+    lats.max() - lats.min(),
+    0.001,
+)
+
+lng_range = max(
+    lngs.max() - lngs.min(),
+    0.001,
+)
+
+lat_padding = lat_range * 0.08
+lng_padding = lng_range * 0.08
+
+
+# ============================================================
+# FIGURE
+# ============================================================
+
+fig = plt.figure(
+    figsize=FIGURE_SIZE
+)
+
+gs = fig.add_gridspec(
+    1,
+    2,
+    width_ratios=[3.4, 1],
+    wspace=0.08,
+)
+
+ax = fig.add_subplot(gs[0])
+side_ax = fig.add_subplot(gs[1])
+
+side_ax.axis("off")
+
+
+# ============================================================
+# MAP
+# ============================================================
+
+ax.set_xlim(
+    lngs.min() - lng_padding,
+    lngs.max() + lng_padding,
+)
+
+ax.set_ylim(
+    lats.min() - lat_padding,
+    lats.max() + lat_padding,
+)
+
+ax.set_aspect(
+    "equal",
+    adjustable="box",
+)
+
+
+# ============================================================
+# DRAW ALL PLACES IN BACKGROUND
+# ============================================================
+#
+# These are deliberately VERY small.
+#
+# 500 locations should look like geography rather than
+# 500 giant bubbles.
+# ============================================================
+
+male_unassigned = [
+    place
+    for place in places
+    if place["id"] not in place_assignments
+    and place["type"].lower() == "men"
+]
+
+female_unassigned = [
+    place
+    for place in places
+    if place["id"] not in place_assignments
+    and place["type"].lower() == "women"
+]
+
+
+# Small background squares = male
+if male_unassigned:
+
+    ax.scatter(
+        [
+            p["lng"]
+            for p in male_unassigned
+        ],
+        [
+            p["lat"]
+            for p in male_unassigned
+        ],
+        s=22,
+        marker="s",
+        facecolor="0.75",
+        edgecolor="0.45",
+        linewidth=0.5,
+        alpha=0.55,
+        zorder=1,
+    )
+
+
+# Small background circles = female
+if female_unassigned:
+
+    ax.scatter(
+        [
+            p["lng"]
+            for p in female_unassigned
+        ],
+        [
+            p["lat"]
+            for p in female_unassigned
+        ],
+        s=22,
+        marker="o",
+        facecolor="0.88",
+        edgecolor="0.45",
+        linewidth=0.5,
+        alpha=0.60,
+        zorder=1,
+    )
+
+
+# ============================================================
+# DRAW GROUP CONNECTIONS
+# ============================================================
+#
+# Every group:
+#
+#        MEN PLACE -------- WOMEN PLACE
+#
+# The lines are deliberately transparent.
+#
+# Farther pairs become slightly thicker/more visible.
+# ============================================================
+
+if group_separations:
+
+    max_distance = max(
+        x["distance_km"]
+        for x in group_separations
+    )
+
+else:
+
+    max_distance = 1
+
+
+for separation in group_separations:
+
+    group_id = separation["group_id"]
+
+    men_place = place_by_id[
+        separation["men_place_id"]
+    ]
+
+    women_place = place_by_id[
+        separation["women_place_id"]
+    ]
+
+    distance = separation["distance_km"]
+
+    normalized_distance = (
+        distance / max_distance
+        if max_distance > 0
+        else 0
+    )
+
+    linewidth = (
+        0.5
+        +
+        normalized_distance * 2.0
+    )
+
+    alpha = (
+        CONNECTION_ALPHA
+        +
+        normalized_distance * 0.25
+    )
+
+    ax.plot(
+        [
+            men_place["lng"],
+            women_place["lng"],
+        ],
+        [
+            men_place["lat"],
+            women_place["lat"],
+        ],
+        color=GROUP_COLORS[group_id],
+        linewidth=linewidth,
+        alpha=alpha,
+        linestyle="--",
+        zorder=2,
+    )
+
+
+# ============================================================
+# HIGHLIGHT WORST GROUPS
+# ============================================================
+#
+# The 10 groups whose men/women are the farthest apart
+# get a stronger black outline.
+# ============================================================
+
+worst_group_ids = {
+    item["group_id"]
+    for item in worst_groups
+}
+
+
+for separation in worst_groups:
+
+    group_id = separation["group_id"]
+
+    men_place = place_by_id[
+        separation["men_place_id"]
+    ]
+
+    women_place = place_by_id[
+        separation["women_place_id"]
+    ]
+
+    ax.plot(
+        [
+            men_place["lng"],
+            women_place["lng"],
+        ],
+        [
+            men_place["lat"],
+            women_place["lat"],
+        ],
+        color="black",
+        linewidth=2.5,
+        alpha=0.75,
+        linestyle="-",
+        zorder=4,
+    )
+
+    if SHOW_WORST_LABELS:
+
+        mid_lng = (
+            men_place["lng"]
+            +
+            women_place["lng"]
+        ) / 2
+
+        mid_lat = (
+            men_place["lat"]
+            +
+            women_place["lat"]
+        ) / 2
+
+        ax.text(
+            mid_lng,
+            mid_lat,
+            f"{separation['distance_km']:.1f} km",
+            fontsize=7,
+            fontweight="bold",
+            color="black",
+            ha="center",
+            va="bottom",
+            zorder=10,
+            bbox=dict(
+                boxstyle="round,pad=0.2",
+                facecolor="white",
+                edgecolor="black",
+                alpha=0.8,
+            ),
+        )
+
+
+# ============================================================
+# CAPACITY -> MARKER SIZE
+# ============================================================
+
+def marker_size(capacity, assigned=False):
+
+    # sqrt prevents large hotels from completely dominating
+    size = 18 + 8 * math.sqrt(
+        max(capacity, 1)
+    )
+
+    if assigned:
+        size *= 1.35
+
+    return size
+
+
+# ============================================================
+# DRAW ASSIGNED PLACES
+# ============================================================
+#
+# One assignment:
+#
+#       colored marker
+#
+# Multiple assignments:
+#
+#       colored center
+#       + colored rings
+#
+# Gender:
+#
+#       MALE   = square + solid border
+#       FEMALE = circle + dashed border
+# ============================================================
+
+for place in places:
+
+    place_id = place["id"]
+
+    assignments_here = place_assignments.get(
+        place_id,
+        []
+    )
+
+    if not assignments_here:
+        continue
+
+    marker = (
+        "s"
+        if place["type"].lower() == "men"
+        else "o"
+    )
+
+    gender_border = (
+        "-"
+        if place["type"].lower() == "men"
+        else "--"
+    )
+
+    base_size = marker_size(
+        place["capacity"],
+        assigned=True,
+    )
+
+    # --------------------------------------------------------
+    # First group becomes the filled center
+    # --------------------------------------------------------
+
+    first_assignment = assignments_here[0]
+
+    first_group_id = (
+        first_assignment["group_id"]
+    )
+
+    first_color = GROUP_COLORS[
+        first_group_id
+    ]
+
+    ax.scatter(
+        place["lng"],
+        place["lat"],
+        s=base_size,
+        marker=marker,
+        facecolor=first_color,
+        edgecolor="black",
+        linewidth=1.4,
+        linestyle=gender_border,
+        alpha=0.95,
+        zorder=6,
+    )
+
+    # --------------------------------------------------------
+    # Additional groups become rings
+    # --------------------------------------------------------
+
+    for index, item in enumerate(
+        assignments_here[1:],
+        start=1,
+    ):
+
+        group_id = item["group_id"]
+
+        color = GROUP_COLORS[
+            group_id
+        ]
+
+        ax.scatter(
+            place["lng"],
+            place["lat"],
+            s=(
+                base_size
+                +
+                index * 35
+            ),
+            marker=marker,
+            facecolors="none",
+            edgecolors=color,
+            linewidth=2.2,
+            linestyle=gender_border,
+            zorder=7,
+        )
+
+
+# ============================================================
+# TITLE / AXES
+# ============================================================
+
+ax.set_title(
+    "Group → Place Assignments",
+    fontsize=18,
+    fontweight="bold",
+    pad=15,
+)
+
+ax.set_xlabel(
+    "Longitude"
+)
+
+ax.set_ylabel(
+    "Latitude"
+)
+
+ax.grid(
+    True,
+    linestyle="--",
+    alpha=0.12,
+)
+
+
+# ============================================================
+# MAP LEGEND
+# ============================================================
+
+legend_items = [
+
+    Line2D(
+        [0],
+        [0],
+        marker="s",
+        color="0.45",
+        markerfacecolor="0.75",
+        markersize=7,
+        linewidth=0,
+        label="Male place",
+    ),
+
+    Line2D(
+        [0],
+        [0],
+        marker="o",
+        color="0.45",
+        markerfacecolor="0.88",
+        markersize=7,
+        linewidth=0,
+        label="Female place",
+    ),
+
+    Line2D(
+        [0],
+        [0],
+        color="black",
+        linewidth=2,
+        linestyle="--",
+        label="Men ↔ Women",
+    ),
+
+    Line2D(
+        [0],
+        [0],
+        color="black",
+        linewidth=3,
+        linestyle="-",
+        label="Worst separation",
+    ),
+]
+
+ax.legend(
+    handles=legend_items,
+    loc="upper left",
+    fontsize=9,
+    framealpha=0.95,
+)
+
+
+# ============================================================
+# SIDE PANEL: SUMMARY
+# ============================================================
+
+assigned_place_ids = set(
+    place_assignments.keys()
+)
+
+unique_male_places = {
+    place_id
+    for gender, place_id, group_id
+    in valid_assignment
+    if gender == "men"
+}
+
+unique_female_places = {
+    place_id
+    for gender, place_id, group_id
+    in valid_assignment
+    if gender == "women"
+}
+
+
+if group_separations:
+
+    separation_values = np.array([
+        x["distance_km"]
+        for x in group_separations
+    ])
+
+    mean_distance = separation_values.mean()
+    median_distance = np.median(separation_values)
+    p90_distance = np.percentile(
+        separation_values,
+        90,
+    )
+    max_distance_value = separation_values.max()
+
+else:
+
+    mean_distance = 0
+    median_distance = 0
+    p90_distance = 0
+    max_distance_value = 0
+
+
+complete_groups = len(
+    group_separations
+)
+
+
+summary_text = (
+    "SOLUTION OVERVIEW\n"
+    "\n"
+    f"Groups                 {len(groups):>8}\n"
+    f"Assignment entries     {len(valid_assignment):>8}\n"
+    f"Used places            {len(assigned_place_ids):>8}\n"
+    f"Unused places          "
+    f"{len(places) - len(assigned_place_ids):>8}\n"
+    "\n"
+    f"Male places used       "
+    f"{len(unique_male_places):>8}\n"
+    f"Female places used     "
+    f"{len(unique_female_places):>8}\n"
+    "\n"
+    f"Groups with M + F      "
+    f"{complete_groups:>8}\n"
+    f"Missing one gender     "
+    f"{len(groups) - complete_groups:>8}\n"
+    "\n"
+    "MEN ↔ WOMEN DISTANCE\n"
+    "\n"
+    f"Mean                   "
+    f"{mean_distance:>7.2f} km\n"
+    f"Median                 "
+    f"{median_distance:>7.2f} km\n"
+    f"90th percentile        "
+    f"{p90_distance:>7.2f} km\n"
+    f"Maximum                "
+    f"{max_distance_value:>7.2f} km"
+)
+
+side_ax.text(
+    0.02,
+    0.98,
+    summary_text,
+    transform=side_ax.transAxes,
+    va="top",
+    ha="left",
+    fontsize=10,
+    family="monospace",
+)
+
+
+# ============================================================
+# SIDE PANEL: WORST GROUPS BAR CHART
+# ============================================================
+
+bar_ax = side_ax.inset_axes([
+    0.02,
+    0.36,
+    0.94,
+    0.31,
+])
+
+
+worst_for_chart = worst_groups[::-1]
+
+if worst_for_chart:
+
+    y = np.arange(
+        len(worst_for_chart)
+    )
+
+    distances = [
+        item["distance_km"]
+        for item in worst_for_chart
+    ]
+
+    colors = [
+        GROUP_COLORS[
+            item["group_id"]
+        ]
+        for item in worst_for_chart
+    ]
+
+    bars = bar_ax.barh(
+        y,
+        distances,
+        color=colors,
+        alpha=0.85,
+    )
+
+    bar_ax.set_yticks(y)
+
+    bar_ax.set_xlabel(
+        "Men ↔ Women distance (km)",
+        fontsize=8,
+    )
+
+    bar_ax.set_title(
+        f"Worst {len(worst_for_chart)} groups",
+        fontsize=10,
+        fontweight="bold",
+    )
+
+    bar_ax.tick_params(
+        axis="x",
+        labelsize=7,
+    )
+
+    bar_ax.grid(
+        axis="x",
+        alpha=0.2,
+    )
+
+    for bar, distance in zip(
+        bars,
+        distances,
+    ):
+
+        bar_ax.text(
+            distance,
+            bar.get_y()
+            + bar.get_height() / 2,
+            f" {distance:.1f}",
+            va="center",
+            fontsize=7,
+        )
+
+else:
+
+    bar_ax.text(
+        0.5,
+        0.5,
+        "No groups have both\nmale and female assignments",
+        ha="center",
+        va="center",
+        fontsize=9,
+    )
+
+
+# ============================================================
+# SIDE PANEL: COLOR SCALE
+# ============================================================
+
+color_ax = side_ax.inset_axes([
+    0.05,
+    0.07,
+    0.90,
+    0.17,
+])
+
+if number_of_groups > 0:
+
+    discrete_cmap = ListedColormap(
+        raw_colors
+    )
+
+    norm = BoundaryNorm(
+        np.arange(
+            -0.5,
+            number_of_groups + 0.5,
+            1
+        ),
+        number_of_groups,
+    )
+
+    sm = ScalarMappable(
+        norm=norm,
+        cmap=discrete_cmap,
+    )
+
+    sm.set_array([])
+
+    colorbar = fig.colorbar(
+        sm,
+        cax=color_ax,
+        orientation="horizontal",
+    )
+
+    # Don't display 200 labels.
+    tick_indices = np.linspace(
+        0,
+        number_of_groups - 1,
+        min(10, number_of_groups),
+        dtype=int,
+    )
+
+    colorbar.set_ticks(
+        tick_indices
+    )
+
+    colorbar.set_ticklabels(
+        [
+            str(group_ids_sorted[i])
+            for i in tick_indices
+        ]
+    )
+
+    colorbar.ax.tick_params(
+        labelsize=7
+    )
+
+    colorbar.set_label(
+        "Group ID → color",
+        fontsize=8,
+    )
+
+
+# ============================================================
+# SIDE PANEL: INSTRUCTIONS
+# ============================================================
+
+side_ax.text(
+    0.02,
+    0.01,
+    (
+        "MAP\n"
+        "■ Male    ● Female\n"
+        "Gray = unused\n"
+        "Color = assigned group\n"
+        "Extra colored rings = place reused by multiple groups\n"
+        "Marker size = capacity\n\n"
+        "Click any place for details."
+    ),
+    transform=side_ax.transAxes,
+    va="bottom",
+    ha="left",
+    fontsize=8,
+)
+
+
+# ============================================================
+# CLICK-TO-INSPECT
+# ============================================================
+#
+# This replaces the giant sea of permanent labels.
+#
+# Click a place and its details appear in the right panel.
+# ============================================================
+
+detail_text = side_ax.text(
+    0.02,
+    0.66,
+    "",
+    transform=side_ax.transAxes,
+    va="top",
+    ha="left",
+    fontsize=8.5,
+    family="monospace",
+    bbox=dict(
+        boxstyle="round,pad=0.5",
+        facecolor="white",
+        edgecolor="0.5",
+        alpha=0.95,
+    ),
+    visible=False,
+)
+
+
+# Precompute screen coordinates
+# This is updated automatically if the plot is resized.
+def update_screen_coordinates():
+
+    points = np.column_stack([
+        lngs,
+        lats,
+    ])
+
+    return ax.transData.transform(
+        points
+    )
+
+
+def on_click(event):
+
+    if event.inaxes != ax:
+        return
+
+    if event.x is None or event.y is None:
+        return
+
+    screen_points = (
+        update_screen_coordinates()
+    )
+
+    click_point = np.array([
+        event.x,
+        event.y,
+    ])
+
+    distances = np.sqrt(
+        (
+            screen_points[:, 0]
+            - click_point[0]
+        ) ** 2
+        +
+        (
+            screen_points[:, 1]
+            - click_point[1]
+        ) ** 2
+    )
+
+    nearest_index = np.argmin(
+        distances
+    )
+
+    nearest_distance = distances[
+        nearest_index
+    ]
+
+    if nearest_distance > CLICK_TOLERANCE:
+        return
+
+    place = places[
+        nearest_index
+    ]
+
+    place_id = place["id"]
+
+    assignments_here = (
+        place_assignments.get(
+            place_id,
+            []
+        )
+    )
+
+    lines = [
+        f"ID: {place['id']}",
+        f"Type: {place['type'].upper()}",
+        f"Capacity: {place['capacity']}",
+        (
+            f"Event: "
+            f"{place['event_distance'] / 1000:.2f} km"
+        ),
+        "",
+    ]
+
+    if not assignments_here:
+
+        lines.append(
+            "UNUSED"
+        )
+
+    else:
+
+        lines.append(
+            "ASSIGNMENTS:"
+        )
+
+        for item in assignments_here:
+
+            group_id = item["group_id"]
+            gender = item["gender"]
+
+            group = group_by_id[
+                group_id
+            ]
+
+            people = (
+                group["men"]
+                if gender == "men"
+                else group["women"]
+            )
+
+            remaining = (
+                place["capacity"]
+                -
+                people
+            )
+
+            lines.append(
+                f"({gender})"
+            )
+
+            lines.append(
+                f"  used: {people}"
+            )
+
+            lines.append(
+                f"  free: {remaining}"
+            )
+
+    detail_text.set_text(
+        "\n".join(lines)
+    )
+
+    detail_text.set_visible(
+        True
+    )
+
+    fig.canvas.draw_idle()
+
+
+fig.canvas.mpl_connect(
+    "button_press_event",
+    on_click,
+)
+
+
+# ============================================================
+# SAVE
+# ============================================================
+
+plt.savefig(
+    "group_assignments_overview.png",
+    dpi=220,
+    bbox_inches="tight",
+)
+
+plt.show()
