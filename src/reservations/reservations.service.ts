@@ -1173,7 +1173,7 @@ export class ReservationsService {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
-    return this.prisma.$transaction(async (tx) => {
+    const approved = await this.prisma.$transaction(async (tx) => {
       const current = await this.requireReservation(id, tx);
       if (current.status !== ReservationStatus.PENDING_MANAGEMENT_REVIEW) {
         throw new BadRequestException('پرونده در وضعیت مناسب این عملیات نیست');
@@ -1240,8 +1240,10 @@ export class ReservationsService {
       if (next === ReservationStatus.COMPLETED) {
         this.emitWorkflowEvent('complete', current.id, actor.id);
       }
-      return this.serialize(updated, actor);
+      return updated;
     });
+    await this.notifyReviewResult(approved, 'approved', actor.id);
+    return this.serialize(approved, actor);
   }
 
   async adjustCapacity(
@@ -1364,6 +1366,7 @@ export class ReservationsService {
       include: reservationInclude,
     });
     this.emitWorkflowEvent('reject', id, actor.id);
+    await this.notifyReviewResult(updated, 'rejected', actor.id);
     return this.serialize(updated, actor);
   }
 
@@ -3279,7 +3282,7 @@ export class ReservationsService {
       throw new BadRequestException('مجوز کاروان برای تأیید آماده نیست');
     }
     if (!current.issuedLicenseId && !current.permitImageId) {
-      throw new BadRequestException('منبع مجوز کاروان مشخص نیست');
+      throw new BadRequestException('لطفاً مشخص نمایید مجوز کاروان را چگونه ارائه خواهید کرد.');
     }
     if (current.issuedLicenseId) {
       await this.assertIssuedLicenseForReservation({
@@ -3658,8 +3661,8 @@ export class ReservationsService {
     if (current.basicInfoLockedAt) {
       throw new BadRequestException('پرونده قفل است');
     }
-    const requestedMale = current.requestedMaleCount || current.maleCount;
-    const requestedFemale = current.requestedFemaleCount || current.femaleCount;
+    const { male: requestedMale, female: requestedFemale } =
+      this.submitRequestedCounts(current);
     this.assertCounts(requestedMale, requestedFemale);
     const occasionSettings = await tx.receptionSettings.findUnique({
       where: { year: current.year },
@@ -3769,6 +3772,8 @@ export class ReservationsService {
         createWizardStep: null,
         originCityId,
         originCountryId,
+        requestedMaleCount: requestedMale,
+        requestedFemaleCount: requestedFemale,
         ...(waivePermit
           ? {
               hasPermit: true,
@@ -3844,6 +3849,70 @@ export class ReservationsService {
     } catch (error) {
       this.logger.warn(
         `پیامک ثبت‌نام اولیه پرونده ${result.code} ارسال نشد: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  /** پیامک نتیجهٔ بررسی ستاد (تأیید یا رد) به مدیر کاروان/گروه یا متقاضی. */
+  private async notifyReviewResult(
+    row: ReservationRecord,
+    outcome: 'approved' | 'rejected',
+    actorId: string,
+  ) {
+    const recipient =
+      row.type === ReservationType.CARAVAN
+        ? (row.caravanManager ?? row.createdBy)
+        : row.type === ReservationType.GROUP
+          ? (row.group?.manager ?? row.createdBy)
+          : row.createdBy;
+    const phone = recipient?.phone?.trim() || row.createdBy.phone?.trim();
+    if (!phone) {
+      return;
+    }
+
+    const fa = (value: number | string) => toPersianDigits(String(value));
+    const greeting =
+      row.type === ReservationType.CARAVAN && row.caravan
+        ? `مدیر محترم کاروان ${row.caravan.name}`
+        : row.type === ReservationType.GROUP && row.group
+          ? `مدیر محترم گروه ${row.group.name}`
+          : 'زائر گرامی';
+    const origin = row.originCity
+      ? `از شهر ${row.originCity.nameFa}`
+      : row.originCountry
+        ? `از کشور ${row.originCountry.nameFa}`
+        : null;
+
+    const lines = [
+      greeting,
+      ...(recipient?.fullName ? [recipient.fullName] : []),
+      `پرونده زیارتی ${fa(row.year)} شما`,
+      ...(origin ? [origin] : []),
+      '',
+    ];
+    if (outcome === 'approved') {
+      lines.push(
+        'ظرفیت درخواستی:',
+        `مرد: ${fa(row.requestedMaleCount)}  زن: ${fa(row.requestedFemaleCount)}`,
+        '',
+        'ظرفیت مورد تایید ستاد جمعیت:',
+        `مرد: ${fa(row.maleCount)}  زن: ${fa(row.femaleCount)}`,
+        '',
+        'پرونده شما تایید شد. لطفا نسبت به تکمیل پرونده خود اقدام نمایید.',
+      );
+    } else {
+      lines.push(
+        'متاسفانه پرونده شما در سال جاری مورد تایید ستاد جمعیت قرار نگرفت. ان شاءالله در سال‌های آتی در خدمتتان خواهیم بود.',
+      );
+    }
+
+    try {
+      await this.sms.send({ phone, body: lines.join('\n'), sentById: actorId });
+    } catch (error) {
+      this.logger.warn(
+        `پیامک نتیجه بررسی پرونده ${row.code} ارسال نشد: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -4002,6 +4071,24 @@ export class ReservationsService {
     if (incoming === undefined) return current;
     if (draftSoft && !incoming && current) return current;
     return incoming;
+  }
+
+  private submitRequestedCounts(current: ReservationRecord) {
+    if (current.type === ReservationType.INDIVIDUAL) {
+      const gender = current.createdBy?.gender;
+      if (gender === UserGender.MALE) return { male: 1, female: 0 };
+      if (gender === UserGender.FEMALE) return { male: 0, female: 1 };
+      const male = current.requestedMaleCount || current.maleCount;
+      const female = current.requestedFemaleCount || current.femaleCount;
+      if (male + female === 1) return { male, female };
+      throw new BadRequestException(
+        'جنسیت زائر در پروفایل ثبت نشده است؛ ابتدا پروفایل را تکمیل کنید',
+      );
+    }
+    return {
+      male: current.requestedMaleCount || current.maleCount,
+      female: current.requestedFemaleCount || current.femaleCount,
+    };
   }
 
   private assertCounts(maleCount: number, femaleCount: number) {

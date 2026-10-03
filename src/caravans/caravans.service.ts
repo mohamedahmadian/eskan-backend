@@ -802,7 +802,20 @@ export class CaravansService {
 
   async remove(id: string) {
     await this.findOne(id);
-    await this.prisma.caravan.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      const licenses = await tx.issuedLicense.findMany({
+        where: { caravanId: id },
+        select: { fileId: true },
+      });
+      await tx.issuedLicense.deleteMany({ where: { caravanId: id } });
+      const fileIds = licenses
+        .map((license) => license.fileId)
+        .filter((fileId): fileId is string => Boolean(fileId));
+      if (fileIds.length > 0) {
+        await tx.storedImage.deleteMany({ where: { id: { in: fileIds } } });
+      }
+      await tx.caravan.delete({ where: { id } });
+    });
     return { ok: true };
   }
 

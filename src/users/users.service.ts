@@ -966,6 +966,7 @@ export class UsersService {
       gender: user.gender,
       nationalId: user.nationalId,
       phone: user.phone,
+      birthDate: toDateOnly(user.birthDate),
       photoId: user.photoId,
       activityStartYear: user.activityStartYear,
       country: user.country,
