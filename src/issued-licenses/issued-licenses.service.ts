@@ -45,6 +45,9 @@ const caravanLookupSelect = {
   licenseNumber: true,
   foundedYear: true,
   isActive: true,
+  maleCount: true,
+  femaleCount: true,
+  totalCount: true,
   city: {
     select: {
       ...geoSelect,
@@ -91,6 +94,7 @@ export class IssuedLicensesService {
       },
       select: {
         ...personSelect,
+        photoId: true,
         city: {
           select: {
             ...geoSelect,

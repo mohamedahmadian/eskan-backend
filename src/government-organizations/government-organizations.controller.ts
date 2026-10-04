@@ -12,7 +12,9 @@ import {
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { UsersService } from '../users/users.service';
 import { CreateGovernmentOrganizationDto } from './dto/create-government-organization.dto';
+import { CreateOrganizationOfficerDto } from './dto/create-organization-officer.dto';
 import { FindGovernmentOrganizationsQueryDto } from './dto/find-government-organizations-query.dto';
 import { UpdateGovernmentOrganizationDto } from './dto/update-government-organization.dto';
 import { GovernmentOrganizationsService } from './government-organizations.service';
@@ -22,6 +24,7 @@ import { GovernmentOrganizationsService } from './government-organizations.servi
 export class GovernmentOrganizationsController {
   constructor(
     private readonly governmentOrganizations: GovernmentOrganizationsService,
+    private readonly users: UsersService,
   ) {}
 
   @Get()
@@ -39,6 +42,16 @@ export class GovernmentOrganizationsController {
   @Roles('ADMIN')
   create(@Body() dto: CreateGovernmentOrganizationDto) {
     return this.governmentOrganizations.create(dto);
+  }
+
+  @Post(':id/officers')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  createOfficer(
+    @Param('id') id: string,
+    @Body() dto: CreateOrganizationOfficerDto,
+  ) {
+    return this.users.createGovernmentOrgOfficer(id, dto);
   }
 
   @Patch(':id')

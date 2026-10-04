@@ -138,6 +138,7 @@ model User {
   userRoles           UserRole[]
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
+  introducedAccommodations Accommodation[] @relation("AccommodationIntroducer")
   accommodationContacts AccommodationContact[]
   accommodationYearContacts AccommodationYearContact[]
   managedCaravans       Caravan[] @relation("CaravanManager")
@@ -1131,6 +1132,8 @@ model Accommodation {
   parkingCapacity       Int?
   bathroomCount         Int?
   toiletCount           Int?
+  introducedById        String?
+  introducedBy          User?                @relation("AccommodationIntroducer", fields: [introducedById], references: [id], onDelete: SetNull)
   managers              AccommodationManager[]
   contacts              AccommodationContact[]
   yearContacts          AccommodationYearContact[]
@@ -1144,6 +1147,7 @@ model Accommodation {
   @@index([status, type])
   @@index([managementType, genderType])
   @@index([cityId])
+  @@index([introducedById])
   @@map("accommodations")
 }
 

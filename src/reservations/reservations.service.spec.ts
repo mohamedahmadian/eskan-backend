@@ -48,10 +48,12 @@ describe('ReservationsService.remove', () => {
     ),
   };
 
+  const placements = { vacateActiveForReservation: jest.fn() };
+
   const service = new ReservationsService(
     prisma as unknown as PrismaService,
     {} as UsersService,
-    {} as PlacementsService,
+    placements as unknown as PlacementsService,
     {} as SmsService,
   );
 
@@ -110,6 +112,24 @@ describe('ReservationsService.remove', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.reservation.delete).not.toHaveBeenCalled();
   });
+
+  it('lets an admin hard-delete a file in any status and vacates placements', async () => {
+    prisma.reservation.findUnique.mockResolvedValue(
+      draftRow({ status: ReservationStatus.COMPLETED }),
+    );
+    prisma.reservation.delete.mockResolvedValue({ id: 'res-1' });
+    const admin = { id: 'admin-1', userRoles: [{ role: { code: 'ADMIN' } }] };
+
+    await expect(service.remove('res-1', admin)).resolves.toEqual({ ok: true });
+    expect(placements.vacateActiveForReservation).toHaveBeenCalledWith(
+      prisma,
+      'res-1',
+      'admin-1',
+    );
+    expect(prisma.reservation.delete).toHaveBeenCalledWith({
+      where: { id: 'res-1' },
+    });
+  });
 });
 
 describe('ReservationsService.findOpen', () => {
@@ -145,11 +165,11 @@ describe('ReservationsService.findOpen', () => {
       createdById: 'pilgrim-1',
     });
 
-    await expect(service.findOpen(pilgrim('pilgrim-1'))).resolves.toMatchObject({
+    await expect(service.findOpen(pilgrim('pilgrim-1'), undefined, 1405)).resolves.toMatchObject({
       id: 'res-1',
     });
     expect(prisma.reservation.findFirst).toHaveBeenCalledWith({
-      where: openReservationWhere('pilgrim-1'),
+      where: openReservationWhere('pilgrim-1', 1405),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

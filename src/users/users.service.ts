@@ -52,6 +52,7 @@ import {
   type ParsedPilgrimImport,
 } from './pilgrim-excel-import.util';
 import { resolvePilgrimResetPassword } from './pilgrim-password.util';
+import { isQuickAssignableRole } from './dto/set-quick-role.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { UpdateUserLocationDto } from './dto/update-user-location.dto';
@@ -1238,6 +1239,58 @@ export class UsersService {
     }
   }
 
+  async createGovernmentOrgOfficer(
+    organizationId: string,
+    dto: { firstName: string; lastName: string; phone: string; password: string },
+  ) {
+    const organization = await this.prisma.governmentOrganization.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new NotFoundException('سازمان یافت نشد');
+    }
+    const roleCodes = ['GOVERNMENT_ORG_OFFICER', 'LICENSE_ISSUER'];
+    const roles = await this.prisma.role.findMany({
+      where: { code: { in: roleCodes } },
+      select: { id: true, code: true },
+    });
+    if (roles.length !== roleCodes.length) {
+      throw new BadRequestException(
+        'نقش مسئول سازمان‌ها یا صادرکننده مجوز تعریف نشده است',
+      );
+    }
+    const phone = normalizeMobile(dto.phone);
+    if (!/^09\d{9}$/.test(phone)) {
+      throw new BadRequestException('شماره تلفن همراه معتبر نیست');
+    }
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    await this.assertUniqueIdentity({ username: phone, phone });
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          username: phone,
+          passwordHash,
+          firstName,
+          lastName,
+          fullName: joinFullName(firstName, lastName),
+          phone,
+          locale: 'fa',
+          status: UserStatus.ACTIVE,
+          issuingOrganizationId: organization.id,
+          userRoles: { create: roles.map((role) => ({ roleId: role.id })) },
+        },
+        include: publicInclude,
+      });
+      return this.toPublicUser(user);
+    } catch (error) {
+      this.rethrowUnique(error);
+    }
+  }
+
   async update(id: string, dto: UpdateUserDto) {
     const current = await this.findOne(id);
 
@@ -1566,6 +1619,18 @@ export class UsersService {
       create: { userId, roleId: role.id },
     });
     return role;
+  }
+
+  async setQuickRole(userId: string, roleCode: string, enabled: boolean, actorId: string) {
+    if (!isQuickAssignableRole(roleCode)) {
+      throw new BadRequestException('این نقش از اینجا قابل تغییر نیست');
+    }
+    if (enabled) {
+      await this.findOne(userId);
+      await this.ensureRole(userId, roleCode);
+      return this.findOne(userId);
+    }
+    return this.removeRole(userId, roleCode, actorId);
   }
 
   async createWithRole(dto: CreateUserDto, roleCode: string) {
@@ -3667,10 +3732,7 @@ export class UsersService {
       return;
     }
     const value = nationalId?.trim() || '';
-    if (!value) {
-      throw new BadRequestException('کد ملی را وارد کنید');
-    }
-    if (!isValidIranianNationalId(value)) {
+    if (value && !isValidIranianNationalId(value)) {
       throw new BadRequestException('کد ملی معتبر نیست');
     }
   }

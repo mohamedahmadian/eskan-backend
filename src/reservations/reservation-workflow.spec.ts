@@ -197,10 +197,11 @@ describe('canAssignBothGendersTogether', () => {
 });
 
 describe('openReservationWhere', () => {
-  it('keeps a file open until it is completed or cancelled', () => {
-    expect(openReservationWhere('user-1')).toEqual({
+  it('treats every file of the year as active unless rejected or cancelled', () => {
+    expect(openReservationWhere('user-1', 1405)).toEqual({
+      year: 1405,
       status: {
-        notIn: [ReservationStatus.COMPLETED, ReservationStatus.CANCELLED],
+        notIn: [ReservationStatus.REJECTED, ReservationStatus.CANCELLED],
       },
       OR: [
         { createdById: 'user-1' },

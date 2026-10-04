@@ -106,7 +106,7 @@ export class ReservationsController {
     @Query() query: OpenReservationQueryDto,
     @CurrentUser() actor: RequestUser,
   ) {
-    return this.reservations.findOpen(actor, query.userId);
+    return this.reservations.findOpen(actor, query.userId, query.year);
   }
 
   @Get('assigned')

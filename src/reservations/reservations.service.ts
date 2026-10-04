@@ -801,7 +801,7 @@ export class ReservationsService {
 
     const result = await this.withCodeConflictRetry(() =>
       this.prisma.$transaction(async (tx) => {
-        await this.assertNoOpenReservation(tx, createdById);
+        await this.assertNoOpenReservation(tx, createdById, dto.year);
         const { code, codeSeq } = await this.nextReservationCode(tx, dto.year);
         const created = await tx.reservation.create({
           data: {
@@ -1196,9 +1196,7 @@ export class ReservationsService {
         current.year,
         current.originCountryId,
       );
-      if (current.type === ReservationType.INDIVIDUAL) {
-        await this.ensureApplicantMember(tx, current);
-      }
+      await this.ensureLeaderMember(tx, current, counts);
 
       const now = new Date();
       const trimmedNotes = dto?.notes?.trim();
@@ -1254,7 +1252,7 @@ export class ReservationsService {
     if (!isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
-    return this.prisma.$transaction(async (tx) => {
+    const { updated, changed } = await this.prisma.$transaction(async (tx) => {
       const current = await this.requireReservation(id, tx);
       if (
         !current.managementReviewedAt ||
@@ -1264,6 +1262,9 @@ export class ReservationsService {
       }
 
       const counts = this.resolveApprovedCounts(current, dto);
+      const capacityChanged =
+        counts.maleCount !== current.maleCount ||
+        counts.femaleCount !== current.femaleCount;
       this.assertCountsCoverMembers(
         current,
         counts.maleCount,
@@ -1338,8 +1339,12 @@ export class ReservationsService {
         year: current.year,
         updateYear: true,
       });
-      return this.serialize(updated, actor);
+      return { updated, changed: capacityChanged };
     });
+    if (changed) {
+      await this.notifyReviewResult(updated, 'capacityAdjusted', actor.id);
+    }
+    return this.serialize(updated, actor);
   }
 
   async reject(id: string, reason: string | null | undefined, actor: Actor) {
@@ -1477,13 +1482,13 @@ export class ReservationsService {
     return this.serialize(updated, actor);
   }
 
-  /** Hard-delete an owner create-wizard draft or a cancelled file. */
+  /** Hard-delete a file: owners only drafts/cancelled; admins any status. */
   async remove(id: string, actor: Actor) {
     const current = await this.requireReservation(id);
     this.assertOwnerOrAdmin(current, actor);
     const draft = isOwnerCreateDraft(current);
     const cancelled = current.status === ReservationStatus.CANCELLED;
-    if (!draft && !cancelled) {
+    if (!draft && !cancelled && !isAdmin(actor)) {
       throw new BadRequestException(
         'فقط پرونده پیش‌نویس یا انصراف‌داده‌شده قابل حذف است',
       );
@@ -1494,6 +1499,10 @@ export class ReservationsService {
       const partyMale = current.requestedMaleCount || current.maleCount;
       const partyFemale = current.requestedFemaleCount || current.femaleCount;
 
+      // Accommodation occupancy counters are not maintained by FK cascade.
+      if (!draft && !cancelled) {
+        await this.placements.vacateActiveForReservation(tx, id, actor.id);
+      }
       await tx.reservation.delete({ where: { id } });
 
       if (permitImageId) {
@@ -1554,13 +1563,13 @@ export class ReservationsService {
     });
   }
 
-  async findOpen(actor: Actor, userId?: string) {
+  async findOpen(actor: Actor, userId?: string, year?: number) {
     const subjectId = userId || actor.id;
     if (subjectId !== actor.id && !isAdmin(actor)) {
       throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
     }
     return this.prisma.reservation.findFirst({
-      where: openReservationWhere(subjectId),
+      where: openReservationWhere(subjectId, year ?? currentJalaliYear()),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -2022,6 +2031,18 @@ export class ReservationsService {
     if (!member) {
       throw new NotFoundException('عضو پرونده یافت نشد');
     }
+    if (member.userId === this.leaderUserId(current)) {
+      throw new BadRequestException(
+        current.type === ReservationType.CARAVAN
+          ? 'مدیر کاروان همراه کاروان است و از فهرست زائرین حذف نمی‌شود'
+          : 'سرگروه عضو گروه است و از فهرست اعضا حذف نمی‌شود',
+      );
+    }
+    if (current.caravanContacts.some((item) => item.userId === member.userId)) {
+      throw new BadRequestException(
+        'این فرد رابط کاروان است؛ ابتدا او را از رابطین بردارید',
+      );
+    }
     await this.prisma.reservationMember.delete({ where: { id: memberId } });
     await this.syncMemberServiceRequests(this.prisma, id);
     return this.serialize(await this.requireReservation(id), actor);
@@ -2406,27 +2427,26 @@ export class ReservationsService {
         contactEditStatuses(current.type),
       );
 
-      let userId = dto.userId;
-      if (userId) {
-        const existing = await tx.user.findUnique({
-          where: { id: userId },
-          select: { id: true },
+      let userId = dto.userId ?? null;
+      if (!userId && dto.nationalId) {
+        const found = await this.users.findByIdentity({
+          nationalId: dto.nationalId,
         });
-        if (!existing) {
-          throw new NotFoundException('کاربر یافت نشد');
-        }
-      } else {
-        const { user } = await this.resolveCompanion(
-          {
-            nationalId: dto.nationalId,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            phone: dto.phone,
-            birthDate: dto.birthDate,
-          },
-          { requireGender: false },
+        userId = found.found ? found.user.id : null;
+      }
+      const member = userId
+        ? current.members.find((item) => item.userId === userId)
+        : undefined;
+      if (!member || !userId) {
+        throw new BadRequestException(
+          'رابط کاروان باید از زائرین همین پرونده انتخاب شود',
         );
-        userId = user.id;
+      }
+      if (
+        member.user.gender !== UserGender.MALE &&
+        member.user.gender !== UserGender.FEMALE
+      ) {
+        throw new BadRequestException('جنسیت رابط کاروان باید مشخص باشد');
       }
 
       await tx.reservationCaravanContact.upsert({
@@ -2492,9 +2512,22 @@ export class ReservationsService {
     if (!caravan?.contacts.length) {
       throw new BadRequestException('برای این کاروان مسئولی تعریف نشده است');
     }
+    const travellers = caravan.contacts.filter((contact) =>
+      current.members.some(
+        (member) =>
+          member.userId === contact.userId &&
+          (member.user.gender === UserGender.MALE ||
+            member.user.gender === UserGender.FEMALE),
+      ),
+    );
+    if (!travellers.length) {
+      throw new BadRequestException(
+        'هیچ‌یک از رابطین تعریف‌شدهٔ کاروان در فهرست زائرین این پرونده نیستند',
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
-      for (const contact of caravan.contacts) {
+      for (const contact of travellers) {
         await tx.reservationCaravanContact.upsert({
           where: {
             reservationId_role: { reservationId: id, role: contact.role },
@@ -3241,18 +3274,23 @@ export class ReservationsService {
     );
     const confirmed = permit.permitSource === ReservationPermitSource.CONFIRMED;
 
+    if (confirmed) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.reservation.update({ where: { id }, data: permit });
+        return this.maybeFinishAfterInsurance(tx, id, actor);
+      });
+    }
+
     const updated = await this.prisma.reservation.update({
       where: { id },
-      data: confirmed
-        ? permit
-        : {
-            ...permit,
-            hasPermit: false,
-            permitStatus: ReservationPermitStatus.PENDING,
-            permitReviewedAt: null,
-            permitReviewedById: null,
-            permitRejectionReason: null,
-          },
+      data: {
+        ...permit,
+        hasPermit: false,
+        permitStatus: ReservationPermitStatus.PENDING,
+        permitReviewedAt: null,
+        permitReviewedById: null,
+        permitRejectionReason: null,
+      },
       include: reservationInclude,
     });
     return this.serialize(updated, actor);
@@ -3290,10 +3328,24 @@ export class ReservationsService {
         year: current.year,
         caravanId: current.caravanId!,
         managerUserId: current.caravanManagerId!,
+        requireApproved: false,
       });
     }
 
     return this.prisma.$transaction(async (tx) => {
+      if (current.issuedLicenseId) {
+        await tx.issuedLicense.updateMany({
+          where: {
+            id: current.issuedLicenseId,
+            status: IssuedLicenseStatus.ISSUED,
+          },
+          data: {
+            status: IssuedLicenseStatus.APPROVED,
+            approvedAt: new Date(),
+            approvedById: actor.id,
+          },
+        });
+      }
       await tx.reservation.update({
         where: { id },
         data: {
@@ -3537,9 +3589,9 @@ export class ReservationsService {
     return firstStage?.walkingStation?.cityId ?? null;
   }
 
-  private async assertNoOpenReservation(tx: Tx, userId: string) {
+  private async assertNoOpenReservation(tx: Tx, userId: string, year: number) {
     const open = await tx.reservation.findFirst({
-      where: openReservationWhere(userId),
+      where: openReservationWhere(userId, year),
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -3552,7 +3604,7 @@ export class ReservationsService {
     if (open) {
       throw new ConflictException({
         message:
-          'پرونده زیارتی فعال وجود دارد. تا تکمیل یا انصراف، پرونده جدیدی ساخته نمی‌شود',
+          'برای این سال یک پرونده زیارتی فعال وجود دارد و امکان ایجاد پرونده جدید نیست',
         error: 'Conflict',
         reservationId: open.id,
         code: open.code,
@@ -3728,11 +3780,6 @@ export class ReservationsService {
       if (!license || license.status === IssuedLicenseStatus.REVOKED) {
         throw new BadRequestException('مجوز سازمانی انتخاب‌شده معتبر نیست');
       }
-      if (license.status === IssuedLicenseStatus.ISSUED) {
-        throw new BadRequestException(
-          'برای ثبت نهایی پرونده باید منتظر تأیید مجوز از طرف مدیریت ستاد باشید',
-        );
-      }
     }
 
     const settings = await this.requireSettings(current.year, tx);
@@ -3759,8 +3806,12 @@ export class ReservationsService {
       );
     }
 
-    if (current.type === ReservationType.INDIVIDUAL) {
-      await this.ensureApplicantMember(tx, current);
+    await this.assertLeaderFitsCounts(tx, current, requestedMale, requestedFemale);
+    if (current.type === ReservationType.INDIVIDUAL || autoApprove) {
+      await this.ensureLeaderMember(tx, current, {
+        maleCount: requestedMale,
+        femaleCount: requestedFemale,
+      });
     }
 
     const updated = await tx.reservation.update({
@@ -3855,10 +3906,10 @@ export class ReservationsService {
     }
   }
 
-  /** پیامک نتیجهٔ بررسی ستاد (تأیید یا رد) به مدیر کاروان/گروه یا متقاضی. */
+  /** پیامک نتیجهٔ بررسی ستاد (تأیید، رد یا اصلاح ظرفیت) به مدیر کاروان/گروه یا متقاضی. */
   private async notifyReviewResult(
     row: ReservationRecord,
-    outcome: 'approved' | 'rejected',
+    outcome: 'approved' | 'rejected' | 'capacityAdjusted',
     actorId: string,
   ) {
     const recipient =
@@ -3892,7 +3943,7 @@ export class ReservationsService {
       ...(origin ? [origin] : []),
       '',
     ];
-    if (outcome === 'approved') {
+    if (outcome === 'approved' || outcome === 'capacityAdjusted') {
       lines.push(
         'ظرفیت درخواستی:',
         `مرد: ${fa(row.requestedMaleCount)}  زن: ${fa(row.requestedFemaleCount)}`,
@@ -3900,7 +3951,9 @@ export class ReservationsService {
         'ظرفیت مورد تایید ستاد جمعیت:',
         `مرد: ${fa(row.maleCount)}  زن: ${fa(row.femaleCount)}`,
         '',
-        'پرونده شما تایید شد. لطفا نسبت به تکمیل پرونده خود اقدام نمایید.',
+        outcome === 'approved'
+          ? 'پرونده شما تایید شد. لطفا نسبت به تکمیل پرونده خود اقدام نمایید.'
+          : 'ظرفیت پرونده شما توسط ستاد جمعیت اصلاح شد. لطفا نسبت به تکمیل پرونده خود اقدام نمایید.',
       );
     } else {
       lines.push(
@@ -3912,29 +3965,88 @@ export class ReservationsService {
       await this.sms.send({ phone, body: lines.join('\n'), sentById: actorId });
     } catch (error) {
       this.logger.warn(
-        `پیامک نتیجه بررسی پرونده ${row.code} ارسال نشد: ${
+        `پیامک ${outcome === 'capacityAdjusted' ? 'اصلاح ظرفیت' : 'نتیجه بررسی'} پرونده ${row.code} ارسال نشد: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
     }
   }
 
-  private async ensureApplicantMember(
-    tx: Tx,
-    reservation: Pick<ReservationRecord, 'id' | 'createdById' | 'members'>,
+  /** Applicant (individual), group head, or caravan manager — always travels and is always a member. */
+  private leaderUserId(
+    reservation: Pick<
+      ReservationRecord,
+      'type' | 'createdById' | 'caravanManagerId' | 'group'
+    >,
   ) {
-    if (
-      reservation.members.some(
-        (item) => item.userId === reservation.createdById,
-      )
-    ) {
+    if (reservation.type === ReservationType.CARAVAN) {
+      return reservation.caravanManagerId ?? reservation.createdById;
+    }
+    if (reservation.type === ReservationType.GROUP) {
+      return reservation.group?.managerUserId ?? reservation.createdById;
+    }
+    return reservation.createdById;
+  }
+
+  private leaderLabel(type: ReservationType) {
+    return type === ReservationType.CARAVAN ? 'مدیر کاروان' : 'سرگروه';
+  }
+
+  private async leaderGender(tx: Tx, reservation: ReservationRecord) {
+    const user = await tx.user.findUnique({
+      where: { id: this.leaderUserId(reservation) },
+      select: { gender: true },
+    });
+    if (user?.gender !== UserGender.MALE && user?.gender !== UserGender.FEMALE) {
+      throw new BadRequestException(
+        `جنسیت ${this.leaderLabel(reservation.type)} مشخص نیست؛ ابتدا آن را در اطلاعات کاربری او ثبت کنید`,
+      );
+    }
+    return user.gender;
+  }
+
+  private async assertLeaderFitsCounts(
+    tx: Tx,
+    reservation: ReservationRecord,
+    maleCount: number,
+    femaleCount: number,
+  ) {
+    if (reservation.type === ReservationType.INDIVIDUAL) return;
+    const gender = await this.leaderGender(tx, reservation);
+    const need = gender === UserGender.MALE ? maleCount : femaleCount;
+    if (need < 1) {
+      throw new BadRequestException(
+        `${this.leaderLabel(reservation.type)} خودش هم در سفر است؛ تعداد ${
+          gender === UserGender.MALE ? 'آقایان' : 'خانم‌ها'
+        } را با احتساب او وارد کنید`,
+      );
+    }
+  }
+
+  private async ensureLeaderMember(
+    tx: Tx,
+    reservation: ReservationRecord,
+    counts: { maleCount: number; femaleCount: number },
+  ) {
+    const userId = this.leaderUserId(reservation);
+    if (reservation.members.some((item) => item.userId === userId)) {
       return;
     }
+    if (reservation.type !== ReservationType.INDIVIDUAL) {
+      const gender = await this.leaderGender(tx, reservation);
+      const taken = reservation.members.filter(
+        (item) => item.user.gender === gender,
+      ).length;
+      const need =
+        gender === UserGender.MALE ? counts.maleCount : counts.femaleCount;
+      if (taken >= need) {
+        throw new BadRequestException(
+          `ظرفیت ${gender === UserGender.MALE ? 'آقایان' : 'خانم‌های'} پرونده برای ${this.leaderLabel(reservation.type)} کافی نیست`,
+        );
+      }
+    }
     await tx.reservationMember.create({
-      data: {
-        reservationId: reservation.id,
-        userId: reservation.createdById,
-      },
+      data: { reservationId: reservation.id, userId },
     });
   }
 
@@ -4684,6 +4796,14 @@ export class ReservationsService {
     if (current.members.some((item) => !item.user.gender)) {
       throw new BadRequestException('جنسیت همه اعضا باید مشخص باشد');
     }
+    const leaderId = this.leaderUserId(current);
+    if (!current.members.some((item) => item.userId === leaderId)) {
+      throw new BadRequestException(
+        current.type === ReservationType.CARAVAN
+          ? 'مدیر کاروان باید در فهرست زائرین باشد'
+          : 'سرگروه باید در فهرست اعضای گروه باشد',
+      );
+    }
     if (!this.memberCountsMatch(current)) {
       throw new BadRequestException(
         'تعداد اعضای مرد و زن با تعداد اعلام‌شده پرونده سازگار نیست',
@@ -4698,6 +4818,12 @@ export class ReservationsService {
     );
     if (missing.length) {
       throw new BadRequestException('همه رابطین کاروان باید تعیین شوند');
+    }
+    const memberIds = new Set(current.members.map((item) => item.userId));
+    if (current.caravanContacts.some((item) => !memberIds.has(item.userId))) {
+      throw new BadRequestException(
+        'همه رابطین باید از زائرین همین پرونده باشند',
+      );
     }
   }
 
@@ -5549,6 +5675,7 @@ export class ReservationsService {
       features,
       internationalWorkflow: Boolean(originIso2 && originIso2 !== 'IR'),
       iraqiWorkflow: originIso2 === 'IQ',
+      leaderUserId: this.leaderUserId(row),
       members: seeMembers
         ? row.members.map((item) => this.serializeMember(item))
         : undefined,

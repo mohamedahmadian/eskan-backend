@@ -17,15 +17,19 @@ export const IN_PROGRESS_STATUSES: ReservationStatus[] = [
   ReservationStatus.INSURANCE,
 ];
 
-/** A file stops blocking a new one only after completion or cancellation. */
-export const CLOSED_RESERVATION_STATUSES: ReservationStatus[] = [
-  ReservationStatus.COMPLETED,
+/** Only these let the same person open another file in the same year; completed files still block. */
+export const INACTIVE_RESERVATION_STATUSES: ReservationStatus[] = [
+  ReservationStatus.REJECTED,
   ReservationStatus.CANCELLED,
 ];
 
-export function openReservationWhere(userId: string): Prisma.ReservationWhereInput {
+export function openReservationWhere(
+  userId: string,
+  year: number,
+): Prisma.ReservationWhereInput {
   return {
-    status: { notIn: CLOSED_RESERVATION_STATUSES },
+    year,
+    status: { notIn: INACTIVE_RESERVATION_STATUSES },
     OR: [
       { createdById: userId },
       { caravanManagerId: userId },

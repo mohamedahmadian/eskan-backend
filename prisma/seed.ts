@@ -126,12 +126,14 @@ async function main() {
 
   const pilgrims = await prisma.navModule.upsert({
     where: { code: 'pilgrims' },
-    update: {},
+    update: {
+      sortOrder: 3,
+    },
     create: {
       code: 'pilgrims',
       nameKey: 'modules.pilgrims',
       icon: 'users',
-      sortOrder: 2,
+      sortOrder: 3,
     },
   });
 
@@ -140,13 +142,13 @@ async function main() {
     update: {
       nameKey: 'modules.caravans',
       icon: 'footprints',
-      sortOrder: 3,
+      sortOrder: 2,
     },
     create: {
       code: 'caravans',
       nameKey: 'modules.caravans',
       icon: 'footprints',
-      sortOrder: 3,
+      sortOrder: 2,
     },
   });
 
@@ -394,14 +396,6 @@ async function main() {
       path: '/',
       icon: 'home',
       sortOrder: 1,
-    },
-    {
-      code: 'dashboard.introduce-accommodation',
-      moduleId: dashboard.id,
-      nameKey: 'menus.introduceAccommodation',
-      path: '/accommodation-introduction',
-      icon: 'building-2',
-      sortOrder: 2,
     },
     {
       code: 'dashboard.new-caravan',
@@ -820,12 +814,20 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'accommodation.list',
+      moduleId: accommodation.id,
+      nameKey: 'menus.accommodations',
+      path: '/accommodations',
+      icon: 'building-2',
+      sortOrder: 1,
+    },
+    {
       code: 'accommodation.mine',
       moduleId: accommodation.id,
       nameKey: 'menus.myAccommodations',
       path: '/my-accommodations',
       icon: 'building',
-      sortOrder: 1,
+      sortOrder: 2,
     },
     {
       code: 'accommodation.introduce',
@@ -833,7 +835,15 @@ async function main() {
       nameKey: 'menus.introduceAccommodation',
       path: '/accommodation-introduction',
       icon: 'building-2',
-      sortOrder: 0,
+      sortOrder: 3,
+    },
+    {
+      code: 'accommodation.introduced',
+      moduleId: accommodation.id,
+      nameKey: 'menus.introducedAccommodations',
+      path: '/introduced-accommodations',
+      icon: 'file-check',
+      sortOrder: 4,
     },
     {
       code: 'accommodation.managers',
@@ -841,15 +851,15 @@ async function main() {
       nameKey: 'menus.accommodationManagers',
       path: '/accommodation-managers',
       icon: 'user-round-check',
-      sortOrder: 2,
+      sortOrder: 5,
     },
     {
-      code: 'accommodation.list',
+      code: 'accommodation.assignment',
       moduleId: accommodation.id,
-      nameKey: 'menus.accommodations',
-      path: '/accommodations',
-      icon: 'building-2',
-      sortOrder: 3,
+      nameKey: 'menus.accommodationAssignment',
+      path: '/accommodation-assignments',
+      icon: 'user-round-plus',
+      sortOrder: 6,
     },
     {
       code: 'accommodation.year-management',
@@ -857,7 +867,7 @@ async function main() {
       nameKey: 'menus.accommodationYearManagement',
       path: '/accommodation-year-management',
       icon: 'calendar-range',
-      sortOrder: 4,
+      sortOrder: 7,
     },
     {
       code: 'accommodation.report',
@@ -865,7 +875,7 @@ async function main() {
       nameKey: 'menus.accommodationReport',
       path: '/accommodation-report',
       icon: 'chart-column',
-      sortOrder: 5,
+      sortOrder: 8,
     },
     {
       code: 'logistics.suppliers',
@@ -1199,6 +1209,7 @@ async function main() {
               'base-info.medical-centers',
               'base-info.red-crescents',
               'dashboard.honorary-apply',
+              'dashboard.introduce-accommodation',
             ],
           },
         },
@@ -1231,7 +1242,7 @@ async function main() {
       item.code === 'evaluations.mine' ||
       item.code === 'accommodation.mine' ||
       item.code === 'accommodation.introduce' ||
-      item.code === 'dashboard.introduce-accommodation' ||
+      item.code === 'accommodation.introduced' ||
       item.code === 'stations.mine' ||
       item.code === 'stations.report' ||
       item.code === 'stations.history' ||
@@ -1629,7 +1640,7 @@ async function main() {
   const introduceAccommodationMenus = menuRecords.filter(
     (item) =>
       item.code === 'accommodation.introduce' ||
-      item.code === 'dashboard.introduce-accommodation',
+      item.code === 'accommodation.introduced',
   );
   for (const role of [
     accommodationManagerRole,

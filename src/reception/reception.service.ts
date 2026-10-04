@@ -695,7 +695,8 @@ export class ReceptionService {
     });
     const showHousing = kinds.includes('accommodationManager') || history.length > 0;
     const honoraryVisits = this.uniqueHonoraryVisits(honoraryAssignments);
-    const showHonorary = hasHonoraryService || honoraryVisits.length > 0;
+    const hasHonoraryRole = user.userRoles.some((item) => item.role.code === 'HONORARY_SERVANT');
+    const showHonorary = hasHonoraryService || honoraryVisits.length > 0 || hasHonoraryRole;
 
     return {
       person,

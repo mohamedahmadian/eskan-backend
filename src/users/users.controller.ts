@@ -17,6 +17,7 @@ import { CheckIdentityDto } from './dto/check-identity.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
+import { SetQuickRoleDto } from './dto/set-quick-role.dto';
 import { SetUserPasswordDto } from './dto/set-user-password.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserLocationDto } from './dto/update-user-location.dto';
@@ -75,6 +76,16 @@ export class UsersController {
   @Patch(':id/location')
   updateLocation(@Param('id') id: string, @Body() dto: UpdateUserLocationDto) {
     return this.users.updateLocation(id, dto);
+  }
+
+  @Patch(':id/roles/:code')
+  setQuickRole(
+    @Param('id') id: string,
+    @Param('code') code: string,
+    @Body() dto: SetQuickRoleDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.setQuickRole(id, code, dto.enabled, actor.id);
   }
 
   @Patch(':id')

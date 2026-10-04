@@ -64,6 +64,12 @@ export class HonoraryServantsController {
     return this.honoraryServants.create({ ...dto, userId: actor.id });
   }
 
+  @Delete('mine/:id')
+  @Roles('AUTHENTICATED')
+  removeMine(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
+    return this.honoraryServants.removeMine(actor.id, id);
+  }
+
   @Get(':id')
   @Roles('AUTHENTICATED')
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {

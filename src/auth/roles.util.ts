@@ -89,7 +89,12 @@ export function canAccessMyReservations(user: RoleBearer | null | undefined) {
   if (hasNoRoles(user)) {
     return true;
   }
-  return isPilgrim(user) || isCaravanManager(user) || isGroupManager(user);
+  return (
+    isPilgrim(user) ||
+    isCaravanManager(user) ||
+    isGroupManager(user) ||
+    isHonoraryServant(user)
+  );
 }
 
 export function canAccessMyGroups(user: RoleBearer | null | undefined) {

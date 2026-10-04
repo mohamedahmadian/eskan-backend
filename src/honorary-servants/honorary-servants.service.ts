@@ -299,6 +299,29 @@ export class HonoraryServantsService {
     return this.toPublic(item);
   }
 
+  async removeMine(userId: string, id: string) {
+    const item = await this.prisma.honoraryServiceAnnouncement.findUnique({
+      where: { id },
+      select: { userId: true, serviceTypeId: true },
+    });
+    if (!item || item.userId !== userId) {
+      throw new NotFoundException('اعلام همکاری یافت نشد');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.honoraryServiceAnnouncement.delete({ where: { id } });
+      if (!item.serviceTypeId) return;
+      const remaining = await tx.honoraryServiceAnnouncement.count({
+        where: { userId, serviceTypeId: item.serviceTypeId },
+      });
+      if (remaining > 0) return;
+      await tx.reservationHonoraryAssignment.deleteMany({
+        where: { userId, serviceTypeId: item.serviceTypeId },
+      });
+    });
+    await this.syncRole(userId);
+    return { ok: true };
+  }
+
   async remove(id: string) {
     const item = await this.prisma.honoraryServiceAnnouncement.findUnique({
       where: { id },

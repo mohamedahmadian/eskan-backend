@@ -18,6 +18,8 @@ import {
   canAccessMyEvaluations,
   canAccessMyGroups,
   canAccessMyReservations,
+  isAdmin,
+  isLicenseIssuer,
 } from './roles.util';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -28,6 +30,7 @@ const retiredMenuCodes = new Set([
   'base-info.medical-centers',
   'base-info.red-crescents',
   'dashboard.honorary-apply',
+  'dashboard.introduce-accommodation',
 ]);
 const retiredMenuNameKeys = new Set(['menus.medicalCenters', 'menus.redCrescents']);
 
@@ -45,9 +48,12 @@ type AuthUserRecord = {
   locale: string;
   status: UserStatus;
   gender: UserGender | null;
+  nationalId: string | null;
+  phone: string | null;
   countryId: string | null;
   provinceId: string | null;
   cityId: string | null;
+  photoId: string | null;
   issuingOrganization: { id: string; name: string; phone: string | null } | null;
   userRoles: {
     role: { id: string; code: string; nameKey: string };
@@ -266,8 +272,8 @@ export class AuthService {
                   in: [
                     'dashboard.overview',
                     'dashboard.new-caravan',
-                    'dashboard.introduce-accommodation',
                     'accommodation.introduce',
+                    'accommodation.introduced',
                     'honorary-service.apply',
                     'honorary-service.history',
                     'participations.home',
@@ -398,6 +404,12 @@ export class AuthService {
       addMenu(menu);
     }
 
+    const licenses = modulesMap.get('licenses');
+    if (licenses && isLicenseIssuer(user) && !isAdmin(user)) {
+      const dashboardOrder = modulesMap.get('dashboard')?.sortOrder ?? 0;
+      licenses.sortOrder = dashboardOrder + 0.5;
+    }
+
     const modules = [...modulesMap.values()]
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((mod) => ({
@@ -411,9 +423,12 @@ export class AuthService {
       fullName: user.fullName,
       locale: user.locale,
       gender: user.gender,
+      nationalId: user.nationalId,
+      phone: user.phone,
       countryId: user.countryId,
       provinceId: user.provinceId,
       cityId: user.cityId,
+      photoId: user.photoId,
       issuingOrganization: user.issuingOrganization,
       roles: user.userRoles.map((item) => ({
         code: item.role.code,

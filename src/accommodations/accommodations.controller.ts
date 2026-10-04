@@ -21,6 +21,7 @@ import { ActivateAllAccommodationYearDto } from './dto/activate-all-accommodatio
 import { AddAccommodationYearDto } from './dto/add-accommodation-year.dto';
 import { AssignAccommodationManagerDto } from './dto/assign-accommodation-manager.dto';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
+import { FindAccommodationAssignmentsQueryDto } from './dto/find-accommodation-assignments-query.dto';
 import { FindAccommodationReportQueryDto } from './dto/find-accommodation-report-query.dto';
 import { FindAccommodationsQueryDto } from './dto/find-accommodations-query.dto';
 import { FindYearManagementQueryDto } from './dto/find-year-management-query.dto';
@@ -50,6 +51,7 @@ export class AccommodationsController {
   constructor(private readonly accommodations: AccommodationsService) {}
 
   @Get()
+  @Roles(...mineRoles)
   findAll(
     @Query() query: FindAccommodationsQueryDto,
     @CurrentUser() actor: RequestUser,
@@ -64,6 +66,15 @@ export class AccommodationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.accommodations.findMine(query, actor);
+  }
+
+  @Get('introduced')
+  @Roles('AUTHENTICATED')
+  findIntroduced(
+    @Query() query: FindAccommodationsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.findIntroduced(query, actor);
   }
 
   @Get('report')
@@ -89,6 +100,21 @@ export class AccommodationsController {
   ) {
     const buffer = await this.accommodations.exportExcel(query, actor);
     return new StreamableFile(buffer);
+  }
+
+  @Get('assignments/stats')
+  @Roles('ADMIN')
+  assignmentStats(@CurrentUser() actor: RequestUser) {
+    return this.accommodations.assignmentStats(actor);
+  }
+
+  @Get('assignments')
+  @Roles('ADMIN')
+  findAssignments(
+    @Query() query: FindAccommodationAssignmentsQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.accommodations.findAssignments(query, actor);
   }
 
   @Get('year-management/stats')
@@ -192,6 +218,7 @@ export class AccommodationsController {
   }
 
   @Get(':id')
+  @Roles(...mineRoles)
   findOne(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
     return this.accommodations.findOne(id, actor);
   }
