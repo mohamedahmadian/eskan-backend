@@ -115,7 +115,7 @@ async function main() {
 
   const dashboard = await prisma.navModule.upsert({
     where: { code: 'dashboard' },
-    update: {},
+    update: { sortOrder: 1 },
     create: {
       code: 'dashboard',
       nameKey: 'modules.dashboard',
@@ -187,13 +187,13 @@ async function main() {
     update: {
       nameKey: 'modules.groupManagement',
       icon: 'users-round',
-      sortOrder: 5,
+      sortOrder: 12,
     },
     create: {
       code: 'group-management',
       nameKey: 'modules.groupManagement',
       icon: 'users-round',
-      sortOrder: 5,
+      sortOrder: 12,
     },
   });
 
@@ -202,13 +202,13 @@ async function main() {
     update: {
       nameKey: 'modules.sms',
       icon: 'message-square',
-      sortOrder: 6,
+      sortOrder: 13,
     },
     create: {
       code: 'sms',
       nameKey: 'modules.sms',
       icon: 'message-square',
-      sortOrder: 6,
+      sortOrder: 13,
     },
   });
 
@@ -217,13 +217,13 @@ async function main() {
     update: {
       nameKey: 'modules.baseInfo',
       icon: 'database',
-      sortOrder: 7,
+      sortOrder: 15,
     },
     create: {
       code: 'base-info',
       nameKey: 'modules.baseInfo',
       icon: 'database',
-      sortOrder: 7,
+      sortOrder: 15,
     },
   });
 
@@ -247,13 +247,13 @@ async function main() {
     update: {
       nameKey: 'modules.stations',
       icon: 'milestone',
-      sortOrder: 6,
+      sortOrder: 14,
     },
     create: {
       code: 'stations',
       nameKey: 'modules.stations',
       icon: 'milestone',
-      sortOrder: 6,
+      sortOrder: 14,
     },
   });
 
@@ -262,13 +262,13 @@ async function main() {
     update: {
       nameKey: 'modules.headquarters',
       icon: 'landmark',
-      sortOrder: 8,
+      sortOrder: 6,
     },
     create: {
       code: 'headquarters',
       nameKey: 'modules.headquarters',
       icon: 'landmark',
-      sortOrder: 8,
+      sortOrder: 6,
     },
   });
 
@@ -277,13 +277,13 @@ async function main() {
     update: {
       nameKey: 'modules.participations',
       icon: 'heart-handshake',
-      sortOrder: 8,
+      sortOrder: 7,
     },
     create: {
       code: 'participations',
       nameKey: 'modules.participations',
       icon: 'heart-handshake',
-      sortOrder: 8,
+      sortOrder: 7,
     },
   });
 
@@ -292,24 +292,24 @@ async function main() {
     update: {
       nameKey: 'modules.logistics',
       icon: 'package',
-      sortOrder: 9,
+      sortOrder: 8,
     },
     create: {
       code: 'logistics',
       nameKey: 'modules.logistics',
       icon: 'package',
-      sortOrder: 9,
+      sortOrder: 8,
     },
   });
 
   const users = await prisma.navModule.upsert({
     where: { code: 'users' },
-    update: {},
+    update: { sortOrder: 16 },
     create: {
       code: 'users',
       nameKey: 'modules.users',
       icon: 'user-cog',
-      sortOrder: 10,
+      sortOrder: 16,
     },
   });
 
@@ -318,13 +318,13 @@ async function main() {
     update: {
       nameKey: 'modules.licenses',
       icon: 'stamp',
-      sortOrder: 11,
+      sortOrder: 17,
     },
     create: {
       code: 'licenses',
       nameKey: 'modules.licenses',
       icon: 'stamp',
-      sortOrder: 11,
+      sortOrder: 17,
     },
   });
 
@@ -333,13 +333,13 @@ async function main() {
     update: {
       nameKey: 'modules.evaluations',
       icon: 'clipboard-list',
-      sortOrder: 12,
+      sortOrder: 9,
     },
     create: {
       code: 'evaluations',
       nameKey: 'modules.evaluations',
       icon: 'clipboard-list',
-      sortOrder: 12,
+      sortOrder: 9,
     },
   });
 
@@ -348,28 +348,28 @@ async function main() {
     update: {
       nameKey: 'modules.honoraryService',
       icon: 'hand-heart',
-      sortOrder: 13,
+      sortOrder: 10,
     },
     create: {
       code: 'honorary-service',
       nameKey: 'modules.honoraryService',
       icon: 'hand-heart',
-      sortOrder: 13,
+      sortOrder: 10,
     },
   });
 
-  const honoraryServants = await prisma.navModule.upsert({
-    where: { code: 'honorary-servants' },
+  const healthcare = await prisma.navModule.upsert({
+    where: { code: 'healthcare' },
     update: {
-      nameKey: 'modules.honoraryServants',
-      icon: 'hand-heart',
-      sortOrder: 14,
+      nameKey: 'modules.healthcare',
+      icon: 'heart-pulse',
+      sortOrder: 11,
     },
     create: {
-      code: 'honorary-servants',
-      nameKey: 'modules.honoraryServants',
-      icon: 'hand-heart',
-      sortOrder: 14,
+      code: 'healthcare',
+      nameKey: 'modules.healthcare',
+      icon: 'heart-pulse',
+      sortOrder: 11,
     },
   });
 
@@ -378,13 +378,13 @@ async function main() {
     update: {
       nameKey: 'modules.systemManagement',
       icon: 'settings',
-      sortOrder: 15,
+      sortOrder: 18,
     },
     create: {
       code: 'system-management',
       nameKey: 'modules.systemManagement',
       icon: 'settings',
-      sortOrder: 15,
+      sortOrder: 18,
     },
   });
 
@@ -1063,27 +1063,67 @@ async function main() {
     },
     {
       code: 'reservations.translator',
-      moduleId: honoraryServants.id,
+      moduleId: honoraryService.id,
       nameKey: 'menus.translatorReservations',
       path: '/translator-reservations',
       icon: 'languages',
-      sortOrder: 0,
+      sortOrder: 5,
     },
     {
       code: 'honorary-servants.list',
-      moduleId: honoraryServants.id,
+      moduleId: honoraryService.id,
       nameKey: 'menus.honoraryServants',
       path: '/honorary-servants',
       icon: 'hand-heart',
-      sortOrder: 1,
+      sortOrder: 3,
     },
     {
       code: 'honorary-servants.service-types',
-      moduleId: honoraryServants.id,
+      moduleId: honoraryService.id,
       nameKey: 'menus.honoraryServiceTypes',
       path: '/honorary-service-types',
       icon: 'heart-handshake',
+      sortOrder: 4,
+    },
+    {
+      code: 'healthcare.bases',
+      moduleId: healthcare.id,
+      nameKey: 'menus.treatmentBases',
+      path: '/healthcare/bases',
+      icon: 'hospital',
+      sortOrder: 1,
+    },
+    {
+      code: 'healthcare.servants',
+      moduleId: healthcare.id,
+      nameKey: 'menus.healthServants',
+      path: '/healthcare/servants',
+      icon: 'stethoscope',
       sortOrder: 2,
+    },
+    {
+      code: 'healthcare.services',
+      moduleId: healthcare.id,
+      nameKey: 'menus.medicalServices',
+      path: '/healthcare/services',
+      icon: 'heart-pulse',
+      sortOrder: 3,
+    },
+    {
+      code: 'healthcare.visits',
+      moduleId: healthcare.id,
+      nameKey: 'menus.visitManagement',
+      path: '/healthcare/visits',
+      icon: 'calendar-range',
+      sortOrder: 4,
+    },
+    {
+      code: 'healthcare.warehouse',
+      moduleId: healthcare.id,
+      nameKey: 'menus.pharmacyWarehouse',
+      path: '/healthcare/warehouse',
+      icon: 'pill',
+      sortOrder: 5,
     },
     {
       code: 'participations.home',
@@ -1198,6 +1238,10 @@ async function main() {
     });
     menuRecords.push(record);
   }
+
+  await prisma.navModule.deleteMany({
+    where: { code: 'honorary-servants', menus: { none: {} } },
+  });
 
   for (const leftover of await prisma.menu.findMany({
     where: {
