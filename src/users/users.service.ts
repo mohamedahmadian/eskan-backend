@@ -2143,6 +2143,98 @@ export class UsersService {
     return { status: 'registered' as const, locale };
   }
 
+  /**
+   * حساب معرفی‌کنندهٔ عمومی اسکان.
+   * اگر شماره تازه باشد، نام کاربری و رمز عبور همان شماره تلفن است.
+   */
+  async ensurePublicIntroducer(input: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+  }) {
+    const phone = normalizeMobile(input.phone);
+    if (!/^09\d{9}$/.test(phone)) {
+      throw new BadRequestException('شماره تلفن همراه معتبر نیست');
+    }
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      throw new BadRequestException('نام و نام خانوادگی را وارد کنید');
+    }
+
+    const existing = await this.prisma.user.findUnique({
+      where: { phone },
+      include: { userRoles: { include: { role: true } } },
+    });
+    if (existing) {
+      if (existing.status !== UserStatus.ACTIVE) {
+        throw new BadRequestException('این شماره تلفن متعلق به حساب غیرفعال است');
+      }
+      await this.ensureRole(existing.id, 'PILGRIM');
+      const codes = new Set(existing.userRoles.map((item) => item.role.code));
+      codes.add('PILGRIM');
+      const userRoles = [...codes].map((code) => ({ role: { code } }));
+      const loginWithPhone =
+        existing.username === phone &&
+        (await bcrypt.compare(phone, existing.passwordHash));
+      return {
+        id: existing.id,
+        phone,
+        loginWithPhone,
+        userRoles,
+      };
+    }
+
+    const usernameOwner = await this.prisma.user.findUnique({
+      where: { username: phone },
+      select: { id: true },
+    });
+    if (usernameOwner) {
+      throw new ConflictException(
+        'این شماره تلفن قبلاً به‌عنوان نام کاربری ثبت شده است',
+      );
+    }
+
+    const iran = await this.prisma.country.findFirst({
+      where: { iso2: 'IR' },
+      select: { id: true },
+    });
+    const role = await this.prisma.role.findUnique({
+      where: { code: 'PILGRIM' },
+      select: { id: true },
+    });
+    if (!role) {
+      throw new BadRequestException('نقش زائر تعریف نشده است');
+    }
+    const passwordHash = await bcrypt.hash(phone, 10);
+
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          username: phone,
+          passwordHash,
+          firstName,
+          lastName,
+          fullName: joinFullName(firstName, lastName),
+          phone,
+          locale: 'fa',
+          status: UserStatus.ACTIVE,
+          countryId: iran?.id,
+          userRoles: { create: { roleId: role.id } },
+        },
+        select: { id: true },
+      });
+      return {
+        id: user.id,
+        phone,
+        loginWithPhone: true,
+        userRoles: [{ role: { code: 'PILGRIM' } }],
+      };
+    } catch (error) {
+      this.rethrowUnique(error);
+    }
+  }
+
   /** اگر سرویس پیامک فعال باشد، مشخصات ورود برای زائر پیامک می‌شود. */
   private async sendRegisterWelcomeSms(input: {
     phone: string;
@@ -2523,6 +2615,9 @@ export class UsersService {
       }
     }
 
+    if (query.status) {
+      filters.push({ status: query.status });
+    }
     if (query.gender) {
       filters.push({ gender: query.gender });
     }

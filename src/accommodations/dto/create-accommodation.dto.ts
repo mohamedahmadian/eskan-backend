@@ -209,6 +209,19 @@ export class CreateAccommodationDto {
   toiletCount?: number | null;
 
   @IsOptional()
+  @Transform(({ value }) => toOptionalNumber(value))
+  @ValidateIf((_, value) => value != null)
+  @IsInt()
+  @Min(0)
+  classroomCount?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  schoolDistrictId?: string | null;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1300)

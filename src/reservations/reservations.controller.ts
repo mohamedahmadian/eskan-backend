@@ -30,6 +30,7 @@ import { CopyPreviousMembersDto } from './dto/copy-previous-members.dto';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { AssignReservationHonoraryDto } from './dto/assign-reservation-honorary.dto';
 import { FindReservationsQueryDto } from './dto/find-reservations-query.dto';
+import { CaravanHeadcountLimitQueryDto } from './dto/caravan-headcount-limit-query.dto';
 import { OpenReservationQueryDto } from './dto/open-reservation-query.dto';
 import { ImportReservationMembersDto } from './dto/import-reservation-members.dto';
 import { RejectReservationDto } from './dto/reject-reservation.dto';
@@ -124,6 +125,20 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.getDashboard(year, actor);
+  }
+
+  @Get('caravan-headcount-limit')
+  @Roles('AUTHENTICATED')
+  caravanHeadcountLimit(
+    @Query() query: CaravanHeadcountLimitQueryDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.reservations.getCaravanNewHeadcountLimit(
+      query.year,
+      query.caravanId,
+      query.excludeId,
+      actor,
+    );
   }
 
   @Get('permit-options')

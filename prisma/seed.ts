@@ -878,6 +878,14 @@ async function main() {
       sortOrder: 8,
     },
     {
+      code: 'accommodation.base-info',
+      moduleId: accommodation.id,
+      nameKey: 'menus.accommodationBaseInfo',
+      path: '/accommodation-base-info',
+      icon: 'database',
+      sortOrder: 9,
+    },
+    {
       code: 'logistics.suppliers',
       moduleId: logistics.id,
       nameKey: 'menus.suppliers',
@@ -1307,6 +1315,7 @@ async function main() {
     'honorary-service.apply',
     'honorary-service.history',
     'participations.home',
+    'accommodation.list',
     'accommodation.mine',
     'accommodation.report',
     'logistics.my-vouchers',
@@ -1317,14 +1326,6 @@ async function main() {
   const accommodationListMenu = menuRecords.find(
     (item) => item.code === 'accommodation.list',
   );
-  if (accommodationListMenu) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: accommodationManagerRole.id,
-        menuId: accommodationListMenu.id,
-      },
-    });
-  }
   for (const menu of menuRecords.filter((item) =>
     managerMenuCodes.has(item.code),
   )) {
@@ -1337,6 +1338,14 @@ async function main() {
       },
       update: {},
       create: { roleId: accommodationManagerRole.id, menuId: menu.id },
+    });
+  }
+  if (accommodationListMenu) {
+    await prisma.roleMenu.deleteMany({
+      where: {
+        menuId: accommodationListMenu.id,
+        roleId: { notIn: [adminRole.id, accommodationManagerRole.id] },
+      },
     });
   }
 

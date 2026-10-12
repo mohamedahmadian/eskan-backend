@@ -7,7 +7,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { isAccommodationManager, isAdmin } from '../auth/roles.util';
-import { localizedGeoName } from '../common/request-locale';
 import { SmsService } from '../sms/sms.service';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
@@ -31,6 +30,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { CreateAccommodationDto } from './dto/create-accommodation.dto';
+import { PublicIntroduceAccommodationDto } from './dto/public-introduce-accommodation.dto';
 import {
   FindAccommodationAssignmentsQueryDto,
   type AssignmentManagerFilter,
@@ -93,6 +93,7 @@ const accommodationInclude = {
       user: { select: contactUserSelect },
     },
   },
+  schoolDistrict: { select: { id: true, name: true } },
 } satisfies Prisma.AccommodationInclude;
 
 type Actor = {
@@ -350,6 +351,8 @@ export class AccommodationsService {
         parkingCapacity: true,
         bathroomCount: true,
         toiletCount: true,
+        classroomCount: true,
+        schoolDistrict: { select: { id: true, name: true } },
       },
     });
     if (!item) {
@@ -396,16 +399,20 @@ export class AccommodationsService {
       assignedFemaleCapacity: 0,
     });
     const geo = await this.resolveGeo(dto);
+    await this.applySchoolFields(dto, dto.type);
     const admin = isAdmin(actor);
-    if (!admin) {
+    const introducing = Boolean(options?.introducedById);
+    if (!admin && !introducing) {
       await this.users.ensureRole(actor.id, 'ACCOMMODATION_MANAGER');
     }
     const managerIds = admin
       ? [...new Set(dto.managerUserIds ?? [])]
-      : [actor.id];
+      : introducing
+        ? []
+        : [actor.id];
     const wantsPrimary = admin
       ? Boolean(dto.primaryManagerUserId)
-      : dto.isPrimary !== false;
+      : !introducing && dto.isPrimary !== false;
 
     const created = await this.prisma.$transaction(async (tx) => {
       const row = await tx.accommodation.create({
@@ -425,7 +432,7 @@ export class AccommodationsService {
             ? actor.id
             : null,
         actorId: actor.id,
-        forcePrimaryIfFirst: !admin,
+        forcePrimaryIfFirst: !admin && !introducing,
         year: dto.year,
         maleCapacity: dto.maleCapacity ?? 0,
         femaleCapacity: dto.femaleCapacity ?? 0,
@@ -437,7 +444,7 @@ export class AccommodationsService {
       await this.syncContacts(created.id, dto.contacts);
     }
 
-    if (!admin) {
+    if (!admin && !introducing) {
       await this.applyYearContacts(
         created.id,
         currentJalaliYear(),
@@ -467,14 +474,39 @@ export class AccommodationsService {
     return created;
   }
 
+  async introducePublic(dto: PublicIntroduceAccommodationDto) {
+    const {
+      introducerFirstName,
+      introducerLastName,
+      introducerPhone,
+      ...accommodation
+    } = dto;
+    const account = await this.users.ensurePublicIntroducer({
+      firstName: introducerFirstName,
+      lastName: introducerLastName,
+      phone: introducerPhone,
+    });
+    const actor = { id: account.id, userRoles: account.userRoles };
+    const created = await this.create(
+      {
+        ...accommodation,
+        status: AccommodationStatus.INACTIVE,
+        yearContactMode: accommodation.yearContactMode ?? 'fromAccommodation',
+      },
+      actor,
+      { introducedById: account.id },
+    );
+    await this.notifyPublicIntroduction(
+      created,
+      account.id,
+      account.phone,
+      account.loginWithPhone,
+    );
+    return { ...created, loginWithPhone: account.loginWithPhone };
+  }
+
   private async notifyIntroduction(
-    accommodation: {
-      name: string;
-      address: string | null;
-      maleCapacity: number;
-      femaleCapacity: number;
-      city: { nameFa: string; nameEn: string | null } | null;
-    },
+    accommodation: { name: string },
     actorId: string,
   ) {
     const user = await this.prisma.user.findUnique({
@@ -488,19 +520,43 @@ export class AccommodationsService {
       );
       return;
     }
-    const capacity = introductionCapacityLine(
-      accommodation.maleCapacity,
-      accommodation.femaleCapacity,
-    );
     const body = [
-      'اطلاعات اسکان شما با موفقیت در سامانه ثبت شد',
-      `نام اسکان: ${accommodation.name}`,
-      `شهر: ${accommodation.city ? localizedGeoName(accommodation.city) : '—'}`,
-      `آدرس: ${accommodation.address?.trim() || '—'}`,
-      ...(capacity ? [`ظرفیت: ${capacity}`] : []),
+      'کاربر گرامی',
+      'اطلاعات اسکان شما با موفقیت در سامانه ثبت شد. اطلاعات این اسکان توسط واحد اسکان ستاد جمعیت بررسی و نتیجه به اطلاع شما رسانده خواهد شد.',
     ].join('\n');
     try {
       await this.sms.send({ phone, body, sentById: actorId });
+    } catch (error) {
+      this.logger.warn(
+        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private async notifyPublicIntroduction(
+    accommodation: { name: string },
+    actorId: string,
+    phone: string,
+    loginWithPhone: boolean,
+  ) {
+    const lines = [
+      'کاربر گرامی',
+      'اطلاعات اسکان معرفی شده توسط شما در سامانه با موفقیت ثبت گردید.',
+      'واحد اسکان ستاد جمعیت به زودی این پرونده را بررسی و نتیجه را به اطلاع جنابعالی می‌رساند.',
+    ];
+    if (loginWithPhone) {
+      lines.push(
+        'ضمناً می‌توانید از شماره تلفن خود به عنوان نام کاربری و رمز عبور جهت ورود به سامانه استفاده نمایید و نتیجه درخواست خود را مشاهده نمایید.',
+      );
+    } else {
+      lines.push(
+        'برای مشاهده نتیجه درخواست، با حساب کاربری خود وارد سامانه شوید.',
+      );
+    }
+    try {
+      await this.sms.send({ phone, body: lines.join('\n'), sentById: actorId });
     } catch (error) {
       this.logger.warn(
         `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: ${
@@ -528,6 +584,7 @@ export class AccommodationsService {
         dto.provinceId === undefined ? current.provinceId : dto.provinceId,
       cityId: dto.cityId === undefined ? current.cityId : dto.cityId,
     });
+    await this.applySchoolFields(dto, dto.type ?? current.type);
     const admin = isAdmin(actor);
 
     await this.prisma.$transaction(async (tx) => {
@@ -1490,11 +1547,20 @@ export class AccommodationsService {
     if (query.genderType) {
       filters.push({ genderType: query.genderType });
     }
+    if (query.status) {
+      filters.push({ status: query.status });
+    }
+    if (query.introduced === true) {
+      filters.push({ introducedById: { not: null } });
+    }
     if (query.provinceId) {
       filters.push({ provinceId: query.provinceId });
     }
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
+    }
+    if (query.schoolDistrictId && (!query.type || query.type === 'SCHOOL')) {
+      filters.push({ type: 'SCHOOL', schoolDistrictId: query.schoolDistrictId });
     }
     if (query.year || query.managerUserId) {
       filters.push({
@@ -1713,6 +1779,25 @@ export class AccommodationsService {
     };
   }
 
+  private async applySchoolFields(
+    dto: CreateAccommodationDto | UpdateAccommodationDto,
+    type: AccommodationType,
+  ) {
+    if (type !== 'SCHOOL') {
+      dto.classroomCount = null;
+      dto.schoolDistrictId = null;
+      return;
+    }
+    if (!dto.schoolDistrictId) return;
+    const district = await this.prisma.schoolDistrict.findUnique({
+      where: { id: dto.schoolDistrictId },
+      select: { id: true },
+    });
+    if (!district) {
+      throw new BadRequestException('ناحیه انتخاب‌شده معتبر نیست');
+    }
+  }
+
   private toData(
     dto: CreateAccommodationDto | UpdateAccommodationDto,
     geo: { countryId: string | null; provinceId: string | null; cityId: string | null },
@@ -1761,6 +1846,8 @@ export class AccommodationsService {
     set('parkingCapacity', dto.parkingCapacity);
     set('bathroomCount', dto.bathroomCount);
     set('toiletCount', dto.toiletCount);
+    set('classroomCount', dto.classroomCount);
+    set('schoolDistrictId', dto.schoolDistrictId);
 
     if (!isUpdate) {
       return {
@@ -2159,6 +2246,8 @@ export class AccommodationsService {
         { header: 'ظرفیت پارکینگ', key: 'parkingCapacity', width: 16 },
         { header: 'تعداد حمام', key: 'bathroomCount', width: 12 },
         { header: 'تعداد سرویس بهداشتی', key: 'toiletCount', width: 18 },
+        { header: 'تعداد کلاس', key: 'classroomCount', width: 14 },
+        { header: 'ناحیه', key: 'schoolDistrict', width: 20 },
         { header: 'مدیران', key: 'managers', width: 28 },
         { header: 'توضیحات', key: 'description', width: 32 },
       ],
@@ -2189,6 +2278,8 @@ export class AccommodationsService {
         parkingCapacity: item.parkingCapacity,
         bathroomCount: item.bathroomCount,
         toiletCount: item.toiletCount,
+        classroomCount: item.type === 'SCHOOL' ? item.classroomCount : '',
+        schoolDistrict: item.type === 'SCHOOL' ? (item.schoolDistrict?.name ?? '') : '',
         managers: item.managers
           .map((manager) => {
             const primary = manager.isPrimary ? ' (اصلی)' : '';
@@ -2245,13 +2336,3 @@ const managementTypeLabels: Record<ManagementType, string> = {
   NON_SELF_SUFFICIENT: 'غیرخودکفا',
 };
 
-function toPersianDigits(value: string) {
-  return value.replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)] ?? digit);
-}
-
-function introductionCapacityLine(male: number, female: number) {
-  const parts: string[] = [];
-  if (male > 0) parts.push(`${toPersianDigits(String(male))} تا مرد`);
-  if (female > 0) parts.push(`${toPersianDigits(String(female))} تا خانم`);
-  return parts.join(' و ');
-}

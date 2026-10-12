@@ -121,6 +121,11 @@ export class UpdateReceptionSettingsDto {
   @Min(1)
   caravanMaxPerNationalId: number;
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  caravanNewMaxHeadcount: number;
+
   @IsBoolean()
   caravanCreateInReception: boolean;
 

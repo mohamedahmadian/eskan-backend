@@ -19,6 +19,7 @@ import {
   parseIsoDate,
   parseOptionalIsoDate,
 } from '../common/iso-date';
+import { lateSafarYears, stayOverlapsLateSafar } from '../common/hijri';
 import { currentJalaliYear } from '../common/jalali-year';
 import { toLatinDigits } from '../common/national-id';
 import {
@@ -106,6 +107,7 @@ import {
   CARAVAN_CONTACT_ROLES,
   IN_PROGRESS_FILTER,
   IN_PROGRESS_STATUSES,
+  INACTIVE_RESERVATION_STATUSES,
   canAdjustApprovedCapacity,
   companionEditStatuses,
   contactEditStatuses,
@@ -325,6 +327,7 @@ const emptySettings = (year: number) => ({
   caravanAutoApprove: false,
   caravanAutoApproveLicenses: false,
   caravanMaxPerNationalId: 1,
+  caravanNewMaxHeadcount: 20,
   caravanCreateInReception: false,
   caravanPlacementMode: PlacementMode.MANUAL,
   caravanIntro: '',
@@ -415,6 +418,7 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     caravanAutoApprove: row.caravanAutoApprove,
     caravanAutoApproveLicenses: row.caravanAutoApproveLicenses,
     caravanMaxPerNationalId: row.caravanMaxPerNationalId ?? 1,
+    caravanNewMaxHeadcount: row.caravanNewMaxHeadcount ?? 20,
     caravanCreateInReception: row.caravanCreateInReception ?? false,
     caravanPlacementMode: row.caravanPlacementMode,
     caravanIntro: row.caravanIntro ?? '',
@@ -740,6 +744,13 @@ export class ReservationsService {
     const femaleCount = dto.femaleCount ?? 0;
     this.assertDraftOrFullCounts(asDraft, maleCount, femaleCount);
     this.assertGroupSize(dto.type, maleCount, femaleCount);
+    await this.assertCaravanNewHeadcount(this.prisma, {
+      type: dto.type,
+      year: dto.year,
+      caravanId: dto.caravanId,
+      maleCount,
+      femaleCount,
+    });
     const settings = await this.requireEnabledSettings(dto.year, dto.type);
     this.assertDraftOrFullTripDates(
       asDraft,
@@ -801,6 +812,12 @@ export class ReservationsService {
 
     const result = await this.withCodeConflictRetry(() =>
       this.prisma.$transaction(async (tx) => {
+        await this.assertSingleLateSafarReservation(
+          tx,
+          createdById,
+          dto.stayStartDate,
+          dto.stayEndDate,
+        );
         await this.assertNoOpenReservation(tx, createdById, dto.year);
         const { code, codeSeq } = await this.nextReservationCode(tx, dto.year);
         const created = await tx.reservation.create({
@@ -929,6 +946,14 @@ export class ReservationsService {
       pendingReview || draftSoft ? requestedFemaleCount : femaleCount;
     this.assertDraftOrFullCounts(draftSoft, validateMale, validateFemale);
     this.assertGroupSize(type, validateMale, validateFemale);
+    await this.assertCaravanNewHeadcount(this.prisma, {
+      type,
+      year,
+      caravanId: dto.caravanId !== undefined ? dto.caravanId : current.caravanId,
+      excludeReservationId: current.id,
+      maleCount: validateMale,
+      femaleCount: validateFemale,
+    });
     this.assertCountsCoverMembers(current, validateMale, validateFemale);
 
     const walkingStart =
@@ -959,6 +984,13 @@ export class ReservationsService {
       arrivalPeriod,
       toDateOnly(occasionSettings?.imamRezaMartyrdomDate),
       toDateOnly(occasionSettings?.prophetDemiseDate),
+    );
+    await this.assertSingleLateSafarReservation(
+      this.prisma,
+      current.createdById,
+      stayStart,
+      stayEnd,
+      current.id,
     );
 
     let placementMode: PlacementMode | undefined;
@@ -1180,6 +1212,14 @@ export class ReservationsService {
       }
 
       const counts = this.resolveApprovedCounts(current, dto);
+      await this.assertCaravanNewHeadcount(tx, {
+        type: current.type,
+        year: current.year,
+        caravanId: current.caravanId,
+        excludeReservationId: current.id,
+        maleCount: counts.maleCount,
+        femaleCount: counts.femaleCount,
+      });
       const settings = await this.requireSettings(current.year, tx);
       await assertCapacity(
         tx,
@@ -1262,6 +1302,14 @@ export class ReservationsService {
       }
 
       const counts = this.resolveApprovedCounts(current, dto);
+      await this.assertCaravanNewHeadcount(tx, {
+        type: current.type,
+        year: current.year,
+        caravanId: current.caravanId,
+        excludeReservationId: current.id,
+        maleCount: counts.maleCount,
+        femaleCount: counts.femaleCount,
+      });
       const capacityChanged =
         counts.maleCount !== current.maleCount ||
         counts.femaleCount !== current.femaleCount;
@@ -3589,6 +3637,44 @@ export class ReservationsService {
     return firstStage?.walkingStation?.cityId ?? null;
   }
 
+  private async assertSingleLateSafarReservation(
+    tx: Tx | PrismaService,
+    userId: string,
+    stayStart?: string | null,
+    stayEnd?: string | null,
+    excludeId?: string,
+  ) {
+    if (!stayStart || !stayEnd || !stayOverlapsLateSafar(stayStart, stayEnd)) {
+      return;
+    }
+    const years = lateSafarYears(stayStart, stayEnd);
+    const others = await tx.reservation.findMany({
+      where: {
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        status: { notIn: INACTIVE_RESERVATION_STATUSES },
+        stayStartDate: { not: null },
+        stayEndDate: { not: null },
+        OR: [
+          { createdById: userId },
+          { caravanManagerId: userId },
+          { members: { some: { userId } } },
+        ],
+      },
+      select: { code: true, stayStartDate: true, stayEndDate: true },
+    });
+    for (const row of others) {
+      const otherStart = toDateOnly(row.stayStartDate);
+      const otherEnd = toDateOnly(row.stayEndDate);
+      if (!otherStart || !otherEnd) continue;
+      const otherYears = lateSafarYears(otherStart, otherEnd);
+      if ([...years].some((year) => otherYears.has(year))) {
+        throw new BadRequestException(
+          `برای ایام ۲۰ تا ۳۰ صفر فقط یک پرونده زیارتی می‌توان تشکیل داد. پرونده ${row.code} در این بازه ثبت شده است`,
+        );
+      }
+    }
+  }
+
   private async assertNoOpenReservation(tx: Tx, userId: string, year: number) {
     const open = await tx.reservation.findFirst({
       where: openReservationWhere(userId, year),
@@ -3728,6 +3814,13 @@ export class ReservationsService {
       true,
       toDateOnly(occasionSettings?.imamRezaMartyrdomDate),
       toDateOnly(occasionSettings?.prophetDemiseDate),
+    );
+    await this.assertSingleLateSafarReservation(
+      tx,
+      current.createdById,
+      toDateOnly(current.stayStartDate),
+      toDateOnly(current.stayEndDate),
+      current.id,
     );
     if (!current.walkingRouteId) {
       throw new BadRequestException('مسیر پیاده‌روی را انتخاب کنید');
@@ -4468,6 +4561,109 @@ export class ReservationsService {
     }
   }
 
+  async getCaravanNewHeadcountLimit(
+    year: number,
+    caravanId: string,
+    excludeId: string | undefined,
+    actor: Actor,
+  ) {
+    this.assertYear(year);
+    await this.assertCanReadCaravanHeadcountLimit(caravanId, excludeId, actor);
+    const applies = await this.caravanHeadcountLimitApplies(
+      this.prisma,
+      caravanId,
+      excludeId,
+    );
+    if (!applies) return { applies: false, max: null };
+    const max = await this.caravanNewMaxHeadcount(this.prisma, year);
+    return { applies: true, max };
+  }
+
+  private async assertCanReadCaravanHeadcountLimit(
+    caravanId: string,
+    excludeId: string | undefined,
+    actor: Actor,
+  ) {
+    const caravan = await this.prisma.caravan.findUnique({
+      where: { id: caravanId },
+      select: { id: true, managerUserId: true },
+    });
+    if (!caravan) {
+      throw new NotFoundException('کاروان یافت نشد');
+    }
+    if (isAdmin(actor) || caravan.managerUserId === actor.id) return;
+    const contact = await this.prisma.caravanContact.findFirst({
+      where: { caravanId, userId: actor.id },
+      select: { id: true },
+    });
+    if (contact) return;
+    if (excludeId) {
+      const row = await this.prisma.reservation.findUnique({
+        where: { id: excludeId },
+        select: { createdById: true, caravanManagerId: true, caravanId: true },
+      });
+      if (
+        row &&
+        row.caravanId === caravanId &&
+        (row.createdById === actor.id || row.caravanManagerId === actor.id)
+      ) {
+        return;
+      }
+    }
+    throw new ForbiddenException('دسترسی به این کاروان مجاز نیست');
+  }
+
+  private async caravanHeadcountLimitApplies(
+    db: Tx | PrismaService,
+    caravanId: string,
+    excludeReservationId?: string,
+  ) {
+    const prior = await db.reservation.count({
+      where: {
+        caravanId,
+        type: ReservationType.CARAVAN,
+        ...(excludeReservationId
+          ? { id: { not: excludeReservationId } }
+          : {}),
+      },
+    });
+    return prior === 0;
+  }
+
+  private async caravanNewMaxHeadcount(db: Tx | PrismaService, year: number) {
+    const settings = await db.receptionSettings.findUnique({
+      where: { year },
+      select: { caravanNewMaxHeadcount: true },
+    });
+    return settings?.caravanNewMaxHeadcount ?? 20;
+  }
+
+  private async assertCaravanNewHeadcount(
+    db: Tx | PrismaService,
+    params: {
+      type: ReservationType;
+      year: number;
+      caravanId?: string | null;
+      excludeReservationId?: string;
+      maleCount: number;
+      femaleCount: number;
+    },
+  ) {
+    if (params.type !== ReservationType.CARAVAN || !params.caravanId) return;
+    const applies = await this.caravanHeadcountLimitApplies(
+      db,
+      params.caravanId,
+      params.excludeReservationId,
+    );
+    if (!applies) return;
+    const max = await this.caravanNewMaxHeadcount(db, params.year);
+    if (params.maleCount + params.femaleCount > max) {
+      throw new BadRequestException(
+        `چون این کاروان تازه تأسیس است، ظرفیت پرونده حداکثر ${max} نفر است. در سال‌های بعد این محدودیت برداشته می‌شود.`,
+      );
+    }
+  }
+
   private assertTripDates(
     walkingStart?: string | null,
     stayStart?: string | null,
@@ -4497,6 +4693,15 @@ export class ReservationsService {
     if (stayStart && stayEnd && stayEnd < stayStart) {
       throw new BadRequestException(
         'تاریخ پایان اقامت باید مساوی یا بعد از تاریخ رسیدن به مشهد باشد',
+      );
+    }
+    if (
+      imamRezaMartyrdomDate &&
+      stayStart &&
+      stayStart > imamRezaMartyrdomDate
+    ) {
+      throw new BadRequestException(
+        'تاریخ رسیدن به مشهد نمی‌تواند بعد از تاریخ شهادت امام رضا (ع) باشد',
       );
     }
     if (
@@ -4730,17 +4935,27 @@ export class ReservationsService {
     });
   }
 
-  private memberCountsMatch(current: ReservationRecord) {
-    if (current.type === ReservationType.INDIVIDUAL) {
-      return current.members.length === current.totalCount;
-    }
+  private memberHeadcount(current: ReservationRecord) {
     const male = current.members.filter(
       (item) => item.user.gender === UserGender.MALE,
     ).length;
     const female = current.members.filter(
       (item) => item.user.gender === UserGender.FEMALE,
     ).length;
-    return male === current.maleCount && female === current.femaleCount;
+    return { male, female };
+  }
+
+  private memberCountsMatch(current: ReservationRecord) {
+    if (current.type === ReservationType.INDIVIDUAL) {
+      return current.members.length === current.totalCount;
+    }
+    const { male, female } = this.memberHeadcount(current);
+    return (
+      current.members.length >= 1 &&
+      male + female === current.members.length &&
+      male <= current.maleCount &&
+      female <= current.femaleCount
+    );
   }
 
   private async maybeFinishAfterInsurance(
@@ -4804,9 +5019,13 @@ export class ReservationsService {
           : 'سرگروه باید در فهرست اعضای گروه باشد',
       );
     }
-    if (!this.memberCountsMatch(current)) {
+    if (current.members.length < 1) {
+      throw new BadRequestException('حداقل یک زائر باید ثبت شود');
+    }
+    const { male, female } = this.memberHeadcount(current);
+    if (male > current.maleCount || female > current.femaleCount) {
       throw new BadRequestException(
-        'تعداد اعضای مرد و زن با تعداد اعلام‌شده پرونده سازگار نیست',
+        'تعداد آقایان و خانم‌ها نمی‌تواند بیشتر از تعداد اعلام‌شده پرونده باشد',
       );
     }
   }

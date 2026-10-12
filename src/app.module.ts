@@ -11,6 +11,7 @@ import { ImagesModule } from './images/images.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SmsModule } from './sms/sms.module';
 import { AccommodationsModule } from './accommodations/accommodations.module';
+import { SchoolDistrictsModule } from './school-districts/school-districts.module';
 import { UsersModule } from './users/users.module';
 import { FoodSuppliersModule } from './food-suppliers/food-suppliers.module';
 import { BenefactorsModule } from './benefactors/benefactors.module';
@@ -61,6 +62,7 @@ import { DataManagementModule } from './data-management/data-management.module';
     GroupsModule,
     SmsModule,
     AccommodationsModule,
+    SchoolDistrictsModule,
     UsersModule,
     WalkingRoutesModule,
     WalkingStationsModule,

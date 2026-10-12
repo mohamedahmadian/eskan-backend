@@ -821,6 +821,9 @@ model ReceptionSettings {
   caravanAutoApproveLicenses  Boolean       @default(false)
   /// Max caravans one national ID may define in this reception year.
   caravanMaxPerNationalId     Int           @default(1)
+  /// Headcount cap on the first pilgrimage file of a newly established caravan.
+  /// Caravans that already have a pilgrimage file are not capped.
+  caravanNewMaxHeadcount      Int           @default(20)
   /// When true, the reception wizard shows «create a new caravan».
   caravanCreateInReception    Boolean       @default(false)
   caravanPlacementMode        PlacementMode @default(MANUAL)
@@ -1084,6 +1087,18 @@ enum ManagementType {
   NON_SELF_SUFFICIENT
 }
 
+model SchoolDistrict {
+  id             String          @id @default(uuid())
+  name           String
+  description    String?
+  accommodations Accommodation[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([name])
+  @@map("school_districts")
+}
+
 enum AccommodationContactRole {
   DEPUTY
   RECEPTION
@@ -1132,6 +1147,9 @@ model Accommodation {
   parkingCapacity       Int?
   bathroomCount         Int?
   toiletCount           Int?
+  classroomCount        Int?
+  schoolDistrictId      String?
+  schoolDistrict        SchoolDistrict?      @relation(fields: [schoolDistrictId], references: [id], onDelete: Restrict)
   introducedById        String?
   introducedBy          User?                @relation("AccommodationIntroducer", fields: [introducedById], references: [id], onDelete: SetNull)
   managers              AccommodationManager[]
@@ -1148,6 +1166,7 @@ model Accommodation {
   @@index([managementType, genderType])
   @@index([cityId])
   @@index([introducedById])
+  @@index([schoolDistrictId])
   @@map("accommodations")
 }
 

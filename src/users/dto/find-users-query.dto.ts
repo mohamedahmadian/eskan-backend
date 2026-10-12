@@ -10,7 +10,7 @@ import {
 } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
-import { UserGender } from '../../generated/prisma/client';
+import { UserGender, UserStatus } from '../../generated/prisma/client';
 
 export const userSortFields = [
   'fullName',
@@ -74,6 +74,11 @@ export class FindUsersQueryDto extends PaginationQueryDto {
   @ValidateIf((_, value) => value !== CITY_ID_NONE)
   @IsUUID()
   cityId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsEnum(UserStatus)
+  status?: UserStatus;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))

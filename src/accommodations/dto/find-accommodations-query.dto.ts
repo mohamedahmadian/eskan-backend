@@ -12,7 +12,12 @@ import {
 import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
 import { emptyToUndefined, toOptionalBoolean } from '../../common/dto-transform';
-import { AccommodationType, GenderType, ManagementType } from '../../generated/prisma/client';
+import {
+  AccommodationStatus,
+  AccommodationType,
+  GenderType,
+  ManagementType,
+} from '../../generated/prisma/client';
 
 export const accommodationSortFields = [
   'name',
@@ -41,6 +46,17 @@ export class FindAccommodationsQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
+  @IsEnum(AccommodationStatus)
+  status?: AccommodationStatus;
+
+  /** Only accommodations registered through the introduction flow. */
+  @IsOptional()
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  introduced?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
   provinceId?: string;
 
@@ -48,6 +64,11 @@ export class FindAccommodationsQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => emptyToUndefined(value))
   @IsUUID()
   cityId?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToUndefined(value))
+  @IsUUID()
+  schoolDistrictId?: string;
 
   @IsOptional()
   @Transform(({ value }) => {

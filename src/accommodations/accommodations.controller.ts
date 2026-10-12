@@ -51,7 +51,6 @@ export class AccommodationsController {
   constructor(private readonly accommodations: AccommodationsService) {}
 
   @Get()
-  @Roles(...mineRoles)
   findAll(
     @Query() query: FindAccommodationsQueryDto,
     @CurrentUser() actor: RequestUser,
