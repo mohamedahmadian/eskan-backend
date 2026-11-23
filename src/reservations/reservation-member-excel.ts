@@ -1,5 +1,6 @@
-import * as ExcelJS from 'exceljs';
+import type * as ExcelJS from 'exceljs';
 import { BadRequestException } from '@nestjs/common';
+import { loadExcelJS } from '../common/lazy-modules';
 import {
   isValidIranianNationalId,
   normalizeNationalId,
@@ -340,6 +341,7 @@ function parseRow(
 export async function parseReservationMemberExcel(
   buffer: Buffer,
 ): Promise<ParsedMemberImportRow[]> {
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as never);
   const sheet = workbook.worksheets[0];

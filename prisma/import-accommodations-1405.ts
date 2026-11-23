@@ -4,7 +4,6 @@ import * as bcrypt from 'bcrypt';
 import * as ExcelJS from 'exceljs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
-  AccommodationType,
   GenderType,
   ManagementType,
   PrismaClient,
@@ -32,7 +31,7 @@ type ManagerDraft = {
 
 type VenueDraft = {
   name: string;
-  type: AccommodationType;
+  typeCode: string;
   genderType: GenderType;
   managementType: ManagementType;
   maleCapacity: number;
@@ -72,18 +71,21 @@ function normalizeName(value: string) {
     .trim();
 }
 
-function inferType(name: string): AccommodationType {
+function inferType(name: string): string {
   const compact = name.replace(/\s+/g, '');
-  if (compact.includes('مسجد')) return 'MOSQUE';
-  if (compact.includes('حسینیه')) return 'HUSSEINIEH';
-  if (compact.includes('سالن')) return 'HALL';
-  if (compact.includes('منزل')) return 'HOUSE';
+  if (compact.includes('مسجد')) return 'mosque';
+  if (compact.includes('حسینیه')) return 'husseinieh';
+  if (compact.includes('چادر')) return 'tent';
+  if (/درمان|بیمارستان|درمانگاه/.test(compact)) return 'medical';
+  if (/خوابگاه|مهمانسرا|مهمان‌سرا/.test(compact)) return 'lodging';
+  if (compact.includes('سالن')) return 'sports-hall';
+  if (compact.includes('منزل')) return 'lodging';
   if (
     /دبستان|دبیرستان|هنرستان|مدرسه|شاهد/.test(compact)
   ) {
-    return 'SCHOOL';
+    return 'school';
   }
-  return 'OTHER';
+  return 'other';
 }
 
 function parseGender(raw: string): GenderType | null {
@@ -233,7 +235,7 @@ function collectVenues(sheet: ExcelJS.Worksheet): VenueDraft[] {
     const key = name.replace(/\s+/g, '').toLowerCase();
     const current = byName.get(key) ?? {
       name,
-      type: inferType(name),
+      typeCode: inferType(name),
       genderType: gender ?? 'MIXED',
       managementType,
       maleCapacity: 0,
@@ -330,6 +332,10 @@ async function main() {
   if (!managerRoleId) throw new Error('نقش مدیر اسکان یافت نشد');
 
   const mashhad = await resolveMashhad();
+  const typeRows = await prisma.accommodationType.findMany({
+    select: { id: true, code: true },
+  });
+  const typeIdByCode = new Map(typeRows.map((item) => [item.code, item.id]));
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 8);
   const phones = venues.flatMap((venue) => venue.managers.map((item) => item.phone));
   const usersByPhone = await loadExistingUsers(phones);
@@ -357,9 +363,13 @@ async function main() {
     const key = normalizeName(venue.name).replace(/\s+/g, '').toLowerCase();
     let accommodationId = accommodationByName.get(key)?.id;
     const venuePhone = venue.managers[0]?.phone ?? null;
+    const typeId = typeIdByCode.get(venue.typeCode);
+    if (!typeId) {
+      throw new Error(`نوع اسکان یافت نشد: ${venue.typeCode}`);
+    }
     const data = {
       name: venue.name,
-      type: venue.type,
+      typeId,
       status: 'ACTIVE' as const,
       genderType: venue.genderType,
       managementType: venue.managementType,

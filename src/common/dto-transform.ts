@@ -34,6 +34,29 @@ export function toOptionalBoolean(value: unknown) {
   return undefined;
 }
 
+export function emptyArrayToNull(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value == null || value === '') return null;
+  if (Array.isArray(value) && value.length === 0) return null;
+  return value;
+}
+
+export function toOptionalNullableBoolean(value: unknown) {
+  if (value === '' || value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (value === true || value === 'true' || value === 1 || value === '1') {
+    return true;
+  }
+  if (value === false || value === 'false' || value === 0 || value === '0') {
+    return false;
+  }
+  return undefined;
+}
+
 export function toBoolean(value: unknown, fallback = false) {
   if (value === true || value === 'true' || value === 1 || value === '1') {
     return true;

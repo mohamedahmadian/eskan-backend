@@ -10,6 +10,11 @@ import { isAccommodationManager, isAdmin } from '../auth/roles.util';
 import { SmsService } from '../sms/sms.service';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
+import { localizedGeoName } from '../common/request-locale';
+import {
+  ACCOMMODATION_UNAVAILABLE_STATUSES,
+  isAccommodationUnavailable,
+} from '../common/accommodation-availability';
 import {
   containsInsensitive,
   paginatedResult,
@@ -18,12 +23,14 @@ import {
 } from '../common/pagination';
 import {
   Prisma,
+  AccommodationInspectionResult,
+  AccommodationInspectionStatus,
+  AccommodationOperationStatus,
   AccommodationStatus,
   AllocationStatus,
   ReservationType,
   UserGender,
   type AccommodationContactRole,
-  type AccommodationType,
   type GenderType,
   type ManagementType,
 } from '../generated/prisma/client';
@@ -43,9 +50,26 @@ import {
 } from './dto/set-accommodation-year-contacts.dto';
 import { TransferAccommodationsYearDto } from './dto/transfer-accommodations-year.dto';
 import { UpdateAccommodationDto } from './dto/update-accommodation.dto';
+import {
+  parseIsoDate,
+  parseOptionalIsoDate,
+  toIsoDateOnly,
+  todayIsoDateTehran,
+} from '../common/iso-date';
 import { resolveSortOrder } from '../common/sort-query';
 import { effectiveCapacity } from '../placements/placement-capacity';
 import type { AccommodationContactInputDto } from './dto/accommodation-contact-input.dto';
+import {
+  accommodationTypeDetailKeys,
+  accommodationTypeDetailKind,
+  isSchoolAccommodationType,
+  typeDetailImageKeys,
+  typeDetailKeysByKind,
+  typeDetailKeysToClear,
+} from './accommodation-type-details';
+
+const MAX_ACCOMMODATION_IMAGES = 12;
+const reviewerSelect = { id: true, username: true, fullName: true } as const;
 
 const geoSelect = { id: true, nameFa: true, nameEn: true };
 
@@ -94,6 +118,27 @@ const accommodationInclude = {
     },
   },
   schoolDistrict: { select: { id: true, name: true } },
+  schoolManagerUser: { select: { id: true, username: true, fullName: true } },
+  type: {
+    select: {
+      id: true,
+      code: true,
+      nameFa: true,
+      nameEn: true,
+      icon: true,
+      isActive: true,
+      sortOrder: true,
+    },
+  },
+  reviewer: { select: reviewerSelect },
+  images: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: { imageId: true, sortOrder: true },
+  },
+  evaluations: {
+    orderBy: [{ evaluatedAt: 'desc' as const }, { createdAt: 'desc' as const }],
+    include: { reviewer: { select: reviewerSelect } },
+  },
 } satisfies Prisma.AccommodationInclude;
 
 type Actor = {
@@ -178,7 +223,7 @@ export class AccommodationsService {
     const where = viewer
       ? this.andWhere(this.listWhere(query, actor, { unscoped: true }), {
           OR: [
-            { status: { not: AccommodationStatus.INACTIVE } },
+            { status: { notIn: ACCOMMODATION_UNAVAILABLE_STATUSES } },
             { managers: { some: { userId: actor.id } } },
           ],
         })
@@ -224,6 +269,7 @@ export class AccommodationsService {
     const [
       total,
       typeRows,
+      types,
       genderRows,
       managementRows,
       comboRows,
@@ -234,9 +280,21 @@ export class AccommodationsService {
     ] = await Promise.all([
       this.prisma.accommodation.count({ where: scope }),
       this.prisma.accommodation.groupBy({
-        by: ['type'],
+        by: ['typeId'],
         where: scope,
         _count: { _all: true },
+      }),
+      this.prisma.accommodationType.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { nameFa: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          nameFa: true,
+          nameEn: true,
+          icon: true,
+          isActive: true,
+          sortOrder: true,
+        },
       }),
       this.prisma.accommodation.groupBy({
         by: ['genderType'],
@@ -259,7 +317,7 @@ export class AccommodationsService {
       this.prisma.accommodation.count({ where: inactiveInYearWhere }),
     ]);
 
-    const typeCount = new Map(typeRows.map((row) => [row.type, row._count._all]));
+    const typeCount = new Map(typeRows.map((row) => [row.typeId, row._count._all]));
     const genderCount = new Map(
       genderRows.map((row) => [row.genderType, row._count._all]),
     );
@@ -284,9 +342,9 @@ export class AccommodationsService {
         active: activeInYear,
         inactive: inactiveInYear,
       },
-      byType: accommodationTypeOrder.map((type) => ({
+      byType: types.map((type) => ({
         type,
-        count: typeCount.get(type) ?? 0,
+        count: typeCount.get(type.id) ?? 0,
       })),
       byGenderType: genderTypeOrder.map((genderType) => ({
         genderType,
@@ -318,11 +376,20 @@ export class AccommodationsService {
 
   async findPublicOne(id: string) {
     const item = await this.prisma.accommodation.findFirst({
-      where: { id, status: { not: AccommodationStatus.INACTIVE } },
+      where: { id, status: { notIn: ACCOMMODATION_UNAVAILABLE_STATUSES } },
       select: {
         id: true,
         name: true,
-        type: true,
+        typeId: true,
+        type: {
+          select: {
+            id: true,
+            code: true,
+            nameFa: true,
+            nameEn: true,
+            icon: true,
+          },
+        },
         status: true,
         genderType: true,
         managementType: true,
@@ -353,6 +420,12 @@ export class AccommodationsService {
         toiletCount: true,
         classroomCount: true,
         schoolDistrict: { select: { id: true, name: true } },
+        ownerName: true,
+        ownerPhone: true,
+        images: {
+          orderBy: { sortOrder: 'asc' },
+          select: { imageId: true },
+        },
       },
     });
     if (!item) {
@@ -360,12 +433,17 @@ export class AccommodationsService {
     }
     const num = (value: Prisma.Decimal | null) =>
       value == null ? null : Number(value);
+    const { images, ...rest } = item;
+    const school = isSchoolAccommodationType(item.type);
     return {
-      ...item,
+      ...rest,
+      imageIds: images.map((image) => image.imageId),
       latitude: num(item.latitude),
       longitude: num(item.longitude),
       distanceToShrineKm: num(item.distanceToShrineKm),
       distanceToMashhadKm: num(item.distanceToMashhadKm),
+      classroomCount: school ? rest.classroomCount : null,
+      schoolDistrict: school ? rest.schoolDistrict : null,
     };
   }
 
@@ -380,7 +458,7 @@ export class AccommodationsService {
     if (this.canAccess(item, actor) || item.introducedById === actor.id) {
       return this.serialize(item);
     }
-    if (this.isDirectoryViewer(actor) && item.status !== AccommodationStatus.INACTIVE) {
+    if (this.isDirectoryViewer(actor) && !isAccommodationUnavailable(item.status)) {
       return this.serializeForViewer(item);
     }
     throw new NotFoundException('اسکان یافت نشد');
@@ -399,7 +477,9 @@ export class AccommodationsService {
       assignedFemaleCapacity: 0,
     });
     const geo = await this.resolveGeo(dto);
-    await this.applySchoolFields(dto, dto.type);
+    const type = await this.resolveType(dto.typeId);
+    await this.applySchoolFields(dto, type);
+    await this.applyTypeSpecificFields(dto, type);
     const admin = isAdmin(actor);
     const introducing = Boolean(options?.introducedById);
     if (!admin && !introducing) {
@@ -413,13 +493,20 @@ export class AccommodationsService {
     const wantsPrimary = admin
       ? Boolean(dto.primaryManagerUserId)
       : !introducing && dto.isPrimary !== false;
+    await this.assertImages(dto.imageIds);
+    if (admin) {
+      await this.assertReviewer(dto.reviewerId);
+    }
 
     const created = await this.prisma.$transaction(async (tx) => {
       const row = await tx.accommodation.create({
         data: {
-          ...(this.toData(dto, geo) as Prisma.AccommodationUncheckedCreateInput),
+          ...(this.toData(dto, geo, false, admin) as Prisma.AccommodationUncheckedCreateInput),
           ...(options?.introducedById
-            ? { introducedById: options.introducedById }
+            ? {
+                introducedById: options.introducedById,
+                operationStatus: AccommodationOperationStatus.INACTIVE,
+              }
             : {}),
         },
       });
@@ -437,6 +524,15 @@ export class AccommodationsService {
         maleCapacity: dto.maleCapacity ?? 0,
         femaleCapacity: dto.femaleCapacity ?? 0,
       });
+      await this.syncImages(tx, row.id, dto.imageIds ?? []);
+      if (admin) {
+        await this.recordEvaluation(tx, row.id, dto, {
+          inspectionStatus: 'NOT_DONE',
+          inspectionResult: null,
+          reviewerId: null,
+          lastEvaluatedAt: null,
+        });
+      }
       return row;
     });
 
@@ -463,8 +559,8 @@ export class AccommodationsService {
     }
     const created = await this.create(
       {
-        ...dto,
-        status: AccommodationStatus.INACTIVE,
+        ...this.withoutAdminReviewFields(dto),
+        status: AccommodationStatus.PENDING_REVIEW,
         yearContactMode: dto.yearContactMode ?? 'fromAccommodation',
       },
       actor,
@@ -489,8 +585,8 @@ export class AccommodationsService {
     const actor = { id: account.id, userRoles: account.userRoles };
     const created = await this.create(
       {
-        ...accommodation,
-        status: AccommodationStatus.INACTIVE,
+        ...this.withoutAdminReviewFields(accommodation),
+        status: AccommodationStatus.PENDING_REVIEW,
         yearContactMode: accommodation.yearContactMode ?? 'fromAccommodation',
       },
       actor,
@@ -500,9 +596,32 @@ export class AccommodationsService {
       created,
       account.id,
       account.phone,
+      account.fullName,
       account.loginWithPhone,
     );
     return { ...created, loginWithPhone: account.loginWithPhone };
+  }
+
+  private introducerGreeting(fullName?: string | null) {
+    const name = fullName?.trim();
+    return name ? `${name} گرامی` : 'کاربر گرامی';
+  }
+
+  private introductionRegisteredBody(
+    greeting: string,
+    accommodationName: string,
+    extraLines: string[] = [],
+  ) {
+    return [
+      'با سلام و احترام',
+      greeting,
+      '',
+      `معرفی محل اسکان «${accommodationName}» با موفقیت در سامانه ثبت شد.`,
+      'کارشناسان واحد اسکان ستاد جمعیت درخواست شما را بررسی می‌کنند و نتیجه را از همین طریق به اطلاع جنابعالی می‌رسانند.',
+      ...extraLines,
+      '',
+      'از همراهی شما در خدمت به زائران حضرت امام رضا علیه‌السلام سپاسگزاریم.',
+    ].join('\n');
   }
 
   private async notifyIntroduction(
@@ -511,55 +630,175 @@ export class AccommodationsService {
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: actorId },
-      select: { phone: true },
+      select: { phone: true, fullName: true },
     });
-    const phone = user?.phone?.trim();
-    if (!phone) {
-      this.logger.warn(
-        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: کاربر شماره همراه ندارد`,
-      );
-      return;
-    }
-    const body = [
-      'کاربر گرامی',
-      'اطلاعات اسکان شما با موفقیت در سامانه ثبت شد. اطلاعات این اسکان توسط واحد اسکان ستاد جمعیت بررسی و نتیجه به اطلاع شما رسانده خواهد شد.',
-    ].join('\n');
-    try {
-      await this.sms.send({ phone, body, sentById: actorId });
-    } catch (error) {
-      this.logger.warn(
-        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+    await this.sendIntroducerSms({
+      phone: user?.phone,
+      body: this.introductionRegisteredBody(
+        this.introducerGreeting(user?.fullName),
+        accommodation.name,
+      ),
+      sentById: actorId,
+      accommodationName: accommodation.name,
+      logLabel: 'معرفی',
+    });
   }
 
   private async notifyPublicIntroduction(
     accommodation: { name: string },
     actorId: string,
     phone: string,
+    fullName: string | null | undefined,
     loginWithPhone: boolean,
   ) {
-    const lines = [
-      'کاربر گرامی',
-      'اطلاعات اسکان معرفی شده توسط شما در سامانه با موفقیت ثبت گردید.',
-      'واحد اسکان ستاد جمعیت به زودی این پرونده را بررسی و نتیجه را به اطلاع جنابعالی می‌رساند.',
-    ];
-    if (loginWithPhone) {
-      lines.push(
-        'ضمناً می‌توانید از شماره تلفن خود به عنوان نام کاربری و رمز عبور جهت ورود به سامانه استفاده نمایید و نتیجه درخواست خود را مشاهده نمایید.',
+    const extra = loginWithPhone
+      ? [
+          'ضمناً می‌توانید با شماره همراه خود به‌عنوان نام کاربری و رمز عبور وارد سامانه شوید و نتیجه درخواست را مشاهده کنید.',
+        ]
+      : ['برای مشاهده نتیجه درخواست، با حساب کاربری خود وارد سامانه شوید.'];
+    await this.sendIntroducerSms({
+      phone,
+      body: this.introductionRegisteredBody(
+        this.introducerGreeting(fullName),
+        accommodation.name,
+        extra,
+      ),
+      sentById: actorId,
+      accommodationName: accommodation.name,
+      logLabel: 'معرفی',
+    });
+  }
+
+  private async notifyIntroductionDecisionIfNeeded(
+    current: AccommodationRecord,
+    dto: UpdateAccommodationDto,
+    admin: boolean,
+    actorId: string,
+  ) {
+    if (!current.introducedById) return;
+
+    const nextResult =
+      admin && dto.inspectionResult !== undefined
+        ? dto.inspectionResult
+        : current.inspectionResult;
+    const nextStatus =
+      dto.status !== undefined
+        ? (dto.status as AccommodationStatus)
+        : current.status;
+
+    let outcome: 'approved' | 'rejected' | 'conditional' | null = null;
+    if (nextResult !== current.inspectionResult) {
+      if (nextResult === AccommodationInspectionResult.APPROVED) {
+        outcome = 'approved';
+      } else if (nextResult === AccommodationInspectionResult.REJECTED) {
+        outcome = 'rejected';
+      } else if (nextResult === AccommodationInspectionResult.CONDITIONAL) {
+        outcome = 'conditional';
+      }
+    } else if (
+      isAccommodationUnavailable(current.status) &&
+      nextStatus === AccommodationStatus.ACTIVE
+    ) {
+      outcome = 'approved';
+    }
+
+    if (!outcome) return;
+    await this.notifyIntroductionReview(
+      current.name,
+      current.introducedById,
+      outcome,
+      actorId,
+    );
+  }
+
+  private introductionReviewBody(
+    greeting: string,
+    accommodationName: string,
+    outcome: 'approved' | 'rejected' | 'conditional',
+  ) {
+    if (outcome === 'approved') {
+      return [
+        'با سلام و احترام',
+        greeting,
+        '',
+        `محل اسکان «${accommodationName}» که جنابعالی معرفی فرمودید، پس از بررسی واحد اسکان ستاد جمعیت مورد تأیید قرار گرفت.`,
+        '',
+        'از حسن نیت و خدمت شما به زائران حضرت امام رضا علیه‌السلام صمیمانه قدردانی می‌کنیم.',
+      ].join('\n');
+    }
+    if (outcome === 'conditional') {
+      return [
+        'با سلام و احترام',
+        greeting,
+        '',
+        `محل اسکان «${accommodationName}» که جنابعالی معرفی فرمودید، به‌صورت مشروط تأیید شد.`,
+        'لطفاً با ورود به سامانه، موارد نیازمند اصلاح را تکمیل فرمایید تا بررسی نهایی انجام شود.',
+        '',
+        'از همراهی شما سپاسگزاریم.',
+      ].join('\n');
+    }
+    return [
+      'با سلام و احترام',
+      greeting,
+      '',
+      `متأسفانه محل اسکان «${accommodationName}» که جنابعالی معرفی فرمودید، در بررسی واحد اسکان ستاد جمعیت مورد تأیید قرار نگرفت.`,
+      '',
+      'از همراهی شما سپاسگزاریم. در صورت تمایل می‌توانید پس از اصلاح اطلاعات، مجدداً نسبت به معرفی اقدام فرمایید.',
+    ].join('\n');
+  }
+
+  private async notifyIntroductionReview(
+    accommodationName: string,
+    introducedById: string,
+    outcome: 'approved' | 'rejected' | 'conditional',
+    actorId: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: introducedById },
+      select: { phone: true, fullName: true },
+    });
+    const logLabel =
+      outcome === 'approved'
+        ? 'تأیید'
+        : outcome === 'rejected'
+          ? 'عدم تأیید'
+          : 'تأیید مشروط';
+    await this.sendIntroducerSms({
+      phone: user?.phone,
+      body: this.introductionReviewBody(
+        this.introducerGreeting(user?.fullName),
+        accommodationName,
+        outcome,
+      ),
+      sentById: actorId,
+      accommodationName,
+      logLabel,
+    });
+  }
+
+  private async sendIntroducerSms(input: {
+    phone?: string | null;
+    body: string;
+    sentById: string;
+    accommodationName: string;
+    logLabel: string;
+  }) {
+    const phone = input.phone?.trim();
+    if (!phone) {
+      this.logger.warn(
+        `پیامک ${input.logLabel} اسکان «${input.accommodationName}» ارسال نشد: کاربر شماره همراه ندارد`,
       );
-    } else {
-      lines.push(
-        'برای مشاهده نتیجه درخواست، با حساب کاربری خود وارد سامانه شوید.',
-      );
+      return;
     }
     try {
-      await this.sms.send({ phone, body: lines.join('\n'), sentById: actorId });
+      await this.sms.send({
+        phone,
+        body: input.body,
+        sentById: input.sentById,
+      });
     } catch (error) {
       this.logger.warn(
-        `پیامک معرفی اسکان «${accommodation.name}» ارسال نشد: ${
+        `پیامک ${input.logLabel} اسکان «${input.accommodationName}» ارسال نشد: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -584,14 +823,30 @@ export class AccommodationsService {
         dto.provinceId === undefined ? current.provinceId : dto.provinceId,
       cityId: dto.cityId === undefined ? current.cityId : dto.cityId,
     });
-    await this.applySchoolFields(dto, dto.type ?? current.type);
+    const type = dto.typeId
+      ? await this.resolveType(dto.typeId, { allowInactive: true })
+      : current.type;
+    await this.applySchoolFields(dto, type);
+    await this.applyTypeSpecificFields(dto, type);
     const admin = isAdmin(actor);
+    if (dto.imageIds) {
+      await this.assertImages(dto.imageIds);
+    }
+    if (admin) {
+      await this.assertReviewer(dto.reviewerId);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.accommodation.update({
         where: { id },
-        data: this.toData(dto, geo, true) as Prisma.AccommodationUncheckedUpdateInput,
+        data: this.toData(dto, geo, true, admin) as Prisma.AccommodationUncheckedUpdateInput,
       });
+      if (dto.imageIds) {
+        await this.syncImages(tx, id, dto.imageIds);
+      }
+      if (admin) {
+        await this.recordEvaluation(tx, id, dto, current);
+      }
       if (dto.maleCapacity !== undefined || dto.femaleCapacity !== undefined) {
         await this.syncYearCapacities(
           tx,
@@ -627,6 +882,8 @@ export class AccommodationsService {
     if (dto.contacts !== undefined) {
       await this.syncContacts(id, dto.contacts ?? []);
     }
+
+    await this.notifyIntroductionDecisionIfNeeded(current, dto, admin, actor.id);
 
     return this.findOne(id, actor);
   }
@@ -665,7 +922,7 @@ export class AccommodationsService {
 
   async remove(id: string, actor: Actor) {
     this.assertCanEdit(actor);
-    await this.findRecord(id, actor);
+    const current = await this.findRecord(id, actor);
     const distributionCount = await this.prisma.restaurantMealPlanDistribution.count({
       where: { accommodationId: id },
     });
@@ -674,7 +931,13 @@ export class AccommodationsService {
         'ابتدا توزیع غذای وابسته به این اسکان را حذف کنید',
       );
     }
+    const imageIds = current.images.map((image) => image.imageId);
     await this.prisma.accommodation.delete({ where: { id } });
+    if (imageIds.length) {
+      await this.prisma.storedImage.deleteMany({
+        where: { id: { in: imageIds } },
+      });
+    }
     return { ok: true };
   }
 
@@ -1074,7 +1337,15 @@ export class AccommodationsService {
     const mapRow = (item: {
       id: string;
       name: string;
-      type: AccommodationType;
+      type: {
+        id: string;
+        code: string;
+        nameFa: string;
+        nameEn: string;
+        icon: string;
+        isActive: boolean;
+        sortOrder: number;
+      };
       city: { id: string; nameFa: string; nameEn: string | null } | null;
       province: { id: string; nameFa: string; nameEn: string | null } | null;
       managers: {
@@ -1521,9 +1792,10 @@ export class AccommodationsService {
       query.sortDir,
       {
         name: (dir) => ({ name: dir }),
-        type: (dir) => ({ type: dir }),
+        type: (dir) => ({ type: { nameFa: dir } }),
         managementType: (dir) => ({ managementType: dir }),
         genderType: (dir) => ({ genderType: dir }),
+        status: (dir) => ({ status: dir }),
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
     );
@@ -1538,8 +1810,8 @@ export class AccommodationsService {
     if (!isAdmin(actor) && !options.unscoped) {
       filters.push({ managers: { some: { userId: actor.id } } });
     }
-    if (query.type) {
-      filters.push({ type: query.type });
+    if (query.typeId) {
+      filters.push({ typeId: query.typeId });
     }
     if (query.managementType) {
       filters.push({ managementType: query.managementType });
@@ -1559,8 +1831,11 @@ export class AccommodationsService {
     if (query.cityId) {
       filters.push({ cityId: query.cityId });
     }
-    if (query.schoolDistrictId && (!query.type || query.type === 'SCHOOL')) {
-      filters.push({ type: 'SCHOOL', schoolDistrictId: query.schoolDistrictId });
+    if (query.schoolDistrictId) {
+      filters.push({
+        schoolDistrictId: query.schoolDistrictId,
+        ...(query.typeId ? {} : { type: { code: 'school' } }),
+      });
     }
     if (query.year || query.managerUserId) {
       filters.push({
@@ -1591,6 +1866,8 @@ export class AccommodationsService {
           { eitaa: containsInsensitive(query.q) },
           { bale: containsInsensitive(query.q) },
           { otherSocial: containsInsensitive(query.q) },
+          { ownerName: containsInsensitive(query.q) },
+          { ownerPhone: containsInsensitive(query.q) },
           { heatingSystem: containsInsensitive(query.q) },
           { coolingSystem: containsInsensitive(query.q) },
           { country: { nameFa: containsInsensitive(query.q) } },
@@ -1678,7 +1955,7 @@ export class AccommodationsService {
       query.sortDir,
       {
         name: (dir) => ({ name: dir }),
-        type: (dir) => ({ type: dir }),
+        type: (dir) => ({ type: { nameFa: dir } }),
         city: (dir) => ({ city: { nameFa: dir } }),
       },
       [{ name: 'asc' }, { id: 'asc' }],
@@ -1779,11 +2056,27 @@ export class AccommodationsService {
     };
   }
 
+  private async resolveType(
+    typeId: string,
+    options: { allowInactive?: boolean } = {},
+  ) {
+    const item = await this.prisma.accommodationType.findUnique({
+      where: { id: typeId },
+    });
+    if (!item) {
+      throw new BadRequestException('نوع اسکان انتخاب‌شده معتبر نیست');
+    }
+    if (!item.isActive && !options.allowInactive) {
+      throw new BadRequestException('نوع اسکان انتخاب‌شده غیرفعال است');
+    }
+    return item;
+  }
+
   private async applySchoolFields(
     dto: CreateAccommodationDto | UpdateAccommodationDto,
-    type: AccommodationType,
+    type: { code: string },
   ) {
-    if (type !== 'SCHOOL') {
+    if (!isSchoolAccommodationType(type)) {
       dto.classroomCount = null;
       dto.schoolDistrictId = null;
       return;
@@ -1798,10 +2091,49 @@ export class AccommodationsService {
     }
   }
 
+  private async applyTypeSpecificFields(
+    dto: CreateAccommodationDto | UpdateAccommodationDto,
+    type: { code: string },
+  ) {
+    const kind = accommodationTypeDetailKind(type);
+    const record = dto as Record<string, unknown>;
+    for (const key of typeDetailKeysToClear(kind)) {
+      record[key] = null;
+    }
+    const keep = new Set(
+      kind ? (typeDetailKeysByKind[kind] as readonly string[]) : [],
+    );
+    const imageMessages: Record<(typeof typeDetailImageKeys)[number], string> =
+      {
+        medicalWrittenApprovalImageId: 'فایل تأیید کتبی مرجع مسئول معتبر نیست',
+        schoolEquipmentHandoverImageId: 'صورت‌جلسه تحویل تجهیزات معتبر نیست',
+        schoolFinalHandoverImageId: 'صورت‌جلسه تخلیه و تحویل نهایی معتبر نیست',
+      };
+    for (const key of typeDetailImageKeys) {
+      if (!keep.has(key)) continue;
+      await this.assertStoredImage(record[key] as string | null | undefined, imageMessages[key]);
+    }
+    if (kind === 'school' && dto.schoolManagerUserId) {
+      await this.assertUser(dto.schoolManagerUserId, 'مدیر مدرسه یا سرایدار معتبر نیست');
+    }
+  }
+
+  private async assertStoredImage(imageId?: string | null, message?: string) {
+    if (!imageId) return;
+    const image = await this.prisma.storedImage.findUnique({
+      where: { id: imageId },
+      select: { id: true },
+    });
+    if (!image) {
+      throw new BadRequestException(message ?? 'فایل انتخاب‌شده معتبر نیست');
+    }
+  }
+
   private toData(
     dto: CreateAccommodationDto | UpdateAccommodationDto,
     geo: { countryId: string | null; provinceId: string | null; cityId: string | null },
     isUpdate = false,
+    admin = false,
   ): Prisma.AccommodationUncheckedCreateInput | Prisma.AccommodationUncheckedUpdateInput {
     const decimal = (value: number | null | undefined) => {
       if (value === undefined) return undefined;
@@ -1819,13 +2151,15 @@ export class AccommodationsService {
     };
 
     set('name', dto.name?.trim());
-    set('type', dto.type as AccommodationType | undefined);
+    set('typeId', dto.typeId);
     set('status', dto.status as AccommodationStatus | undefined);
     set('genderType', dto.genderType as GenderType | undefined);
     set('managementType', dto.managementType as ManagementType | undefined);
     set('maleCapacity', dto.maleCapacity);
     set('femaleCapacity', dto.femaleCapacity);
     set('overflowPercent', dto.overflowPercent);
+    set('ownerName', dto.ownerName);
+    set('ownerPhone', dto.ownerPhone);
     set('phone', dto.phone);
     set('address', dto.address);
     set('neshanAddress', dto.neshanAddress);
@@ -1848,12 +2182,23 @@ export class AccommodationsService {
     set('toiletCount', dto.toiletCount);
     set('classroomCount', dto.classroomCount);
     set('schoolDistrictId', dto.schoolDistrictId);
+    const details = dto as Record<string, unknown>;
+    for (const key of accommodationTypeDetailKeys) {
+      set(key, details[key]);
+    }
+    if (admin) {
+      set('inspectionStatus', dto.inspectionStatus as AccommodationInspectionStatus | undefined);
+      set('inspectionResult', dto.inspectionResult as AccommodationInspectionResult | null | undefined);
+      set('reviewerId', dto.reviewerId);
+      set('lastEvaluatedAt', parseOptionalIsoDate(dto.lastEvaluatedAt));
+      set('operationStatus', dto.operationStatus as AccommodationOperationStatus | undefined);
+    }
 
     if (!isUpdate) {
       return {
         ...data,
         name: (dto as CreateAccommodationDto).name.trim(),
-        type: (dto as CreateAccommodationDto).type,
+        typeId: (dto as CreateAccommodationDto).typeId,
         genderType: (dto as CreateAccommodationDto).genderType,
         managementType:
           (dto as CreateAccommodationDto).managementType ?? 'SELF_SUFFICIENT',
@@ -2180,8 +2525,20 @@ export class AccommodationsService {
   private serialize(item: AccommodationRecord) {
     const num = (value: Prisma.Decimal | null) =>
       value == null ? null : Number(value);
+    const { images, evaluations, lastEvaluatedAt, ...rest } = item;
     return {
-      ...item,
+      ...rest,
+      imageIds: images.map((image) => image.imageId),
+      lastEvaluatedAt: toIsoDateOnly(lastEvaluatedAt),
+      evaluations: evaluations.map((row) => ({
+        id: row.id,
+        inspectionStatus: row.inspectionStatus,
+        inspectionResult: row.inspectionResult,
+        reviewerId: row.reviewerId,
+        reviewer: row.reviewer,
+        evaluatedAt: toIsoDateOnly(row.evaluatedAt),
+        createdAt: row.createdAt,
+      })),
       latitude: num(item.latitude),
       longitude: num(item.longitude),
       distanceToShrineKm: num(item.distanceToShrineKm),
@@ -2193,12 +2550,140 @@ export class AccommodationsService {
     const hidePrivate = <T extends { user: { nationalId: string | null; birthDate: Date | null } }>(
       row: T,
     ) => ({ ...row, user: { ...row.user, nationalId: null, birthDate: null } });
-    const base = this.serialize(item);
+    const {
+      inspectionStatus: _inspectionStatus,
+      inspectionResult: _inspectionResult,
+      reviewerId: _reviewerId,
+      reviewer: _reviewer,
+      lastEvaluatedAt: _lastEvaluatedAt,
+      evaluations: _evaluations,
+      operationStatus: _operationStatus,
+      ...base
+    } = this.serialize(item);
     return {
       ...base,
       contacts: base.contacts.map(hidePrivate),
       yearContacts: base.yearContacts.map(hidePrivate),
     };
+  }
+
+  private withoutAdminReviewFields(dto: CreateAccommodationDto): CreateAccommodationDto {
+    const {
+      inspectionStatus: _inspectionStatus,
+      inspectionResult: _inspectionResult,
+      reviewerId: _reviewerId,
+      lastEvaluatedAt: _lastEvaluatedAt,
+      operationStatus: _operationStatus,
+      ...rest
+    } = dto;
+    return rest;
+  }
+
+  private async assertImages(imageIds?: string[]) {
+    if (!imageIds?.length) return;
+    if (imageIds.length > MAX_ACCOMMODATION_IMAGES) {
+      throw new BadRequestException('تعداد تصاویر اسکان بیش از حد مجاز است');
+    }
+    const unique = [...new Set(imageIds)];
+    const count = await this.prisma.storedImage.count({
+      where: { id: { in: unique } },
+    });
+    if (count !== unique.length) {
+      throw new BadRequestException('یکی از تصاویر انتخاب‌شده معتبر نیست');
+    }
+  }
+
+  private async assertReviewer(reviewerId?: string | null) {
+    await this.assertUser(reviewerId, 'مسئول بررسی انتخاب‌شده معتبر نیست');
+  }
+
+  private async assertUser(userId?: string | null, message?: string) {
+    if (!userId) return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new BadRequestException(message ?? 'کاربر انتخاب‌شده معتبر نیست');
+    }
+  }
+
+  private async syncImages(
+    tx: Prisma.TransactionClient,
+    accommodationId: string,
+    imageIds: string[],
+  ) {
+    const current = await tx.accommodationImage.findMany({
+      where: { accommodationId },
+      select: { imageId: true },
+    });
+    const nextIds = [...new Set(imageIds)].slice(0, MAX_ACCOMMODATION_IMAGES);
+    const removed = current
+      .map((row) => row.imageId)
+      .filter((imageId) => !nextIds.includes(imageId));
+    await tx.accommodationImage.deleteMany({ where: { accommodationId } });
+    if (nextIds.length) {
+      await tx.accommodationImage.createMany({
+        data: nextIds.map((imageId, sortOrder) => ({
+          accommodationId,
+          imageId,
+          sortOrder,
+        })),
+      });
+    }
+    if (removed.length) {
+      await tx.storedImage.deleteMany({ where: { id: { in: removed } } });
+    }
+  }
+
+  private async recordEvaluation(
+    tx: Prisma.TransactionClient,
+    accommodationId: string,
+    dto: CreateAccommodationDto | UpdateAccommodationDto,
+    current: {
+      inspectionStatus: AccommodationInspectionStatus;
+      inspectionResult: AccommodationInspectionResult | null;
+      reviewerId: string | null;
+      lastEvaluatedAt: Date | null;
+    },
+  ) {
+    const nextStatus = dto.inspectionStatus ?? current.inspectionStatus;
+    const nextResult =
+      dto.inspectionResult === undefined ? current.inspectionResult : dto.inspectionResult;
+    const nextReviewerId =
+      dto.reviewerId === undefined ? current.reviewerId : dto.reviewerId;
+    const nextDate =
+      dto.lastEvaluatedAt === undefined
+        ? current.lastEvaluatedAt
+        : parseOptionalIsoDate(dto.lastEvaluatedAt) ?? null;
+    const changed =
+      dto.inspectionStatus !== undefined ||
+      dto.inspectionResult !== undefined ||
+      dto.reviewerId !== undefined ||
+      dto.lastEvaluatedAt !== undefined;
+    if (!changed) return;
+    const same =
+      nextStatus === current.inspectionStatus &&
+      nextResult === current.inspectionResult &&
+      nextReviewerId === current.reviewerId &&
+      toIsoDateOnly(nextDate) === toIsoDateOnly(current.lastEvaluatedAt);
+    if (same) return;
+    const evaluatedAt = nextDate ?? parseIsoDate(todayIsoDateTehran());
+    await tx.accommodationEvaluation.create({
+      data: {
+        accommodationId,
+        inspectionStatus: nextStatus,
+        inspectionResult: nextResult,
+        reviewerId: nextReviewerId,
+        evaluatedAt,
+      },
+    });
+    if (!nextDate) {
+      await tx.accommodation.update({
+        where: { id: accommodationId },
+        data: { lastEvaluatedAt: evaluatedAt },
+      });
+    }
   }
 
   private async buildExcel(items: ReturnType<AccommodationsService['serialize']>[]) {
@@ -2213,10 +2698,17 @@ export class AccommodationsService {
         { header: 'نوع مدیریت', key: 'managementType', width: 16 },
         { header: 'نوع پذیرش', key: 'genderType', width: 14 },
         { header: 'وضعیت', key: 'status', width: 16 },
+        { header: 'وضعیت بهره‌برداری', key: 'operationStatus', width: 18 },
+        { header: 'نام نماینده/مالک', key: 'ownerName', width: 22 },
+        { header: 'شماره نماینده/مالک', key: 'ownerPhone', width: 18 },
+        { header: 'وضعیت بازدید کارشناسی', key: 'inspectionStatus', width: 22 },
+        { header: 'نتیجه بازدید', key: 'inspectionResult', width: 16 },
+        { header: 'مسئول بررسی', key: 'reviewer', width: 22 },
+        { header: 'تاریخ آخرین ارزیابی', key: 'lastEvaluatedAt', width: 18 },
         { header: 'کشور', key: 'country', width: 14 },
         { header: 'استان', key: 'province', width: 16 },
         { header: 'شهر', key: 'city', width: 16 },
-        { header: 'تلفن', key: 'phone', width: 16 },
+        { header: 'تلفن محل', key: 'phone', width: 16 },
         { header: 'آدرس', key: 'address', width: 36 },
         { header: 'ظرفیت آقایان', key: 'maleCapacity', width: 14 },
         { header: 'ظرفیت خانم‌ها', key: 'femaleCapacity', width: 14 },
@@ -2253,10 +2745,19 @@ export class AccommodationsService {
       ],
       rows: items.map((item) => ({
         name: item.name,
-        type: accommodationTypeLabels[item.type],
+        type: localizedGeoName(item.type),
         managementType: managementTypeLabels[item.managementType],
         genderType: genderTypeLabels[item.genderType],
         status: accommodationStatusLabels[item.status],
+        operationStatus: accommodationOperationStatusLabels[item.operationStatus],
+        ownerName: item.ownerName ?? '',
+        ownerPhone: item.ownerPhone ?? '',
+        inspectionStatus: accommodationInspectionStatusLabels[item.inspectionStatus],
+        inspectionResult: item.inspectionResult
+          ? accommodationInspectionResultLabels[item.inspectionResult]
+          : '',
+        reviewer: item.reviewer?.fullName ?? '',
+        lastEvaluatedAt: item.lastEvaluatedAt ?? '',
         country: geoName(item.country),
         province: geoName(item.province),
         city: geoName(item.city),
@@ -2278,8 +2779,12 @@ export class AccommodationsService {
         parkingCapacity: item.parkingCapacity,
         bathroomCount: item.bathroomCount,
         toiletCount: item.toiletCount,
-        classroomCount: item.type === 'SCHOOL' ? item.classroomCount : '',
-        schoolDistrict: item.type === 'SCHOOL' ? (item.schoolDistrict?.name ?? '') : '',
+        classroomCount: isSchoolAccommodationType(item.type)
+          ? item.classroomCount
+          : '',
+        schoolDistrict: isSchoolAccommodationType(item.type)
+          ? (item.schoolDistrict?.name ?? '')
+          : '',
         managers: item.managers
           .map((manager) => {
             const primary = manager.isPrimary ? ' (اصلی)' : '';
@@ -2293,28 +2798,39 @@ export class AccommodationsService {
   }
 }
 
-const accommodationTypeOrder: AccommodationType[] = [
-  'SCHOOL',
-  'MOSQUE',
-  'HUSSEINIEH',
-  'HALL',
-  'HOUSE',
-  'OTHER',
-];
-
-const accommodationTypeLabels: Record<AccommodationType, string> = {
-  SCHOOL: 'مدرسه',
-  MOSQUE: 'مسجد',
-  HUSSEINIEH: 'حسینیه',
-  HALL: 'سالن',
-  HOUSE: 'منزل',
-  OTHER: 'سایر',
-};
-
 const accommodationStatusLabels: Record<AccommodationStatus, string> = {
   ACTIVE: 'فعال',
-  INACTIVE: 'غیرفعال',
+  PENDING_REVIEW: 'در انتظار تأیید',
   FULL: 'تکمیل ظرفیت',
+  INACTIVE: 'غیرفعال',
+};
+
+const accommodationInspectionStatusLabels: Record<
+  AccommodationInspectionStatus,
+  string
+> = {
+  NOT_DONE: 'انجام نشده',
+  PENDING: 'در انتظار',
+  DONE: 'انجام شده',
+};
+
+const accommodationInspectionResultLabels: Record<
+  AccommodationInspectionResult,
+  string
+> = {
+  APPROVED: 'تأیید',
+  CONDITIONAL: 'تأیید مشروط',
+  REJECTED: 'عدم تأیید',
+};
+
+const accommodationOperationStatusLabels: Record<
+  AccommodationOperationStatus,
+  string
+> = {
+  ACTIVE: 'فعال',
+  INACTIVE: 'غیرفعال',
+  EMERGENCY: 'اضطراری',
+  OUT_OF_CYCLE: 'خارج از چرخه',
 };
 
 const genderTypeOrder: GenderType[] = ['FEMALE', 'MALE', 'MIXED'];

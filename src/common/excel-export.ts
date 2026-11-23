@@ -1,4 +1,5 @@
-import * as ExcelJS from 'exceljs';
+import type * as ExcelJS from 'exceljs';
+import { loadExcelJS } from './lazy-modules';
 import { getRequestLocale, isLtrLocale, type AppLocale } from './request-locale';
 
 /** Brand teal-500 — matches frontend `--color-teal-500`. */
@@ -60,6 +61,7 @@ export async function buildStyledExcelExport(options: {
   rows: Array<Record<string, ExcelJS.CellValue>>;
 }): Promise<Buffer> {
   const locale = getRequestLocale();
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'اسکان';
   const sheet = workbook.addWorksheet(options.sheetName, {

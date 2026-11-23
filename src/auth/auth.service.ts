@@ -271,12 +271,12 @@ export class AuthService {
                 code: {
                   in: [
                     'dashboard.overview',
-                    'dashboard.new-caravan',
                     'accommodation.introduce',
                     'accommodation.introduced',
                     'honorary-service.apply',
                     'honorary-service.history',
                     'participations.home',
+                    'participations.in-kind',
                     'reservations.mine',
                     'caravans.register',
                     'caravans.mine',

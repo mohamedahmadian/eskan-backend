@@ -15,7 +15,10 @@ import {
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear, jalaliYearRange } from '../common/jalali-year';
 import { normalizeMobile, normalizePhone, phoneLookupValues } from '../common/phone';
-import { localeFromCountryIso2 } from '../common/request-locale';
+import {
+  REGISTER_OTHER_COUNTRY,
+  registerLocaleFromCountryIso2,
+} from '../common/request-locale';
 import {
   containsInsensitive,
   normalizeSearchDigits,
@@ -52,7 +55,6 @@ import {
   type ParsedPilgrimImport,
 } from './pilgrim-excel-import.util';
 import { resolvePilgrimResetPassword } from './pilgrim-password.util';
-import { isQuickAssignableRole } from './dto/set-quick-role.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindLocationHistoryQueryDto } from './dto/find-location-history-query.dto';
 import { UpdateUserLocationDto } from './dto/update-user-location.dto';
@@ -1604,8 +1606,173 @@ export class UsersService {
     const current = await this.findOne(id);
     await this.assertNotLastAdmin(current);
 
-    await this.prisma.user.delete({ where: { id } });
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          await this.deleteUserWithRelations(tx, id, actorId);
+        },
+        { timeout: 20_000 },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'حذف این کاربر به‌خاطر وابستگی باقی‌مانده ممکن نیست',
+        );
+      }
+      throw error;
+    }
     return { ok: true };
+  }
+
+  /** Deletes a user and owned records; unlinks or reassigns remaining FKs. */
+  private async deleteUserWithRelations(
+    tx: Prisma.TransactionClient,
+    id: string,
+    actorId: string,
+  ) {
+    const user = await tx.user.findUnique({
+      where: { id },
+      select: {
+        photoId: true,
+        nationalCardPhotoId: true,
+        passportPhotoId: true,
+      },
+    });
+    if (!user) {
+      throw new NotFoundException('کاربر یافت نشد');
+    }
+
+    const managedLicenses = await tx.issuedLicense.findMany({
+      where: { managerUserId: id },
+      select: { fileId: true },
+    });
+
+    await Promise.all([
+      tx.accommodationLoan.deleteMany({ where: { accommodationManagerId: id } }),
+      tx.itemQuotaVoucher.deleteMany({
+        where: { accommodationManagerId: id },
+      }),
+      tx.iceVoucher.deleteMany({ where: { accommodationManagerId: id } }),
+      tx.issuedLicense.deleteMany({ where: { managerUserId: id } }),
+      tx.evaluation.deleteMany({
+        where: {
+          OR: [{ evaluatorId: id }, { targetId: id }, { submittedById: id }],
+        },
+      }),
+      tx.reservationHonoraryAssignment.deleteMany({ where: { userId: id } }),
+      tx.reservationMember.deleteMany({ where: { userId: id } }),
+      tx.reservationCaravanContact.deleteMany({ where: { userId: id } }),
+      tx.caravanContact.deleteMany({ where: { userId: id } }),
+      tx.accommodationContact.deleteMany({ where: { userId: id } }),
+      tx.accommodationYearContact.deleteMany({ where: { userId: id } }),
+    ]);
+
+    await this.nullOptionalUserRefs(tx, id);
+
+    await Promise.all([
+      tx.reservation.updateMany({
+        where: { createdById: id },
+        data: { createdById: actorId },
+      }),
+      tx.reservationAllocation.updateMany({
+        where: { placedById: id },
+        data: { placedById: actorId },
+      }),
+      tx.reservationStationStay.updateMany({
+        where: { reservedById: id },
+        data: { reservedById: actorId },
+      }),
+      tx.reservationHonoraryAssignment.updateMany({
+        where: { assignedById: id },
+        data: { assignedById: actorId },
+      }),
+      tx.issuedLicense.updateMany({
+        where: { issuerUserId: id },
+        data: { issuerUserId: actorId },
+      }),
+      tx.walkingStation.updateMany({
+        where: { managerUserId: id },
+        data: {
+          managerUserId: null,
+          managerName: null,
+          managerPhone: null,
+          managerTelegram: null,
+          managerWhatsapp: null,
+          managerEitaa: null,
+        },
+      }),
+    ]);
+
+    await tx.user.delete({ where: { id } });
+
+    const imageIds = [
+      user.photoId,
+      user.nationalCardPhotoId,
+      user.passportPhotoId,
+      ...managedLicenses.map((license) => license.fileId),
+    ].filter((imageId): imageId is string => Boolean(imageId));
+    if (imageIds.length) {
+      await tx.storedImage.deleteMany({ where: { id: { in: imageIds } } });
+    }
+  }
+
+  private async nullOptionalUserRefs(
+    tx: Prisma.TransactionClient,
+    userId: string,
+  ) {
+    const reservationFields = [
+      'caravanManagerId',
+      'placementCompletedById',
+      'permitReviewedById',
+      'rejectedById',
+      'cancelledById',
+      'basicInfoCompletedById',
+      'managementReviewedById',
+      'companionsCompletedById',
+      'caravanContactsCompletedById',
+      'insuranceCompletedById',
+      'completedById',
+    ] as const satisfies ReadonlyArray<keyof Prisma.ReservationWhereInput>;
+
+    await Promise.all([
+      ...reservationFields.map((field) =>
+        tx.reservation.updateMany({
+          where: { [field]: userId },
+          data: { [field]: null },
+        }),
+      ),
+      tx.reservationAllocation.updateMany({
+        where: { vacatedById: userId },
+        data: { vacatedById: null },
+      }),
+      tx.reservationMember.updateMany({
+        where: { insurancePaidById: userId },
+        data: { insurancePaidById: null },
+      }),
+      tx.reservationMember.updateMany({
+        where: { insuranceVerifiedById: userId },
+        data: { insuranceVerifiedById: null },
+      }),
+      tx.reservationStationStay.updateMany({
+        where: { cancelledById: userId },
+        data: { cancelledById: null },
+      }),
+      tx.reservationStationStay.updateMany({
+        where: { evacuatedById: userId },
+        data: { evacuatedById: null },
+      }),
+      tx.issuedLicense.updateMany({
+        where: { revokedById: userId },
+        data: { revokedById: null },
+      }),
+      tx.issuedLicense.updateMany({
+        where: { approvedById: userId },
+        data: { approvedById: null },
+      }),
+    ]);
   }
 
   async ensureRole(userId: string, roleCode: string) {
@@ -1622,9 +1789,7 @@ export class UsersService {
   }
 
   async setQuickRole(userId: string, roleCode: string, enabled: boolean, actorId: string) {
-    if (!isQuickAssignableRole(roleCode)) {
-      throw new BadRequestException('این نقش از اینجا قابل تغییر نیست');
-    }
+    await this.ensureExistingRole(roleCode);
     if (enabled) {
       await this.findOne(userId);
       await this.ensureRole(userId, roleCode);
@@ -1967,37 +2132,44 @@ export class UsersService {
     return { ok: true, smsQueued };
   }
 
-  /** تعیین رمز توسط ادمین و پیامک همان رمز برای هر کاربر */
+  /** تعیین رمز توسط ادمین؛ پیامک فقط اگر sendSms باشد */
   async setUserPasswordAndSms(
     id: string,
-    dto: { password: string },
+    dto: { password: string; sendSms?: boolean },
     actorId: string,
   ) {
     const user = await this.findOne(id);
-    if (!user.phone) {
+    if (dto.sendSms && !user.phone) {
       throw new BadRequestException('شماره همراه برای ارسال پیامک ثبت نشده است');
     }
 
-    await this.sms.assertConfigured();
     const passwordHash = await bcrypt.hash(dto.password, 10);
     await this.prisma.user.update({
       where: { id },
       data: { passwordHash },
     });
 
-    const isPilgrim = user.roles.some((role) => role.code === 'PILGRIM');
-    await this.sms.send({
-      phone: user.phone,
-      body: [
-        isPilgrim ? `زائر گرامی ${user.fullName}` : `${user.fullName} گرامی`,
-        'رمز عبور جدید سامانه اسکان:',
-        dto.password,
-        'ورود با کد ملی یا شماره همراه',
-      ].join('\n'),
-      sentById: actorId,
-    });
+    let smsQueued = false;
+    if (dto.sendSms && user.phone) {
+      try {
+        const isPilgrim = user.roles.some((role) => role.code === 'PILGRIM');
+        await this.sms.send({
+          phone: user.phone,
+          body: [
+            isPilgrim ? `زائر گرامی ${user.fullName}` : `${user.fullName} گرامی`,
+            'رمز عبور جدید سامانه اسکان:',
+            dto.password,
+            'ورود با کد ملی یا شماره همراه',
+          ].join('\n'),
+          sentById: actorId,
+        });
+        smsQueued = true;
+      } catch {
+        // رمز ذخیره شده؛ خطا در پیامک مانع تغییر رمز نمی‌شود
+      }
+    }
 
-    return { ok: true };
+    return { ok: true, smsQueued };
   }
 
   async recoverOwnPilgrimPassword(userId: string) {
@@ -2056,7 +2228,10 @@ export class UsersService {
       where: { iso2: 'IR' },
       select: { id: true },
     });
-    const countryId = dto.countryId ?? iran?.id ?? null;
+    const countryId =
+      dto.countryId === REGISTER_OTHER_COUNTRY
+        ? null
+        : (dto.countryId ?? iran?.id ?? null);
     let countryIso2: string | null = null;
     if (countryId) {
       const country = await this.prisma.country.findUnique({
@@ -2068,7 +2243,7 @@ export class UsersService {
       }
       countryIso2 = country.iso2;
     }
-    const locale = localeFromCountryIso2(countryIso2);
+    const locale = dto.locale ?? registerLocaleFromCountryIso2(countryIso2);
     const isIranian = Boolean(iran && countryId === iran.id);
 
     let nationalId: string | null = null;
@@ -2180,6 +2355,7 @@ export class UsersService {
       return {
         id: existing.id,
         phone,
+        fullName: existing.fullName,
         loginWithPhone,
         userRoles,
       };
@@ -2227,6 +2403,7 @@ export class UsersService {
       return {
         id: user.id,
         phone,
+        fullName: joinFullName(firstName, lastName),
         loginWithPhone: true,
         userRoles: [{ role: { code: 'PILGRIM' } }],
       };

@@ -13,6 +13,10 @@ import {
   wantsPagination,
 } from '../common/pagination';
 import { resolveSortOrder } from '../common/sort-query';
+import {
+  ACCOMMODATION_UNAVAILABLE_STATUSES,
+  isAccommodationUnavailable,
+} from '../common/accommodation-availability';
 import { ManagementType, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRestaurantMealPlanDistributionDto } from './dto/create-restaurant-meal-plan-distribution.dto';
@@ -222,7 +226,7 @@ export class RestaurantMealPlansService {
     const assignedIds = assigned.map((row) => row.accommodationId);
     return this.prisma.accommodation.findMany({
       where: {
-        status: { not: 'INACTIVE' },
+        status: { notIn: ACCOMMODATION_UNAVAILABLE_STATUSES },
         managementType: { in: DISTRIBUTION_MANAGEMENT_TYPES },
         ...(assignedIds.length ? { id: { notIn: assignedIds } } : {}),
       },
@@ -246,7 +250,7 @@ export class RestaurantMealPlansService {
       where: { id: dto.accommodationId },
       select: { id: true, status: true, managementType: true },
     });
-    if (!accommodation || accommodation.status === 'INACTIVE') {
+    if (!accommodation || isAccommodationUnavailable(accommodation.status)) {
       throw new BadRequestException('اسکان انتخاب‌شده معتبر نیست');
     }
     if (!DISTRIBUTION_MANAGEMENT_TYPES.includes(accommodation.managementType)) {

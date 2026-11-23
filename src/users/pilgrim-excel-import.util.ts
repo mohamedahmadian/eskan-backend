@@ -1,4 +1,5 @@
-import * as ExcelJS from 'exceljs';
+import type * as ExcelJS from 'exceljs';
+import { loadExcelJS } from '../common/lazy-modules';
 import { UserGender } from '../generated/prisma/client';
 
 export type PilgrimImportRow = {
@@ -281,6 +282,7 @@ function toImportRow(
 export async function parsePilgrimImportExcel(
   buffer: Buffer,
 ): Promise<ParsedPilgrimImport> {
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   // exceljs typings expect a narrower Buffer shape than Node's Buffer
   await workbook.xlsx.load(buffer as never);

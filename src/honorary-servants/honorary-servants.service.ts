@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -67,6 +68,16 @@ function uniqueWeekDays(days: HonoraryServiceWeekDay[]) {
     seen.add(day);
   }
   return honoraryServiceWeekDays.filter((day) => seen.has(day));
+}
+
+function sameWeekDays(
+  left: HonoraryServiceWeekDay[],
+  right: HonoraryServiceWeekDay[],
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((day, index) => day === right[index]);
 }
 
 @Injectable()
@@ -252,6 +263,7 @@ export class HonoraryServantsService {
   async create(dto: CreateHonoraryServantDto) {
     const data = await this.prepareData(dto);
     await this.assertUser(data.userId);
+    await this.assertUniqueAnnouncement(data);
     const item = await this.prisma.honoraryServiceAnnouncement.create({
       data,
       include: announcementInclude,
@@ -287,6 +299,7 @@ export class HonoraryServantsService {
     if (data.userId !== current.userId) {
       await this.assertUser(data.userId);
     }
+    await this.assertUniqueAnnouncement(data, id);
     const item = await this.prisma.honoraryServiceAnnouncement.update({
       where: { id },
       data,
@@ -365,8 +378,8 @@ export class HonoraryServantsService {
         startDate,
         endDate,
         weekDays,
-        startTime: dto.startTime,
-        endTime: dto.endTime,
+        startTime: dto.startTime.slice(0, 5),
+        endTime: dto.endTime.slice(0, 5),
       };
     }
     if (!otherDescription) {
@@ -381,9 +394,46 @@ export class HonoraryServantsService {
       startDate,
       endDate,
       weekDays,
-      startTime: dto.startTime,
-      endTime: dto.endTime,
+      startTime: dto.startTime.slice(0, 5),
+      endTime: dto.endTime.slice(0, 5),
     };
+  }
+
+  private async assertUniqueAnnouncement(
+    data: {
+      userId: string;
+      serviceTypeId: string | null;
+      otherDescription: string | null;
+      startDate: Date;
+      endDate: Date;
+      weekDays: HonoraryServiceWeekDay[];
+      startTime: string;
+      endTime: string;
+    },
+    exceptId?: string,
+  ) {
+    const existing = await this.prisma.honoraryServiceAnnouncement.findMany({
+      where: {
+        userId: data.userId,
+        serviceTypeId: data.serviceTypeId,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        ...(exceptId ? { NOT: { id: exceptId } } : {}),
+      },
+      select: { otherDescription: true, weekDays: true },
+    });
+    const duplicate = existing.some(
+      (item) =>
+        (item.otherDescription ?? null) === data.otherDescription &&
+        sameWeekDays(uniqueWeekDays(item.weekDays), data.weekDays),
+    );
+    if (duplicate) {
+      throw new ConflictException(
+        'این اعلام همکاری با همین مشخصات قبلاً برای این کاربر ثبت شده است',
+      );
+    }
   }
 
   private async assertUser(userId: string) {

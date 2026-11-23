@@ -3,6 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  contentSourceLocale,
+  contentTranslationLocales,
+  type ContentTranslationLocale,
+} from '../common/content-locales';
 import { currentJalaliYear, jalaliMonth, jalaliYearRange } from '../common/jalali-year';
 import {
   containsInsensitive,
@@ -10,10 +15,14 @@ import {
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
+import { getRequestLocale } from '../common/request-locale';
 import { resolveSortOrder } from '../common/sort-query';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateParticipationCampaignDto } from './dto/create-campaign.dto';
+import {
+  CreateParticipationCampaignDto,
+  ParticipationCampaignTranslationDto,
+} from './dto/create-campaign.dto';
 import { FindCampaignReportQueryDto } from './dto/find-campaign-report-query.dto';
 import { FindParticipationCampaignsQueryDto } from './dto/find-campaigns-query.dto';
 import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
@@ -21,7 +30,14 @@ import { UpdateParticipationCampaignDto } from './dto/update-campaign.dto';
 const campaignInclude = {
   bankAccount: true,
   cryptoWallet: true,
+  translations: { orderBy: { locale: 'asc' as const } },
 } satisfies Prisma.ParticipationCampaignInclude;
+
+type NormalizedCampaignTranslation = {
+  locale: ContentTranslationLocale;
+  name: string;
+  description: string | null;
+};
 
 type CampaignRecord = Prisma.ParticipationCampaignGetPayload<{
   include: typeof campaignInclude;
@@ -102,6 +118,7 @@ export class ParticipationCampaignsService {
     const items = await this.prisma.participationCampaign.findMany({
       where: { isActive: true },
       orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+      include: { translations: { orderBy: { locale: 'asc' } } },
     });
     if (!items.length) {
       return [];
@@ -115,12 +132,14 @@ export class ParticipationCampaignsService {
         row?.purchasedShares ?? 0,
         row?.participantCount ?? 0,
       );
+      const localized = this.pickLocalized(item);
       return {
         id: item.id,
-        name: item.name,
+        name: localized.name,
         startDate: dateOnly(item.startDate),
         endDate: dateOnly(item.endDate),
-        description: item.description,
+        description: localized.description,
+        contentLocale: localized.contentLocale,
         imageId: item.imageId,
         isActive: item.isActive,
         totalAmount: item.totalAmount,
@@ -139,12 +158,14 @@ export class ParticipationCampaignsService {
       throw new NotFoundException('پویش یافت نشد');
     }
     const [serialized] = await this.serializeMany([item]);
+    const localized = this.pickLocalized(item);
     return {
       id: serialized.id,
-      name: serialized.name,
+      name: localized.name,
       startDate: serialized.startDate,
       endDate: serialized.endDate,
-      description: serialized.description,
+      description: localized.description,
+      contentLocale: localized.contentLocale,
       imageId: serialized.imageId,
       isActive: serialized.isActive,
       totalAmount: serialized.totalAmount,
@@ -189,6 +210,7 @@ export class ParticipationCampaignsService {
     this.assertAmounts(dto.totalAmount, dto.sharePrice);
     this.assertDates(dto.startDate, dto.endDate);
     await this.assertPaymentTargets(dto.bankAccountId, dto.cryptoWalletId);
+    const translations = this.normalizeTranslations(dto.translations);
     const item = await this.prisma.participationCampaign.create({
       data: {
         name: dto.name.trim(),
@@ -201,6 +223,9 @@ export class ParticipationCampaignsService {
         sharePrice: dto.sharePrice,
         bankAccountId: dto.bankAccountId || null,
         cryptoWalletId: dto.cryptoWalletId || null,
+        translations: translations.length
+          ? { create: translations }
+          : undefined,
       },
       include: campaignInclude,
     });
@@ -223,28 +248,44 @@ export class ParticipationCampaignsService {
     this.assertAmounts(totalAmount, sharePrice);
     this.assertDates(startDate, endDate);
     await this.assertPaymentTargets(bankAccountId, cryptoWalletId);
-    const item = await this.prisma.participationCampaign.update({
-      where: { id },
-      data: {
-        name: dto.name?.trim(),
-        startDate: dto.startDate ? parseDateOnly(dto.startDate) : undefined,
-        endDate: dto.endDate ? parseDateOnly(dto.endDate) : undefined,
-        description:
-          dto.description === undefined
-            ? undefined
-            : dto.description?.trim() || null,
-        imageId: dto.imageId === undefined ? undefined : dto.imageId || null,
-        isActive: dto.isActive,
-        totalAmount: dto.totalAmount,
-        sharePrice: dto.sharePrice,
-        bankAccountId:
-          dto.bankAccountId === undefined ? undefined : dto.bankAccountId || null,
-        cryptoWalletId:
-          dto.cryptoWalletId === undefined
-            ? undefined
-            : dto.cryptoWalletId || null,
-      },
-      include: campaignInclude,
+    const translations =
+      dto.translations === undefined
+        ? undefined
+        : this.normalizeTranslations(dto.translations);
+    const item = await this.prisma.$transaction(async (tx) => {
+      if (translations) {
+        await tx.participationCampaignTranslation.deleteMany({
+          where: { campaignId: id },
+        });
+        if (translations.length) {
+          await tx.participationCampaignTranslation.createMany({
+            data: translations.map((row) => ({ ...row, campaignId: id })),
+          });
+        }
+      }
+      return tx.participationCampaign.update({
+        where: { id },
+        data: {
+          name: dto.name?.trim(),
+          startDate: dto.startDate ? parseDateOnly(dto.startDate) : undefined,
+          endDate: dto.endDate ? parseDateOnly(dto.endDate) : undefined,
+          description:
+            dto.description === undefined
+              ? undefined
+              : dto.description?.trim() || null,
+          imageId: dto.imageId === undefined ? undefined : dto.imageId || null,
+          isActive: dto.isActive,
+          totalAmount: dto.totalAmount,
+          sharePrice: dto.sharePrice,
+          bankAccountId:
+            dto.bankAccountId === undefined ? undefined : dto.bankAccountId || null,
+          cryptoWalletId:
+            dto.cryptoWalletId === undefined
+              ? undefined
+              : dto.cryptoWalletId || null,
+        },
+        include: campaignInclude,
+      });
     });
     const [serialized] = await this.serializeMany([item]);
     return serialized;
@@ -523,10 +564,17 @@ export class ParticipationCampaignsService {
         row?.purchasedShares ?? 0,
         row?.participantCount ?? 0,
       );
+      const { translations, ...rest } = item;
       return {
-        ...item,
+        ...rest,
         startDate: dateOnly(item.startDate),
         endDate: dateOnly(item.endDate),
+        translations: translations.map((row) => ({
+          locale: row.locale,
+          name: row.name,
+          description: row.description,
+        })),
+        translatedLocales: translations.map((row) => row.locale),
         ...stats,
       };
     });
@@ -568,6 +616,16 @@ export class ParticipationCampaignsService {
         OR: [
           { name: containsInsensitive(query.q) },
           { description: containsInsensitive(query.q) },
+          {
+            translations: {
+              some: {
+                OR: [
+                  { name: containsInsensitive(query.q) },
+                  { description: containsInsensitive(query.q) },
+                ],
+              },
+            },
+          },
         ],
       });
     }
@@ -593,6 +651,61 @@ export class ParticipationCampaignsService {
       },
       [{ createdAt: 'desc' }, { id: 'asc' }],
     );
+  }
+
+  private normalizeTranslations(
+    items?: ParticipationCampaignTranslationDto[],
+  ): NormalizedCampaignTranslation[] {
+    if (!items?.length) {
+      return [];
+    }
+    const byLocale = new Map<ContentTranslationLocale, NormalizedCampaignTranslation>();
+    for (const item of items) {
+      if (!contentTranslationLocales.includes(item.locale)) {
+        continue;
+      }
+      const name = item.name?.trim() ?? '';
+      const description = item.description?.trim() || null;
+      if (!name && !description) {
+        continue;
+      }
+      if (name.length < 2) {
+        throw new BadRequestException(
+          'ترجمه ناقص است؛ نام پویش را کامل کنید یا این زبان را خالی بگذارید',
+        );
+      }
+      byLocale.set(item.locale, {
+        locale: item.locale,
+        name,
+        description,
+      });
+    }
+    return [...byLocale.values()];
+  }
+
+  private pickLocalized(item: {
+    name: string;
+    description: string | null;
+    translations: { locale: string; name: string; description: string | null }[];
+  }) {
+    const locale = getRequestLocale();
+    const persian = {
+      name: item.name,
+      description: item.description,
+      contentLocale: contentSourceLocale,
+    };
+    if (locale === contentSourceLocale) {
+      return persian;
+    }
+    const translation = item.translations.find((row) => row.locale === locale);
+    if (!translation?.name?.trim()) {
+      return persian;
+    }
+    return {
+      name: translation.name,
+      description: translation.description ?? item.description,
+      contentLocale: locale,
+    };
   }
 
   private assertAmounts(totalAmount: number, sharePrice: number) {

@@ -12,12 +12,20 @@ async function main() {
   const caravanModule = await prisma.navModule.findUnique({
     where: { code: 'caravan-management' },
   });
-  const dashboard = await prisma.navModule.findUnique({
-    where: { code: 'dashboard' },
-  });
   const admin = await prisma.role.findUnique({ where: { code: 'ADMIN' } });
-  if (!caravanModule || !dashboard || !admin) {
-    throw new Error('ماژول مدیریت کاروان، داشبورد یا نقش مدیر یافت نشد');
+  if (!caravanModule || !admin) {
+    throw new Error('ماژول مدیریت کاروان یا نقش مدیر یافت نشد');
+  }
+
+  const leftoverDashboardCaravan = await prisma.menu.findUnique({
+    where: { code: 'dashboard.new-caravan' },
+  });
+  if (leftoverDashboardCaravan) {
+    await prisma.roleMenu.deleteMany({
+      where: { menuId: leftoverDashboardCaravan.id },
+    });
+    await prisma.menu.delete({ where: { id: leftoverDashboardCaravan.id } });
+    console.log('dashboard.new-caravan removed from dashboard module');
   }
 
   const menus = [
@@ -28,14 +36,6 @@ async function main() {
       icon: 'tent',
       sortOrder: 5,
       moduleId: caravanModule.id,
-    },
-    {
-      code: 'dashboard.new-caravan',
-      nameKey: 'menus.newCaravan',
-      path: '/caravan-registration',
-      icon: 'tent',
-      sortOrder: 2,
-      moduleId: dashboard.id,
     },
   ];
 
@@ -61,7 +61,7 @@ async function main() {
 
   const shared = await prisma.menu.findMany({
     where: {
-      code: { in: ['dashboard.new-caravan', 'caravans.register', 'caravans.mine'] },
+      code: { in: ['caravans.register', 'caravans.mine'] },
     },
   });
   const roles = await prisma.role.findMany({ select: { id: true, code: true } });

@@ -2,10 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { buildStyledExcelExport } from '../common/excel-export';
 import { currentJalaliYear } from '../common/jalali-year';
 import { localizedGeoName } from '../common/request-locale';
-import {
-  AccommodationStatus,
-  ReservationStatus,
-} from '../generated/prisma/client';
+import { ACCOMMODATION_UNAVAILABLE_STATUSES } from '../common/accommodation-availability';
+import { ReservationStatus } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { NationalMonitoringExportSection } from './dto/find-national-monitoring-query.dto';
 
@@ -362,7 +360,7 @@ export class NationalMonitoringService {
       }),
       this.prisma.accommodation.findMany({
         where: {
-          status: { not: AccommodationStatus.INACTIVE },
+          status: { notIn: ACCOMMODATION_UNAVAILABLE_STATUSES },
           OR: [{ province: iran }, { city: { province: iran } }, { country: { iso2: 'IR' } }],
         },
         select: {

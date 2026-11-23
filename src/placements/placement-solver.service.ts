@@ -61,7 +61,9 @@ export type PlacementSolverAccommodation = {
   id: string;
   name: string;
   type: SolverGender;
-  placeType: 'SCHOOL' | 'MOSQUE' | 'HUSSEINIEH' | 'HALL' | 'HOUSE' | 'OTHER';
+  placeType: string;
+  placeTypeNameFa: string;
+  placeTypeNameEn: string;
   capacity: number;
   latitude: number;
   longitude: number;
@@ -483,7 +485,9 @@ export class PlacementSolverService {
         id: row.id,
         name: row.name,
         type,
-        placeType: row.type,
+        placeType: row.type.code,
+        placeTypeNameFa: row.type.nameFa,
+        placeTypeNameEn: row.type.nameEn,
         capacity,
         latitude,
         longitude,

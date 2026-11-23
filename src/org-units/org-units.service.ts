@@ -5,18 +5,27 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  contentSourceLocale,
+  contentTranslationLocales,
+  type ContentTranslationLocale,
+} from '../common/content-locales';
+import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
   wantsPagination,
 } from '../common/pagination';
+import { getRequestLocale } from '../common/request-locale';
 import { resolveSortOrder } from '../common/sort-query';
 import { CaravanContactRole, AccommodationContactRole, Prisma } from '../generated/prisma/client';
 import { currentJalaliYear } from '../common/jalali-year';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
-import { CreateOrgUnitDto } from './dto/create-org-unit.dto';
+import {
+  CreateOrgUnitDto,
+  OrgUnitTranslationDto,
+} from './dto/create-org-unit.dto';
 import { FindOrgUnitsQueryDto } from './dto/find-org-units-query.dto';
 import { FindUnitLiaisonsQueryDto } from './dto/find-unit-liaisons-query.dto';
 import {
@@ -35,6 +44,7 @@ const managerSelect = {
 
 const orgUnitInclude = {
   manager: { select: managerSelect },
+  translations: { orderBy: { locale: 'asc' as const } },
   _count: {
     select: {
       accommodationLiaisons: true,
@@ -46,6 +56,12 @@ const orgUnitInclude = {
 type OrgUnitRecord = Prisma.OrgUnitGetPayload<{
   include: typeof orgUnitInclude;
 }>;
+
+type NormalizedTranslation = {
+  locale: ContentTranslationLocale;
+  name: string;
+  description: string | null;
+};
 
 const liaisonUserSelect = {
   id: true,
@@ -117,21 +133,28 @@ export class OrgUnitsService {
         manager: {
           select: { id: true, fullName: true, photoId: true },
         },
+        translations: {
+          select: { locale: true, name: true, description: true },
+        },
       },
     });
-    return items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      phone: item.phone,
-      description: item.description,
-      eitaaChannel: item.eitaaChannel,
-      telegramChannel: item.telegramChannel,
-      manager: item.manager,
-    }));
+    return items.map((item) => {
+      const localized = this.pickLocalized(item);
+      return {
+        id: item.id,
+        name: localized.name,
+        phone: item.phone,
+        description: localized.description,
+        eitaaChannel: item.eitaaChannel,
+        telegramChannel: item.telegramChannel,
+        manager: item.manager,
+      };
+    });
   }
 
   async create(dto: CreateOrgUnitDto) {
     const managerUserId = await this.resolveManager(dto.managerUserId);
+    const translations = this.normalizeTranslations(dto.translations);
     const item = await this.prisma.orgUnit.create({
       data: {
         name: dto.name.trim(),
@@ -140,6 +163,9 @@ export class OrgUnitsService {
         eitaaChannel: dto.eitaaChannel?.trim() || null,
         telegramChannel: dto.telegramChannel?.trim() || null,
         managerUserId,
+        translations: translations.length
+          ? { create: translations }
+          : undefined,
       },
       include: orgUnitInclude,
     });
@@ -154,27 +180,41 @@ export class OrgUnitsService {
       dto.managerUserId === undefined
         ? previousManagerId
         : await this.resolveManager(dto.managerUserId);
-    const item = await this.prisma.orgUnit.update({
-      where: { id },
-      data: {
-        name: dto.name?.trim(),
-        phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
-        description:
-          dto.description === undefined
-            ? undefined
-            : dto.description?.trim() || null,
-        eitaaChannel:
-          dto.eitaaChannel === undefined
-            ? undefined
-            : dto.eitaaChannel?.trim() || null,
-        telegramChannel:
-          dto.telegramChannel === undefined
-            ? undefined
-            : dto.telegramChannel?.trim() || null,
-        managerUserId:
-          dto.managerUserId === undefined ? undefined : managerUserId,
-      },
-      include: orgUnitInclude,
+    const translations =
+      dto.translations === undefined
+        ? undefined
+        : this.normalizeTranslations(dto.translations);
+    const item = await this.prisma.$transaction(async (tx) => {
+      if (translations) {
+        await tx.orgUnitTranslation.deleteMany({ where: { unitId: id } });
+        if (translations.length) {
+          await tx.orgUnitTranslation.createMany({
+            data: translations.map((row) => ({ ...row, unitId: id })),
+          });
+        }
+      }
+      return tx.orgUnit.update({
+        where: { id },
+        data: {
+          name: dto.name?.trim(),
+          phone: dto.phone === undefined ? undefined : dto.phone?.trim() || null,
+          description:
+            dto.description === undefined
+              ? undefined
+              : dto.description?.trim() || null,
+          eitaaChannel:
+            dto.eitaaChannel === undefined
+              ? undefined
+              : dto.eitaaChannel?.trim() || null,
+          telegramChannel:
+            dto.telegramChannel === undefined
+              ? undefined
+              : dto.telegramChannel?.trim() || null,
+          managerUserId:
+            dto.managerUserId === undefined ? undefined : managerUserId,
+        },
+        include: orgUnitInclude,
+      });
     });
     if (previousManagerId !== item.managerUserId) {
       await this.syncUnitManagerRole(previousManagerId);
@@ -432,7 +472,74 @@ export class OrgUnitsService {
         { phone: containsInsensitive(query.q) },
         { description: containsInsensitive(query.q) },
         { manager: { fullName: containsInsensitive(query.q) } },
+        {
+          translations: {
+            some: {
+              OR: [
+                { name: containsInsensitive(query.q) },
+                { description: containsInsensitive(query.q) },
+              ],
+            },
+          },
+        },
       ],
+    };
+  }
+
+  private normalizeTranslations(
+    items?: OrgUnitTranslationDto[],
+  ): NormalizedTranslation[] {
+    if (!items?.length) {
+      return [];
+    }
+    const byLocale = new Map<ContentTranslationLocale, NormalizedTranslation>();
+    for (const item of items) {
+      if (!contentTranslationLocales.includes(item.locale)) {
+        continue;
+      }
+      const name = item.name?.trim() ?? '';
+      const description = item.description?.trim() || null;
+      if (!name && !description) {
+        continue;
+      }
+      if (name.length < 2) {
+        throw new BadRequestException(
+          'ترجمه ناقص است؛ نام واحد را کامل کنید یا این زبان را خالی بگذارید',
+        );
+      }
+      byLocale.set(item.locale, {
+        locale: item.locale,
+        name,
+        description,
+      });
+    }
+    return [...byLocale.values()];
+  }
+
+  private pickLocalized(item: {
+    name: string;
+    description: string | null;
+    translations: {
+      locale: string;
+      name: string | null;
+      description: string | null;
+    }[];
+  }) {
+    const locale = getRequestLocale();
+    const persian = {
+      name: item.name,
+      description: item.description,
+    };
+    if (locale === contentSourceLocale) {
+      return persian;
+    }
+    const translation = item.translations.find((row) => row.locale === locale);
+    if (!translation?.name?.trim()) {
+      return persian;
+    }
+    return {
+      name: translation.name,
+      description: translation.description?.trim() || item.description,
     };
   }
 
@@ -467,6 +574,11 @@ export class OrgUnitsService {
   }
 
   private serialize(item: OrgUnitRecord) {
+    const translations = item.translations.map((row) => ({
+      locale: row.locale,
+      name: row.name,
+      description: row.description,
+    }));
     return {
       id: item.id,
       name: item.name,
@@ -478,6 +590,8 @@ export class OrgUnitsService {
       manager: item.manager,
       accommodationLiaisonCount: item._count.accommodationLiaisons,
       caravanLiaisonCount: item._count.caravanLiaisons,
+      translations,
+      translatedLocales: translations.map((row) => row.locale),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };

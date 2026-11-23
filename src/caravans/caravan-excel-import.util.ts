@@ -1,5 +1,6 @@
-import * as ExcelJS from 'exceljs';
+import type * as ExcelJS from 'exceljs';
 import { jalaliToIsoDate } from '../common/jalali-year';
+import { loadExcelJS } from '../common/lazy-modules';
 import {
   normalizeNationalId,
   toLatinDigits,
@@ -631,6 +632,7 @@ function parseDedicatedSheet(
 export async function parseCaravanImportExcel(
   buffer: Buffer,
 ): Promise<ParsedCaravanImport> {
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as never);
   const sheet = workbook.worksheets[0];

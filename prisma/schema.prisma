@@ -139,6 +139,9 @@ model User {
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
   introducedAccommodations Accommodation[] @relation("AccommodationIntroducer")
+  reviewedAccommodations Accommodation[] @relation("AccommodationReviewer")
+  schoolManagedAccommodations Accommodation[] @relation("AccommodationSchoolManager")
+  accommodationEvaluations AccommodationEvaluation[] @relation("AccommodationEvaluationReviewer")
   accommodationContacts AccommodationContact[]
   accommodationYearContacts AccommodationYearContact[]
   managedCaravans       Caravan[] @relation("CaravanManager")
@@ -334,6 +337,10 @@ model StoredImage {
   headquartersLogos HeadquartersInfo[] @relation("HeadquartersLogo")
   participationCampaignImages ParticipationCampaign[] @relation("ParticipationCampaignImage")
   headquartersNewsImages HeadquartersNews[] @relation("HeadquartersNewsImage")
+  accommodationImages AccommodationImage[] @relation("AccommodationPhoto")
+  accommodationMedicalApprovals Accommodation[] @relation("AccommodationMedicalApproval")
+  accommodationSchoolEquipmentHandovers Accommodation[] @relation("AccommodationSchoolEquipmentHandover")
+  accommodationSchoolFinalHandovers Accommodation[] @relation("AccommodationSchoolFinalHandover")
   createdAt         DateTime @default(now())
 
   @@map("stored_images")
@@ -1060,19 +1067,30 @@ model EntryBorder {
   @@map("entry_borders")
 }
 
-enum AccommodationType {
-  SCHOOL
-  MOSQUE
-  HUSSEINIEH
-  HALL
-  HOUSE
-  OTHER
-}
-
 enum AccommodationStatus {
   ACTIVE
   INACTIVE
   FULL
+  PENDING_REVIEW
+}
+
+enum AccommodationInspectionStatus {
+  NOT_DONE
+  PENDING
+  DONE
+}
+
+enum AccommodationInspectionResult {
+  APPROVED
+  CONDITIONAL
+  REJECTED
+}
+
+enum AccommodationOperationStatus {
+  ACTIVE
+  INACTIVE
+  EMERGENCY
+  OUT_OF_CYCLE
 }
 
 enum GenderType {
@@ -1099,6 +1117,22 @@ model SchoolDistrict {
   @@map("school_districts")
 }
 
+model AccommodationType {
+  id                     String          @id @default(uuid())
+  code                   String          @unique
+  nameFa                 String
+  nameEn                 String
+  icon                   String          @default("building-2")
+  isActive               Boolean         @default(true)
+  sortOrder              Int             @default(0)
+  accommodations         Accommodation[]
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("accommodation_types")
+}
+
 enum AccommodationContactRole {
   DEPUTY
   RECEPTION
@@ -1109,10 +1143,144 @@ enum AccommodationContactRole {
   LOGISTICS_SUPPORT
 }
 
+enum MedicalActivityStatus {
+  ACTIVE
+  INACTIVE
+  PARTIALLY_ACTIVE
+}
+
+enum BoardingCenterKind {
+  BOARDING
+  STUDENT_DORM
+  EDUCATIONAL_CENTER
+}
+
+enum TentStructureKind {
+  TENT
+  TEMPORARY_STRUCTURE
+  CONTAINER
+  OTHER
+}
+
+enum TentFlooringKind {
+  SOIL
+  ASPHALT
+  CONCRETE
+  COVERING
+  OTHER
+}
+
+enum DrainageStatus {
+  SUITABLE
+  UNSUITABLE
+  NEEDS_REVIEW
+}
+
+enum WindResistanceStatus {
+  NEEDS_ASSESSMENT
+  APPROVED
+  UNSUITABLE
+}
+
+enum WaterSourceKind {
+  NETWORK
+  TANK
+  OTHER
+}
+
+enum LightingStatus {
+  SUITABLE
+  UNSUITABLE
+}
+
+enum LodgingCenterKind {
+  GUESTHOUSE
+  DORMITORY
+  LODGING
+  OTHER
+}
+
+enum LinenSupplyStatus {
+  SUFFICIENT
+  INSUFFICIENT
+  NEEDS_SUPPLY
+}
+
+enum CleaningServiceKind {
+  INTERNAL
+  ORGANIZATION
+  CONTRACTOR
+}
+
+enum AssemblyCenterKind {
+  CULTURAL
+  CONFERENCE
+  ASSEMBLY
+  MULTIPURPOSE
+}
+
+enum ConditionStatus {
+  SUITABLE
+  CONDITIONAL
+  UNSUITABLE
+}
+
+enum SportsComplexKind {
+  SPORTS
+  MULTIPURPOSE
+  OTHER
+}
+
+enum ApprovalTriState {
+  YES
+  NO
+  NEEDS_APPROVAL
+}
+
+enum EmergencyExitStatus {
+  SUITABLE
+  NEEDS_FIX
+  UNSUITABLE
+}
+
+enum FlooringCondition {
+  SOUND
+  DAMAGED
+  SLIPPERY
+}
+
+enum UnknownSuitabilityStatus {
+  SUITABLE
+  UNSUITABLE
+  UNKNOWN
+}
+
+enum KitchenStatus {
+  ACTIVE
+  INACTIVE
+  DISTRIBUTION_ONLY
+}
+
+enum MosqueManagerLocationKind {
+  OFFICE
+  PRAYER_HALL
+  SIDE_ROOM
+  STORAGE
+  OTHER
+}
+
+enum SchoolKind {
+  PUBLIC
+  PRIVATE
+  VOCATIONAL
+  OTHER
+}
+
 model Accommodation {
   id                    String               @id @default(uuid())
   name                  String
-  type                  AccommodationType
+  typeId                String
+  type                  AccommodationType    @relation(fields: [typeId], references: [id], onDelete: Restrict)
   status                AccommodationStatus  @default(ACTIVE)
   genderType            GenderType
   managementType        ManagementType       @default(SELF_SUFFICIENT)
@@ -1121,6 +1289,8 @@ model Accommodation {
   overflowPercent       Int                  @default(10)
   assignedMaleCapacity  Int                  @default(0)
   assignedFemaleCapacity Int                 @default(0)
+  ownerName             String?
+  ownerPhone            String?
   phone                 String?
   address               String?
   neshanAddress         String?
@@ -1150,11 +1320,189 @@ model Accommodation {
   classroomCount        Int?
   schoolDistrictId      String?
   schoolDistrict        SchoolDistrict?      @relation(fields: [schoolDistrictId], references: [id], onDelete: Restrict)
+  medicalActivityStatus           MedicalActivityStatus?
+  medicalAllowedSections          String?
+  medicalForbiddenSections        String?
+  medicalWrittenApprovalImageId   String?
+  medicalWrittenApprovalImage     StoredImage? @relation("AccommodationMedicalApproval", fields: [medicalWrittenApprovalImageId], references: [id], onDelete: SetNull)
+  medicalHygieneSafetyStatus      String?
+  medicalApprovedCapacity         Int?
+  medicalSanitaryFacilities       String?
+  medicalSpecializedRestrictions  String?
+  medicalApproverName             String?
+  boardingCenterKind              BoardingCenterKind?
+  boardingBlockCount              Int?
+  boardingRoomCount               Int?
+  boardingFixedBedCount           Int?
+  boardingUsableBedCount          Int?
+  boardingPrivateBathroomRoomCount Int?
+  boardingSharedBathToiletCount   Int?
+  boardingHasDiningHall           Boolean?
+  boardingHasKitchen              Boolean?
+  boardingHasLaundry              Boolean?
+  boardingHasStudyOrHall          Boolean?
+  boardingAccessControl           String?
+  boardingPersonalStorage         String?
+  boardingCanAssignFully          Boolean?
+  boardingUnassignableSections    String?
+  boardingApprovedCapacity        Int?
+  boardingRepresentativeName      String?
+  tentStructureKind               TentStructureKind?
+  tentInstalledCount              Int?
+  tentIntactCount                 Int?
+  tentApprovedCapacityEach        Int?
+  tentAreaEach                    Int?
+  tentFlooringKind                TentFlooringKind?
+  tentDrainageStatus              DrainageStatus?
+  tentWindResistanceStatus        WindResistanceStatus?
+  tentHvacStatus                  String?
+  tentWaterSource                 WaterSourceKind?
+  tentWaterHealthStatus           String?
+  tentToiletCount                 Int?
+  tentWasteLocation               String?
+  tentPublicLighting              LightingStatus?
+  tentExitPathLighting            LightingStatus?
+  tentEmergencyVehicleAccess      Boolean?
+  tentSafeAssemblyPoint           String?
+  tentFireEquipment               String?
+  tentMaintenanceManager          String?
+  tentFinalApprovedCapacity       Int?
+  lodgingCenterKind               LodgingCenterKind?
+  lodgingBuildingCount            Int?
+  lodgingFloorCount               Int?
+  lodgingRoomCount                Int?
+  lodgingFixedBedCount            Int?
+  lodgingUsableBedCount           Int?
+  lodgingSingleRoomCount          Int?
+  lodgingMultiRoomCount           Int?
+  lodgingRoomCapacities           Json?
+  lodgingAssignableRoomCount      Int?
+  lodgingOutOfServiceRoomCount    Int?
+  lodgingPrivateBathroomCount     Int?
+  lodgingSharedBathroomCount      Int?
+  lodgingBathCount                Int?
+  lodgingLinenStatus              LinenSupplyStatus?
+  lodgingCanWashLinen             Boolean?
+  lodgingHvacStatus               String?
+  lodgingElevatorCount            Int?
+  lodgingElevatorStatus           String?
+  lodgingStepFreeAccess           Boolean?
+  lodgingLuggageStorage           String?
+  lodgingCleaningService          CleaningServiceKind?
+  lodgingNightReception           Boolean?
+  lodgingLockStatus               String?
+  lodgingOperationTerms           String?
+  lodgingRoomEquipment            String?
+  lodgingFinalApprovedCapacity    Int?
+  assemblyCenterKind              AssemblyCenterKind?
+  assemblyMainHallArea            Int?
+  assemblySideHallCount           Int?
+  assemblyFixedSeatCount          Int?
+  assemblySeatsRemovable          Boolean?
+  assemblyUsableAreaAfterRemoval  Int?
+  assemblySideRoomCount           Int?
+  assemblyHasStage                Boolean?
+  assemblyHasBackstage            Boolean?
+  assemblyToiletCount             Int?
+  assemblyAvSystem                String?
+  assemblyVentilationStatus       ConditionStatus?
+  assemblyAvStorage               String?
+  assemblyEventSchedule           String?
+  assemblyCanSplitSpace           Boolean?
+  assemblyFinalApprovedCapacity   Int?
+  assemblyOperatorRestrictions    String?
+  sportsComplexKind               SportsComplexKind?
+  sportsOperatorName              String?
+  sportsMainFloorArea             Int?
+  sportsIndependentHallCount      Int?
+  sportsSpectatorSeatCount        Int?
+  sportsSpectatorStayUse          ApprovalTriState?
+  sportsShowerCount               Int?
+  sportsToiletCount               Int?
+  sportsEntryExitCount            Int?
+  sportsEmergencyExitStatus       EmergencyExitStatus?
+  sportsFlooringCondition         FlooringCondition?
+  sportsFloorCovering             String?
+  sportsHasEquipmentStorage       Boolean?
+  sportsVentilation               String?
+  sportsHvacStatus                String?
+  sportsEmergencyLighting         UnknownSuitabilityStatus?
+  sportsFireStatus                String?
+  sportsProposedCapacity          Int?
+  sportsFinalApprovedCapacity     Int?
+  sportsHasReceptionDesk          Boolean?
+  husseiniehManagerName           String?
+  husseiniehMainHallArea          Int?
+  husseiniehSideHallCount         Int?
+  husseiniehSideHallAreas         String?
+  husseiniehFloorCount            Int?
+  husseiniehBalconyCount          Int?
+  husseiniehBalconyStayUse        ApprovalTriState?
+  husseiniehMainHallCapacity      Int?
+  husseiniehSideRoomCount         Int?
+  husseiniehHasStaffRoom          Boolean?
+  husseiniehHasStorage            Boolean?
+  husseiniehHasKitchen            Boolean?
+  husseiniehKitchenStatus         KitchenStatus?
+  husseiniehAudioStatus           ConditionStatus?
+  husseiniehCeremonyHours         Json?
+  husseiniehGenderSeparation      String?
+  husseiniehToiletStatus          String?
+  husseiniehVentilationStatus     ConditionStatus?
+  husseiniehCanBringSupplies      Boolean?
+  husseiniehTrusteeRestrictions   String?
+  mosqueTrusteeName               String?
+  mosqueHallCount                 Int?
+  mosqueFloorCount                Int?
+  mosqueAssignableArea            Int?
+  mosqueHallApprovedCapacity      Int?
+  mosqueHasSistersSpace           Boolean?
+  mosqueHasBrothersSpace          Boolean?
+  mosqueBanHours                  Json?
+  mosqueReligiousSchedule         String?
+  mosqueToiletCount               Int?
+  mosqueAblutionCount             Int?
+  mosqueHotWaterStatus            UnknownSuitabilityStatus?
+  mosqueHasShoeStorage            Boolean?
+  mosqueHasStorage                Boolean?
+  mosqueKitchenRestriction        String?
+  mosqueSpeakerRestriction        String?
+  mosqueTrusteeRules              String?
+  mosqueManagerLocationKind       MosqueManagerLocationKind?
+  mosqueManagerLocationText       String?
+  schoolKind                      SchoolKind?
+  schoolFloorCount                Int?
+  schoolBuildingCount             Int?
+  schoolTotalClassroomCount       Int?
+  schoolUsableClassroomCount      Int?
+  schoolUsableHallCount           Int?
+  schoolPrayerRoomCount           Int?
+  schoolAssignableOfficeCount     Int?
+  schoolClassroomApprovedCapacity Int?
+  schoolAllowedStayFloors         Int?
+  schoolToiletCount               Int?
+  schoolWashStatus                ConditionStatus?
+  schoolHvacStatus                ConditionStatus?
+  schoolManagerUserId             String?
+  schoolManagerUser               User? @relation("AccommodationSchoolManager", fields: [schoolManagerUserId], references: [id], onDelete: SetNull)
+  schoolManagerName               String?
+  schoolEquipmentHandoverImageId  String?
+  schoolEquipmentHandoverImage    StoredImage? @relation("AccommodationSchoolEquipmentHandover", fields: [schoolEquipmentHandoverImageId], references: [id], onDelete: SetNull)
+  schoolFinalHandoverImageId      String?
+  schoolFinalHandoverImage        StoredImage? @relation("AccommodationSchoolFinalHandover", fields: [schoolFinalHandoverImageId], references: [id], onDelete: SetNull)
   introducedById        String?
   introducedBy          User?                @relation("AccommodationIntroducer", fields: [introducedById], references: [id], onDelete: SetNull)
+  inspectionStatus      AccommodationInspectionStatus @default(NOT_DONE)
+  inspectionResult      AccommodationInspectionResult?
+  reviewerId            String?
+  reviewer              User?                @relation("AccommodationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  lastEvaluatedAt       DateTime?            @db.Date
+  operationStatus       AccommodationOperationStatus @default(ACTIVE)
   managers              AccommodationManager[]
   contacts              AccommodationContact[]
   yearContacts          AccommodationYearContact[]
+  images                AccommodationImage[]
+  evaluations           AccommodationEvaluation[]
   iceVouchers           IceVoucher[]
   allocations           ReservationAllocation[]
   mealPlanDistributions RestaurantMealPlanDistribution[]
@@ -1162,12 +1510,50 @@ model Accommodation {
   updatedAt             DateTime             @updatedAt
 
   @@index([name])
-  @@index([status, type])
+  @@index([status, typeId])
+  @@index([typeId])
   @@index([managementType, genderType])
   @@index([cityId])
   @@index([introducedById])
   @@index([schoolDistrictId])
+  @@index([medicalWrittenApprovalImageId])
+  @@index([schoolManagerUserId])
+  @@index([schoolEquipmentHandoverImageId])
+  @@index([schoolFinalHandoverImageId])
+  @@index([reviewerId])
+  @@index([inspectionStatus])
+  @@index([operationStatus])
   @@map("accommodations")
+}
+
+model AccommodationImage {
+  id              String        @id @default(uuid())
+  accommodationId String
+  accommodation   Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  imageId         String
+  image           StoredImage   @relation("AccommodationPhoto", fields: [imageId], references: [id], onDelete: Cascade)
+  sortOrder       Int           @default(0)
+  createdAt       DateTime      @default(now())
+
+  @@index([accommodationId, sortOrder])
+  @@index([imageId])
+  @@map("accommodation_images")
+}
+
+model AccommodationEvaluation {
+  id                 String                         @id @default(uuid())
+  accommodationId    String
+  accommodation      Accommodation                  @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  inspectionStatus   AccommodationInspectionStatus
+  inspectionResult   AccommodationInspectionResult?
+  reviewerId         String?
+  reviewer           User?                          @relation("AccommodationEvaluationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  evaluatedAt        DateTime                       @db.Date
+  createdAt          DateTime                       @default(now())
+
+  @@index([accommodationId, evaluatedAt])
+  @@index([reviewerId])
+  @@map("accommodation_evaluations")
 }
 
 model AccommodationContact {
@@ -1644,12 +2030,32 @@ model HeadquartersInfo {
   telegram    String?
   instagram   String?
   phones      HeadquartersPhone[]
+  translations HeadquartersInfoTranslation[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   @@index([name])
   @@index([createdAt])
   @@map("headquarters_info")
+}
+
+/// ترجمهٔ اطلاعات ستاد برای زبان‌های غیر فارسی
+model HeadquartersInfoTranslation {
+  id             String           @id @default(uuid())
+  headquartersId String
+  headquarters   HeadquartersInfo @relation(fields: [headquartersId], references: [id], onDelete: Cascade)
+  locale         String
+  name           String
+  title          String?
+  description    String?
+  address        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([headquartersId, locale])
+  @@index([locale])
+  @@index([createdAt])
+  @@map("headquarters_info_translations")
 }
 
 model HeadquartersPhone {
@@ -1716,14 +2122,15 @@ model HeadquartersNewsTranslation {
 
 /// اطلاعیه‌های مهم ستاد جمعیت (عمومی یا ویژه نقش)
 model HeadquartersAnnouncement {
-  id          String               @id @default(uuid())
-  title       String
-  body        String
-  audience    AnnouncementAudience
-  publishedAt DateTime             @db.Date
-  isPublished Boolean              @default(true)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id           String                                @id @default(uuid())
+  title        String
+  body         String
+  audience     AnnouncementAudience
+  publishedAt  DateTime                              @db.Date
+  isPublished  Boolean                               @default(true)
+  translations HeadquartersAnnouncementTranslation[]
+  createdAt    DateTime                              @default(now())
+  updatedAt    DateTime                              @updatedAt
 
   @@index([title])
   @@index([audience])
@@ -1731,6 +2138,23 @@ model HeadquartersAnnouncement {
   @@index([isPublished])
   @@index([createdAt])
   @@map("headquarters_announcements")
+}
+
+/// ترجمهٔ اطلاعیه برای زبان‌های غیر فارسی
+model HeadquartersAnnouncementTranslation {
+  id             String                   @id @default(uuid())
+  announcementId String
+  announcement   HeadquartersAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  locale         String
+  title          String
+  body           String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([announcementId, locale], map: "hq_announcement_tr_announcementId_locale_key")
+  @@index([locale])
+  @@index([createdAt])
+  @@map("headquarters_announcement_translations")
 }
 
 model OrgUnit {
@@ -1744,6 +2168,7 @@ model OrgUnit {
   manager          User?    @relation("OrgUnitManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   accommodationLiaisons OrgUnitAccommodationLiaison[]
   caravanLiaisons       OrgUnitCaravanLiaison[]
+  translations     OrgUnitTranslation[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -1751,6 +2176,23 @@ model OrgUnit {
   @@index([managerUserId])
   @@index([createdAt])
   @@map("org_units")
+}
+
+/// ترجمهٔ واحد ستاد برای زبان‌های غیر فارسی
+model OrgUnitTranslation {
+  id          String   @id @default(uuid())
+  unitId      String
+  unit        OrgUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  locale      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([unitId, locale])
+  @@index([locale])
+  @@index([createdAt])
+  @@map("org_unit_translations")
 }
 
 model OrgUnitAccommodationLiaison {
@@ -2019,23 +2461,24 @@ model CryptoWallet {
 }
 
 model ParticipationCampaign {
-  id             String                 @id @default(uuid())
+  id             String                              @id @default(uuid())
   name           String
-  startDate      DateTime               @db.Date
-  endDate        DateTime               @db.Date
+  startDate      DateTime                            @db.Date
+  endDate        DateTime                            @db.Date
   description    String?
   imageId        String?
-  image          StoredImage?           @relation("ParticipationCampaignImage", fields: [imageId], references: [id], onDelete: SetNull)
-  isActive       Boolean                @default(true)
+  image          StoredImage?                        @relation("ParticipationCampaignImage", fields: [imageId], references: [id], onDelete: SetNull)
+  isActive       Boolean                             @default(true)
   totalAmount    Int
   sharePrice     Int
   bankAccountId  String?
-  bankAccount    BankAccount?           @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccount    BankAccount?                        @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
   cryptoWalletId String?
-  cryptoWallet   CryptoWallet?          @relation(fields: [cryptoWalletId], references: [id], onDelete: SetNull)
+  cryptoWallet   CryptoWallet?                       @relation(fields: [cryptoWalletId], references: [id], onDelete: SetNull)
   contributions  Contribution[]
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  translations   ParticipationCampaignTranslation[]
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
 
   @@index([name])
   @@index([isActive])
@@ -2044,6 +2487,23 @@ model ParticipationCampaign {
   @@index([bankAccountId])
   @@index([cryptoWalletId])
   @@map("participation_campaigns")
+}
+
+/// ترجمهٔ پویش برای زبان‌های غیر فارسی
+model ParticipationCampaignTranslation {
+  id          String                @id @default(uuid())
+  campaignId  String
+  campaign    ParticipationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  locale      String
+  name        String
+  description String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@unique([campaignId, locale])
+  @@index([locale])
+  @@index([createdAt])
+  @@map("participation_campaign_translations")
 }
 
 model GoodsUnit {

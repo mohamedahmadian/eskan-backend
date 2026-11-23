@@ -10,7 +10,9 @@ import {
 } from './role-scoped-users.controller';
 import { PublicAuthController } from './public-auth.controller';
 import { PublicProfilesController } from './public-profiles.controller';
+import { RolesCatalogController } from './roles-catalog.controller';
 import { RolesController } from './roles.controller';
+import { RolesService } from './roles.service';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -22,12 +24,13 @@ import { UsersService } from './users.service';
     PublicProfilesController,
     UsersController,
     RolesController,
+    RolesCatalogController,
     PilgrimsUsersController,
     CaravanManagersController,
     AccommodationManagersController,
     HeadquartersRepresentativesController,
   ],
-  providers: [UsersService],
+  providers: [UsersService, RolesService],
   exports: [UsersService],
 })
 export class UsersModule {}

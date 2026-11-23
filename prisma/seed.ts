@@ -11,6 +11,11 @@ import {
 } from './iran-official';
 import { seedHeadquartersContent } from './seed-headquarters-content';
 import {
+  ADMIN_FORBIDDEN_MINE_MENU_CODES,
+  adminMenuCodes,
+  DEFAULT_MENU_CODES_BY_ROLE,
+} from '../src/auth/role-menu-defaults';
+import {
   codeFromNeshanSlug,
   displayCityNameFa,
   loadIranProvincesAndCitiesNeshan,
@@ -396,14 +401,6 @@ async function main() {
       path: '/',
       icon: 'home',
       sortOrder: 1,
-    },
-    {
-      code: 'dashboard.new-caravan',
-      moduleId: dashboard.id,
-      nameKey: 'menus.newCaravan',
-      path: '/caravan-registration',
-      icon: 'tent',
-      sortOrder: 2,
     },
     {
       code: 'honorary-service.apply',
@@ -814,6 +811,22 @@ async function main() {
       sortOrder: 1,
     },
     {
+      code: 'users.roles',
+      moduleId: users.id,
+      nameKey: 'menus.roleAccess',
+      path: '/system-management/roles',
+      icon: 'shield',
+      sortOrder: 2,
+    },
+    {
+      code: 'users.new',
+      moduleId: users.id,
+      nameKey: 'menus.newUser',
+      path: '/users/new',
+      icon: 'user-round-plus',
+      sortOrder: 3,
+    },
+    {
       code: 'accommodation.list',
       moduleId: accommodation.id,
       nameKey: 'menus.accommodations',
@@ -878,12 +891,20 @@ async function main() {
       sortOrder: 8,
     },
     {
-      code: 'accommodation.base-info',
+      code: 'accommodation.school-districts',
       moduleId: accommodation.id,
-      nameKey: 'menus.accommodationBaseInfo',
-      path: '/accommodation-base-info',
-      icon: 'database',
+      nameKey: 'menus.schoolDistricts',
+      path: '/school-districts',
+      icon: 'school',
       sortOrder: 9,
+    },
+    {
+      code: 'accommodation.types',
+      moduleId: accommodation.id,
+      nameKey: 'menus.accommodationTypeManagement',
+      path: '/accommodation-types',
+      icon: 'tags',
+      sortOrder: 10,
     },
     {
       code: 'logistics.suppliers',
@@ -1190,12 +1211,20 @@ async function main() {
       sortOrder: 7,
     },
     {
+      code: 'participations.in-kind',
+      moduleId: participations.id,
+      nameKey: 'menus.participationsInKind',
+      path: '/participations/in-kind',
+      icon: 'gift',
+      sortOrder: 8,
+    },
+    {
       code: 'participations.goods',
       moduleId: participations.id,
       nameKey: 'menus.contributionGoods',
       path: '/participations/goods',
       icon: 'package',
-      sortOrder: 8,
+      sortOrder: 9,
     },
     {
       code: 'participations.goods-units',
@@ -1203,7 +1232,7 @@ async function main() {
       nameKey: 'menus.goodsUnits',
       path: '/participations/goods-units',
       icon: 'scale',
-      sortOrder: 9,
+      sortOrder: 10,
     },
     {
       code: 'participations.bank-accounts',
@@ -1211,7 +1240,7 @@ async function main() {
       nameKey: 'menus.bankAccounts',
       path: '/participations/bank-accounts',
       icon: 'landmark',
-      sortOrder: 10,
+      sortOrder: 11,
     },
     {
       code: 'participations.crypto-wallets',
@@ -1219,7 +1248,7 @@ async function main() {
       nameKey: 'menus.cryptoWallets',
       path: '/participations/crypto-wallets',
       icon: 'wallet',
-      sortOrder: 11,
+      sortOrder: 12,
     },
     {
       code: 'system-management.data-management',
@@ -1247,6 +1276,59 @@ async function main() {
     menuRecords.push(record);
   }
 
+  const oldRolesMenu = await prisma.menu.findUnique({
+    where: { code: 'system-management.roles' },
+    select: { id: true },
+  });
+  const newRolesMenu = menuRecords.find((item) => item.code === 'users.roles');
+  if (oldRolesMenu && newRolesMenu && oldRolesMenu.id !== newRolesMenu.id) {
+    const oldLinks = await prisma.roleMenu.findMany({
+      where: { menuId: oldRolesMenu.id },
+      select: { roleId: true },
+    });
+    if (oldLinks.length) {
+      await prisma.roleMenu.createMany({
+        data: oldLinks.map((link) => ({
+          roleId: link.roleId,
+          menuId: newRolesMenu.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  const oldAccommodationBaseInfo = await prisma.menu.findUnique({
+    where: { code: 'accommodation.base-info' },
+    select: { id: true },
+  });
+  const schoolDistrictsMenu = menuRecords.find(
+    (item) => item.code === 'accommodation.school-districts',
+  );
+  const accommodationTypesMenu = menuRecords.find(
+    (item) => item.code === 'accommodation.types',
+  );
+  if (oldAccommodationBaseInfo && schoolDistrictsMenu && accommodationTypesMenu) {
+    const oldLinks = await prisma.roleMenu.findMany({
+      where: { menuId: oldAccommodationBaseInfo.id },
+      select: { roleId: true },
+    });
+    if (oldLinks.length) {
+      await prisma.roleMenu.createMany({
+        data: [
+          ...oldLinks.map((link) => ({
+            roleId: link.roleId,
+            menuId: schoolDistrictsMenu.id,
+          })),
+          ...oldLinks.map((link) => ({
+            roleId: link.roleId,
+            menuId: accommodationTypesMenu.id,
+          })),
+        ],
+        skipDuplicates: true,
+      });
+    }
+  }
+
   await prisma.navModule.deleteMany({
     where: { code: 'honorary-servants', menus: { none: {} } },
   });
@@ -1262,11 +1344,21 @@ async function main() {
               'base-info.red-crescents',
               'dashboard.honorary-apply',
               'dashboard.introduce-accommodation',
+              'dashboard.new-caravan',
+              'system-management.roles',
+              'accommodation.base-info',
             ],
           },
         },
         {
-          nameKey: { in: ['menus.placeTypes', 'menus.medicalCenters', 'menus.redCrescents'] },
+          nameKey: {
+            in: [
+              'menus.placeTypes',
+              'menus.medicalCenters',
+              'menus.redCrescents',
+              'menus.accommodationBaseInfo',
+            ],
+          },
         },
       ],
     },
@@ -1275,479 +1367,58 @@ async function main() {
     await prisma.menu.delete({ where: { id: leftover.id } });
   }
 
-  for (const menu of menuRecords) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: { roleId: adminRole.id, menuId: menu.id },
-      },
-      update: {},
-      create: { roleId: adminRole.id, menuId: menu.id },
+  const defaultMenuCodesByRole: Record<string, Set<string>> = {
+    ADMIN: new Set(adminMenuCodes(menuRecords.map((item) => item.code))),
+    ...Object.fromEntries(
+      Object.entries(DEFAULT_MENU_CODES_BY_ROLE).map(([code, menus]) => [
+        code,
+        new Set(menus),
+      ]),
+    ),
+  };
+
+  async function grantDefaultMenus(role: { id: string; code: string }) {
+    const codes = defaultMenuCodesByRole[role.code];
+    if (!codes) return;
+    const menus = menuRecords.filter((item) => codes.has(item.code));
+    if (!menus.length) return;
+    await prisma.roleMenu.createMany({
+      data: menus.map((menu) => ({ roleId: role.id, menuId: menu.id })),
+      skipDuplicates: true,
     });
   }
 
-  // مدیر منوهای «مال من» پرونده/کاروان/گروه/اسکان را ندارد (مخصوص زائر و نقش‌های مرتبط)
-  const adminForbiddenMineMenus = menuRecords.filter(
-    (item) =>
-      item.code === 'reservations.create' ||
-      item.code === 'reservations.mine' ||
-      item.code === 'groups.mine' ||
-      item.code === 'evaluations.mine' ||
-      item.code === 'accommodation.mine' ||
-      item.code === 'accommodation.introduce' ||
-      item.code === 'accommodation.introduced' ||
-      item.code === 'stations.mine' ||
-      item.code === 'stations.report' ||
-      item.code === 'stations.history' ||
-      item.code === 'location.mine' ||
-      item.code === 'location.history',
-  );
-  if (adminForbiddenMineMenus.length) {
-    await prisma.roleMenu.deleteMany({
-      where: {
+  for (const role of [
+    adminRole,
+    accommodationManagerRole,
+    caravanManagerRole,
+    groupManagerRole,
+    pilgrimRole,
+    honoraryServantRole,
+    licenseIssuerRole,
+    governmentOrgOfficerRole,
+    stationManagerRole,
+    unitManagerRole,
+    headquartersRepresentativeRole,
+  ]) {
+    await grantDefaultMenus(role);
+  }
+
+  const unassignedMenus = await prisma.menu.findMany({
+    where: {
+      roles: { none: {} },
+      NOT: { code: { in: [...ADMIN_FORBIDDEN_MINE_MENU_CODES] } },
+    },
+    select: { id: true },
+  });
+  if (unassignedMenus.length) {
+    await prisma.roleMenu.createMany({
+      data: unassignedMenus.map((menu) => ({
         roleId: adminRole.id,
-        menuId: { in: adminForbiddenMineMenus.map((item) => item.id) },
-      },
+        menuId: menu.id,
+      })),
+      skipDuplicates: true,
     });
-  }
-
-  const managerMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'accommodation.list',
-    'accommodation.mine',
-    'accommodation.report',
-    'logistics.my-vouchers',
-    'logistics.my-loans',
-    'logistics.my-ice-vouchers',
-    'evaluations.mine',
-  ]);
-  const accommodationListMenu = menuRecords.find(
-    (item) => item.code === 'accommodation.list',
-  );
-  for (const menu of menuRecords.filter((item) =>
-    managerMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: accommodationManagerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: accommodationManagerRole.id, menuId: menu.id },
-    });
-  }
-  if (accommodationListMenu) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        menuId: accommodationListMenu.id,
-        roleId: { notIn: [adminRole.id, accommodationManagerRole.id] },
-      },
-    });
-  }
-
-  const myAccommodationsMenuCodes = new Set(['accommodation.mine']);
-  const rolesForMyAccommodations = [
-    caravanManagerRole,
-    groupManagerRole,
-    pilgrimRole,
-    licenseIssuerRole,
-    headquartersRepresentativeRole,
-  ];
-  for (const role of rolesForMyAccommodations) {
-    for (const menu of menuRecords.filter((item) =>
-      myAccommodationsMenuCodes.has(item.code),
-    )) {
-      await prisma.roleMenu.upsert({
-        where: {
-          roleId_menuId: { roleId: role.id, menuId: menu.id },
-        },
-        update: {},
-        create: { roleId: role.id, menuId: menu.id },
-      });
-    }
-  }
-
-  const caravanMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'caravans.mine',
-    'groups.mine',
-    'reservations.create',
-    'reservations.mine',
-    'accommodation.mine',
-    'evaluations.mine',
-    'location.mine',
-    'location.history',
-  ]);
-  const caravanListMenu = menuRecords.find(
-    (item) => item.code === 'caravans.list',
-  );
-  if (caravanListMenu) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: caravanManagerRole.id,
-        menuId: caravanListMenu.id,
-      },
-    });
-  }
-  for (const menu of menuRecords.filter((item) =>
-    caravanMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: caravanManagerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: caravanManagerRole.id, menuId: menu.id },
-    });
-  }
-
-  const groupMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'groups.mine',
-    'reservations.create',
-    'reservations.mine',
-    'accommodation.mine',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    groupMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: groupManagerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: groupManagerRole.id, menuId: menu.id },
-    });
-  }
-
-  const pilgrimMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'reservations.create',
-    'reservations.mine',
-    'caravans.mine',
-    'groups.mine',
-    'accommodation.mine',
-    'evaluations.mine',
-    'location.mine',
-    'location.history',
-    'participations.home',
-    'participations.campaigns',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    pilgrimMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: pilgrimRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: pilgrimRole.id, menuId: menu.id },
-    });
-  }
-  const pilgrimForbiddenMenus = menuRecords.filter(
-    (item) => !pilgrimMenuCodes.has(item.code),
-  );
-  if (pilgrimForbiddenMenus.length) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: pilgrimRole.id,
-        menuId: { in: pilgrimForbiddenMenus.map((item) => item.id) },
-      },
-    });
-  }
-
-  const honoraryServantMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'reservations.translator',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    honoraryServantMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: honoraryServantRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: honoraryServantRole.id, menuId: menu.id },
-    });
-  }
-
-  const licenseIssuerMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'licenses.issue',
-    'licenses.issued',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    licenseIssuerMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: licenseIssuerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: licenseIssuerRole.id, menuId: menu.id },
-    });
-  }
-
-  // صادرکننده مجوز فقط منوی مجوزها را دارد؛ اسکان را بردار
-  const licenseIssuerForbiddenMenus = menuRecords.filter(
-    (item) => !licenseIssuerMenuCodes.has(item.code),
-  );
-  if (licenseIssuerForbiddenMenus.length) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: licenseIssuerRole.id,
-        menuId: { in: licenseIssuerForbiddenMenus.map((item) => item.id) },
-      },
-    });
-  }
-
-  const governmentOrgOfficerMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'caravans.support-requests',
-    'caravans.support-request-report',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    governmentOrgOfficerMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: governmentOrgOfficerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: governmentOrgOfficerRole.id, menuId: menu.id },
-    });
-  }
-  const governmentOrgOfficerForbiddenMenus = menuRecords.filter(
-    (item) => !governmentOrgOfficerMenuCodes.has(item.code),
-  );
-  if (governmentOrgOfficerForbiddenMenus.length) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: governmentOrgOfficerRole.id,
-        menuId: { in: governmentOrgOfficerForbiddenMenus.map((item) => item.id) },
-      },
-    });
-  }
-
-  const stationManagerMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'stations.mine',
-    'stations.report',
-    'stations.history',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    stationManagerMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: stationManagerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: stationManagerRole.id, menuId: menu.id },
-    });
-  }
-  const stationManagerForbiddenMenus = menuRecords.filter(
-    (item) => !stationManagerMenuCodes.has(item.code),
-  );
-  if (stationManagerForbiddenMenus.length) {
-    await prisma.roleMenu.deleteMany({
-      where: {
-        roleId: stationManagerRole.id,
-        menuId: { in: stationManagerForbiddenMenus.map((item) => item.id) },
-      },
-    });
-  }
-
-  const unitManagerMenuCodes = new Set([
-    'dashboard.overview',
-    'honorary-service.apply',
-    'honorary-service.history',
-    'participations.home',
-    'headquarters.accommodation-liaisons',
-    'headquarters.caravan-liaisons',
-    'evaluations.mine',
-  ]);
-  for (const menu of menuRecords.filter((item) =>
-    unitManagerMenuCodes.has(item.code),
-  )) {
-    await prisma.roleMenu.upsert({
-      where: {
-        roleId_menuId: {
-          roleId: unitManagerRole.id,
-          menuId: menu.id,
-        },
-      },
-      update: {},
-      create: { roleId: unitManagerRole.id, menuId: menu.id },
-    });
-  }
-
-  const participationsHomeMenus = menuRecords.filter(
-    (item) => item.code === 'participations.home',
-  );
-  for (const role of [
-    adminRole,
-    accommodationManagerRole,
-    caravanManagerRole,
-    groupManagerRole,
-    pilgrimRole,
-    honoraryServantRole,
-    licenseIssuerRole,
-    governmentOrgOfficerRole,
-    unitManagerRole,
-    stationManagerRole,
-    headquartersRepresentativeRole,
-  ]) {
-    for (const menu of participationsHomeMenus) {
-      await prisma.roleMenu.upsert({
-        where: {
-          roleId_menuId: {
-            roleId: role.id,
-            menuId: menu.id,
-          },
-        },
-        update: {},
-        create: { roleId: role.id, menuId: menu.id },
-      });
-    }
-  }
-
-  const honoraryServiceSelfMenus = menuRecords.filter(
-    (item) =>
-      item.code === 'honorary-service.apply' ||
-      item.code === 'honorary-service.history',
-  );
-  for (const role of [
-    adminRole,
-    accommodationManagerRole,
-    caravanManagerRole,
-    groupManagerRole,
-    pilgrimRole,
-    honoraryServantRole,
-    licenseIssuerRole,
-    governmentOrgOfficerRole,
-    unitManagerRole,
-    stationManagerRole,
-    headquartersRepresentativeRole,
-  ]) {
-    for (const menu of honoraryServiceSelfMenus) {
-      await prisma.roleMenu.upsert({
-        where: {
-          roleId_menuId: {
-            roleId: role.id,
-            menuId: menu.id,
-          },
-        },
-        update: {},
-        create: { roleId: role.id, menuId: menu.id },
-      });
-    }
-  }
-
-  const introduceAccommodationMenus = menuRecords.filter(
-    (item) =>
-      item.code === 'accommodation.introduce' ||
-      item.code === 'accommodation.introduced',
-  );
-  for (const role of [
-    accommodationManagerRole,
-    caravanManagerRole,
-    groupManagerRole,
-    pilgrimRole,
-    headquartersRepresentativeRole,
-    licenseIssuerRole,
-    unitManagerRole,
-    governmentOrgOfficerRole,
-    honoraryServantRole,
-    stationManagerRole,
-  ]) {
-    for (const menu of introduceAccommodationMenus) {
-      await prisma.roleMenu.upsert({
-        where: {
-          roleId_menuId: { roleId: role.id, menuId: menu.id },
-        },
-        update: {},
-        create: { roleId: role.id, menuId: menu.id },
-      });
-    }
-  }
-
-  const sharedCaravanMenuCodes = new Set([
-    'dashboard.new-caravan',
-    'caravans.register',
-    'caravans.mine',
-  ]);
-  const sharedCaravanMenus = menuRecords.filter((item) =>
-    sharedCaravanMenuCodes.has(item.code),
-  );
-  for (const role of [
-    adminRole,
-    accommodationManagerRole,
-    caravanManagerRole,
-    groupManagerRole,
-    pilgrimRole,
-    honoraryServantRole,
-    licenseIssuerRole,
-    governmentOrgOfficerRole,
-    unitManagerRole,
-    stationManagerRole,
-    headquartersRepresentativeRole,
-  ]) {
-    for (const menu of sharedCaravanMenus) {
-      await prisma.roleMenu.upsert({
-        where: {
-          roleId_menuId: { roleId: role.id, menuId: menu.id },
-        },
-        update: {},
-        create: { roleId: role.id, menuId: menu.id },
-      });
-    }
   }
 
   await prisma.smsSettings.upsert({
@@ -1774,6 +1445,7 @@ async function main() {
 
   await seedGeo();
   await seedPlaceTypes();
+  await seedAccommodationTypes();
   await seedHonoraryServiceTypes();
   await seedParticipationsData(prisma);
   await seedGoodsUnits();
@@ -2188,6 +1860,120 @@ async function seedGoodsUnits() {
 async function seedPlaceTypes() {
   for (const item of placeTypeSeed) {
     await prisma.placeType.upsert({
+      where: { code: item.code },
+      update: {
+        nameFa: item.nameFa,
+        nameEn: item.nameEn,
+        icon: item.icon,
+        sortOrder: item.sortOrder,
+      },
+      create: item,
+    });
+  }
+}
+
+const accommodationTypeSeed = [
+  {
+    code: 'school',
+    nameFa: 'مدرسه',
+    nameEn: 'School',
+    icon: 'school',
+    sortOrder: 1,
+  },
+  {
+    code: 'mosque',
+    nameFa: 'مسجد',
+    nameEn: 'Mosque',
+    icon: 'landmark',
+    sortOrder: 2,
+  },
+  {
+    code: 'husseinieh',
+    nameFa: 'حسینیه',
+    nameEn: 'Husseiniyeh',
+    icon: 'building',
+    sortOrder: 3,
+  },
+  {
+    code: 'sports-hall',
+    nameFa: 'سالن‌های ورزشی',
+    nameEn: 'Sports halls',
+    icon: 'building-2',
+    sortOrder: 4,
+  },
+  {
+    code: 'assembly-hall',
+    nameFa: 'سالن اجتماعات و مراکز فرهنگی',
+    nameEn: 'Assembly halls and cultural centers',
+    icon: 'landmark',
+    sortOrder: 5,
+  },
+  {
+    code: 'lodging',
+    nameFa: 'مهمان‌سراها، خوابگاه‌ها و مراکز اقامتی',
+    nameEn: 'Guesthouses, dormitories and lodging',
+    icon: 'home',
+    sortOrder: 6,
+  },
+  {
+    code: 'tent',
+    nameFa: 'چادرها و اسکان‌های موقت',
+    nameEn: 'Tents and temporary lodging',
+    icon: 'tent',
+    sortOrder: 7,
+  },
+  {
+    code: 'boarding',
+    nameFa: 'مراکز آموزشی شبانه‌روزی و خوابگاه‌های دانشجویی',
+    nameEn: 'Boarding schools and student dormitories',
+    icon: 'school',
+    sortOrder: 8,
+  },
+  {
+    code: 'medical',
+    nameFa: 'مراکز درمانی یا ساختمان‌های دارای کاربری درمانی',
+    nameEn: 'Medical buildings',
+    icon: 'hospital',
+    sortOrder: 9,
+  },
+  {
+    code: 'other',
+    nameFa: 'سایر',
+    nameEn: 'Other',
+    icon: 'map-pin',
+    sortOrder: 10,
+  },
+];
+
+async function renameAccommodationTypeCode(from: string, to: string) {
+  const previous = await prisma.accommodationType.findUnique({
+    where: { code: from },
+    select: { id: true },
+  });
+  if (!previous) return;
+  const next = await prisma.accommodationType.findUnique({
+    where: { code: to },
+    select: { id: true },
+  });
+  if (!next) {
+    await prisma.accommodationType.update({
+      where: { id: previous.id },
+      data: { code: to },
+    });
+    return;
+  }
+  await prisma.accommodation.updateMany({
+    where: { typeId: previous.id },
+    data: { typeId: next.id },
+  });
+  await prisma.accommodationType.delete({ where: { id: previous.id } });
+}
+
+async function seedAccommodationTypes() {
+  await renameAccommodationTypeCode('hall', 'sports-hall');
+  await renameAccommodationTypeCode('house', 'lodging');
+  for (const item of accommodationTypeSeed) {
+    await prisma.accommodationType.upsert({
       where: { code: item.code },
       update: {
         nameFa: item.nameFa,

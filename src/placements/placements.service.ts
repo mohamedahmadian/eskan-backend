@@ -28,6 +28,7 @@ import {
   UserGender,
 } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { isAccommodationUnavailable } from '../common/accommodation-availability';
 import { AllocatePlacementDto } from './dto/allocate-placement.dto';
 import { FindPlacementDueQueryDto } from './dto/find-placement-due-query.dto';
 import { FindPlacementQueueQueryDto } from './dto/find-placement-queue-query.dto';
@@ -983,7 +984,7 @@ export class PlacementsService {
     const venue = await tx.accommodation.findUnique({
       where: { id: item.accommodationId },
     });
-    if (!venue || venue.status === 'INACTIVE') {
+    if (!venue || isAccommodationUnavailable(venue.status)) {
       throw new BadRequestException('اسکان انتخاب‌شده معتبر نیست');
     }
     const settings = await tx.receptionSettings.findUnique({

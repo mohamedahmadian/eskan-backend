@@ -1,8 +1,37 @@
-import { IsBoolean, IsDateString, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import {
+  contentTranslationLocales,
+  type ContentTranslationLocale,
+} from '../../common/content-locales';
 import {
   announcementAudiences,
   type AnnouncementAudienceValue,
 } from '../announcement-audiences';
+
+export class HeadquartersAnnouncementTranslationDto {
+  @IsIn([...contentTranslationLocales])
+  locale: ContentTranslationLocale;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string | null;
+
+  @IsOptional()
+  @IsString()
+  body?: string | null;
+}
 
 export class CreateHeadquartersAnnouncementDto {
   @IsString()
@@ -24,4 +53,10 @@ export class CreateHeadquartersAnnouncementDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HeadquartersAnnouncementTranslationDto)
+  translations?: HeadquartersAnnouncementTranslationDto[];
 }

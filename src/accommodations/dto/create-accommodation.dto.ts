@@ -1,7 +1,9 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsIn,
   IsInt,
@@ -18,8 +20,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  AccommodationInspectionResult,
+  AccommodationInspectionStatus,
+  AccommodationOperationStatus,
   AccommodationStatus,
-  AccommodationType,
   GenderType,
   ManagementType,
 } from '../../generated/prisma/client';
@@ -29,15 +33,16 @@ import {
   toOptionalNumber,
 } from '../../common/dto-transform';
 import { AccommodationContactInputDto } from './accommodation-contact-input.dto';
+import { AccommodationTypeDetailsDto } from './accommodation-type-details.dto';
 import { yearContactModes } from './set-accommodation-year-contacts.dto';
 
-export class CreateAccommodationDto {
+export class CreateAccommodationDto extends AccommodationTypeDetailsDto {
   @IsString()
   @MinLength(2)
   name: string;
 
-  @IsEnum(AccommodationType)
-  type: AccommodationType;
+  @IsUUID()
+  typeId: string;
 
   @IsOptional()
   @IsEnum(AccommodationStatus)
@@ -68,6 +73,19 @@ export class CreateAccommodationDto {
   @Min(0)
   @Max(100)
   overflowPercent?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MinLength(2)
+  ownerName?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  ownerPhone?: string | null;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
@@ -220,6 +238,38 @@ export class CreateAccommodationDto {
   @ValidateIf((_, value) => value != null)
   @IsUUID()
   schoolDistrictId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @IsUUID('4', { each: true })
+  imageIds?: string[];
+
+  @IsOptional()
+  @IsEnum(AccommodationInspectionStatus)
+  inspectionStatus?: AccommodationInspectionStatus;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsEnum(AccommodationInspectionResult)
+  inspectionResult?: AccommodationInspectionResult | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsUUID()
+  reviewerId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsDateString()
+  lastEvaluatedAt?: string | null;
+
+  @IsOptional()
+  @IsEnum(AccommodationOperationStatus)
+  operationStatus?: AccommodationOperationStatus;
 
   @IsOptional()
   @Type(() => Number)

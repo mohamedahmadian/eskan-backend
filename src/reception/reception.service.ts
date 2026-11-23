@@ -9,6 +9,7 @@ import {
   isReservationCodeQuery,
   normalizeReservationCode,
 } from '../common/reservation-code';
+import { localizedGeoName } from '../common/request-locale';
 import { AllocationStatus, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -381,7 +382,7 @@ export class ReceptionService {
         type: 'accommodation' as const,
         id: item.id,
         title: item.name,
-        subtitle: item.type,
+        subtitle: localizedGeoName(item.type),
         phone: item.phone,
         nationalId: null,
         city: item.city,
@@ -911,7 +912,7 @@ export class ReceptionService {
   private toAccommodationSummary(item: {
     id: string;
     name: string;
-    type: string;
+    type: { id: string; code: string; nameFa: string; nameEn: string };
     status: string;
     genderType: string;
     phone: string | null;

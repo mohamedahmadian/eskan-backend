@@ -47,6 +47,16 @@ export function localeFromCountryIso2(iso2?: string | null): AppLocale {
   return 'en';
 }
 
+/** Public register: Iran → fa, Iraq → ar, other countries (including «سایر») → en. */
+export const REGISTER_OTHER_COUNTRY = 'other';
+
+export function registerLocaleFromCountryIso2(iso2?: string | null): AppLocale {
+  const code = iso2?.trim().toUpperCase();
+  if (code === 'IR') return 'fa';
+  if (code === 'IQ') return 'ar';
+  return 'en';
+}
+
 const store = new AsyncLocalStorage<AppLocale>();
 
 export function parseAcceptLanguage(

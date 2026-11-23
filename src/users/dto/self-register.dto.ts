@@ -9,9 +9,11 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { UserGender } from '../../generated/prisma/client';
 import { emptyToUndefined } from '../../common/dto-transform';
+import { REGISTER_OTHER_COUNTRY } from '../../common/request-locale';
 import { normalizePassportNumber, toLatinDigits } from '../../common/national-id';
 import { normalizePhone } from '../../common/phone';
 import { APP_LOCALES } from './create-user.dto';
@@ -49,6 +51,7 @@ export class SelfRegisterDto {
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
+  @ValidateIf((_, value) => Boolean(value) && value !== REGISTER_OTHER_COUNTRY)
   @IsUUID()
   countryId?: string;
 

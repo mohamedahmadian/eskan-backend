@@ -5,15 +5,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  contentSourceLocale,
+  contentTranslationLocales,
+  type ContentTranslationLocale,
+} from '../common/content-locales';
+import { currentJalaliYear } from '../common/jalali-year';
+import {
   containsInsensitive,
   paginatedResult,
   paginationArgs,
 } from '../common/pagination';
+import { getRequestLocale } from '../common/request-locale';
 import { resolveSortOrder } from '../common/sort-query';
-import { currentJalaliYear } from '../common/jalali-year';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateHeadquartersInfoDto } from './dto/create-headquarters-info.dto';
+import {
+  CreateHeadquartersInfoDto,
+  HeadquartersInfoTranslationDto,
+} from './dto/create-headquarters-info.dto';
 import { FindHeadquartersInfoQueryDto } from './dto/find-headquarters-info-query.dto';
 import { UpdateHeadquartersInfoDto } from './dto/update-headquarters-info.dto';
 
@@ -22,14 +31,28 @@ const headquartersPhoneOrder = [
   { id: 'asc' as const },
 ];
 
+const headquartersTranslationsInclude = {
+  translations: { orderBy: { locale: 'asc' as const } },
+} satisfies Prisma.HeadquartersInfoInclude;
+
 const headquartersListInclude = {
+  ...headquartersTranslationsInclude,
   _count: { select: { phones: true } },
 } satisfies Prisma.HeadquartersInfoInclude;
 
 const headquartersDetailInclude = {
+  ...headquartersTranslationsInclude,
   phones: { orderBy: headquartersPhoneOrder },
   _count: { select: { phones: true } },
 } satisfies Prisma.HeadquartersInfoInclude;
+
+type NormalizedTranslation = {
+  locale: ContentTranslationLocale;
+  name: string;
+  title: string | null;
+  description: string | null;
+  address: string | null;
+};
 
 type HeadquartersListRecord = Prisma.HeadquartersInfoGetPayload<{
   include: typeof headquartersListInclude;
@@ -82,6 +105,7 @@ export class HeadquartersInfoService {
       throw new ConflictException('فقط یک ستاد قابل تعریف است');
     }
     await this.assertLogo(dto.logoId);
+    const translations = this.normalizeTranslations(dto.translations);
     const item = await this.prisma.headquartersInfo.create({
       data: {
         name: dto.name.trim(),
@@ -97,6 +121,9 @@ export class HeadquartersInfoService {
         telegram: dto.telegram?.trim() || null,
         instagram: dto.instagram?.trim() || null,
         logoId: dto.logoId || null,
+        translations: translations.length
+          ? { create: translations }
+          : undefined,
       },
       include: headquartersDetailInclude,
     });
@@ -108,36 +135,52 @@ export class HeadquartersInfoService {
     if (dto.logoId !== undefined) {
       await this.assertLogo(dto.logoId);
     }
-    const item = await this.prisma.headquartersInfo.update({
-      where: { id },
-      data: {
-        name: dto.name?.trim(),
-        title: dto.title === undefined ? undefined : dto.title?.trim() || null,
-        address:
-          dto.address === undefined ? undefined : dto.address?.trim() || null,
-        neshanAddress:
-          dto.neshanAddress === undefined
-            ? undefined
-            : dto.neshanAddress?.trim() || null,
-        ...this.coordsData(dto, true),
-        description:
-          dto.description === undefined
-            ? undefined
-            : dto.description?.trim() || null,
-        activityStartYear: dto.activityStartYear,
-        website:
-          dto.website === undefined ? undefined : dto.website?.trim() || null,
-        eitaa: dto.eitaa === undefined ? undefined : dto.eitaa?.trim() || null,
-        bale: dto.bale === undefined ? undefined : dto.bale?.trim() || null,
-        telegram:
-          dto.telegram === undefined ? undefined : dto.telegram?.trim() || null,
-        instagram:
-          dto.instagram === undefined
-            ? undefined
-            : dto.instagram?.trim() || null,
-        logoId: dto.logoId === undefined ? undefined : dto.logoId || null,
-      },
-      include: headquartersDetailInclude,
+    const translations =
+      dto.translations === undefined
+        ? undefined
+        : this.normalizeTranslations(dto.translations);
+    const item = await this.prisma.$transaction(async (tx) => {
+      if (translations) {
+        await tx.headquartersInfoTranslation.deleteMany({
+          where: { headquartersId: id },
+        });
+        if (translations.length) {
+          await tx.headquartersInfoTranslation.createMany({
+            data: translations.map((row) => ({ ...row, headquartersId: id })),
+          });
+        }
+      }
+      return tx.headquartersInfo.update({
+        where: { id },
+        data: {
+          name: dto.name?.trim(),
+          title: dto.title === undefined ? undefined : dto.title?.trim() || null,
+          address:
+            dto.address === undefined ? undefined : dto.address?.trim() || null,
+          neshanAddress:
+            dto.neshanAddress === undefined
+              ? undefined
+              : dto.neshanAddress?.trim() || null,
+          ...this.coordsData(dto, true),
+          description:
+            dto.description === undefined
+              ? undefined
+              : dto.description?.trim() || null,
+          activityStartYear: dto.activityStartYear,
+          website:
+            dto.website === undefined ? undefined : dto.website?.trim() || null,
+          eitaa: dto.eitaa === undefined ? undefined : dto.eitaa?.trim() || null,
+          bale: dto.bale === undefined ? undefined : dto.bale?.trim() || null,
+          telegram:
+            dto.telegram === undefined ? undefined : dto.telegram?.trim() || null,
+          instagram:
+            dto.instagram === undefined
+              ? undefined
+              : dto.instagram?.trim() || null,
+          logoId: dto.logoId === undefined ? undefined : dto.logoId || null,
+        },
+        include: headquartersDetailInclude,
+      });
     });
     return this.serialize(item);
   }
@@ -171,17 +214,34 @@ export class HeadquartersInfoService {
           orderBy: headquartersPhoneOrder,
           select: { id: true, phone: true, department: true },
         },
+        translations: {
+          select: {
+            locale: true,
+            name: true,
+            title: true,
+            description: true,
+            address: true,
+          },
+        },
       },
     });
+    const localized = item
+      ? this.pickLocalized(item)
+      : {
+          name: null,
+          title: null,
+          description: null,
+          address: null,
+        };
     const activityStartYear = item?.activityStartYear ?? null;
     return {
-      name: item?.name ?? null,
-      title: item?.title ?? null,
-      address: item?.address ?? null,
+      name: localized.name,
+      title: localized.title,
+      address: localized.address,
       neshanAddress: item?.neshanAddress ?? null,
       latitude: item?.latitude == null ? null : Number(item.latitude),
       longitude: item?.longitude == null ? null : Number(item.longitude),
-      description: item?.description ?? null,
+      description: localized.description,
       activityStartYear,
       currentYear,
       yearsOfService:
@@ -236,7 +296,88 @@ export class HeadquartersInfoService {
         { instagram: containsInsensitive(query.q) },
         { phones: { some: { phone: containsInsensitive(query.q) } } },
         { phones: { some: { department: containsInsensitive(query.q) } } },
+        {
+          translations: {
+            some: {
+              OR: [
+                { name: containsInsensitive(query.q) },
+                { title: containsInsensitive(query.q) },
+                { description: containsInsensitive(query.q) },
+                { address: containsInsensitive(query.q) },
+              ],
+            },
+          },
+        },
       ],
+    };
+  }
+
+  private normalizeTranslations(
+    items?: HeadquartersInfoTranslationDto[],
+  ): NormalizedTranslation[] {
+    if (!items?.length) {
+      return [];
+    }
+    const byLocale = new Map<ContentTranslationLocale, NormalizedTranslation>();
+    for (const item of items) {
+      if (!contentTranslationLocales.includes(item.locale)) {
+        continue;
+      }
+      const name = item.name?.trim() ?? '';
+      const title = item.title?.trim() || null;
+      const description = item.description?.trim() || null;
+      const address = item.address?.trim() || null;
+      if (!name && !title && !description && !address) {
+        continue;
+      }
+      if (name.length < 2) {
+        throw new BadRequestException(
+          'ترجمه ناقص است؛ نام ستاد را کامل کنید یا این زبان را خالی بگذارید',
+        );
+      }
+      byLocale.set(item.locale, {
+        locale: item.locale,
+        name,
+        title,
+        description,
+        address,
+      });
+    }
+    return [...byLocale.values()];
+  }
+
+  private pickLocalized(item: {
+    name: string;
+    title: string | null;
+    description: string | null;
+    address: string | null;
+    translations: {
+      locale: string;
+      name: string | null;
+      title: string | null;
+      description: string | null;
+      address: string | null;
+    }[];
+  }) {
+    const locale = getRequestLocale();
+    const persian = {
+      name: item.name,
+      title: item.title,
+      description: item.description,
+      address: item.address,
+    };
+    if (locale === contentSourceLocale) {
+      return persian;
+    }
+    const translation = item.translations.find((row) => row.locale === locale);
+    if (!translation?.name?.trim()) {
+      return persian;
+    }
+    return {
+      name: translation.name,
+      title: translation.title?.trim() || item.title,
+      description: translation.description?.trim() || item.description,
+      address: translation.address?.trim() || item.address,
     };
   }
 
@@ -281,6 +422,13 @@ export class HeadquartersInfoService {
 
   private serialize(item: HeadquartersListRecord | HeadquartersDetailRecord) {
     const phones = 'phones' in item ? item.phones : undefined;
+    const translations = item.translations.map((row) => ({
+      locale: row.locale,
+      name: row.name,
+      title: row.title,
+      description: row.description,
+      address: row.address,
+    }));
     return {
       id: item.id,
       name: item.name,
@@ -299,6 +447,8 @@ export class HeadquartersInfoService {
       logoId: item.logoId,
       phoneCount: item._count.phones,
       phones,
+      translations,
+      translatedLocales: translations.map((row) => row.locale),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };

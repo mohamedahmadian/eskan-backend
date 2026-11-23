@@ -1,4 +1,7 @@
-import { localeFromCountryIso2 } from './request-locale';
+import {
+  localeFromCountryIso2,
+  registerLocaleFromCountryIso2,
+} from './request-locale';
 
 describe('localeFromCountryIso2', () => {
   it('maps seeded pilgrimage countries to supported locales', () => {
@@ -14,5 +17,15 @@ describe('localeFromCountryIso2', () => {
     expect(localeFromCountryIso2('DE')).toBe('en');
     expect(localeFromCountryIso2(null)).toBe('en');
     expect(localeFromCountryIso2('')).toBe('en');
+  });
+});
+
+describe('registerLocaleFromCountryIso2', () => {
+  it('uses Persian for Iran, Arabic for Iraq, and English otherwise', () => {
+    expect(registerLocaleFromCountryIso2('IR')).toBe('fa');
+    expect(registerLocaleFromCountryIso2('iq')).toBe('ar');
+    expect(registerLocaleFromCountryIso2('SA')).toBe('en');
+    expect(registerLocaleFromCountryIso2('PK')).toBe('en');
+    expect(registerLocaleFromCountryIso2(null)).toBe('en');
   });
 });

@@ -1,17 +1,57 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsInt,
   IsLatitude,
   IsLongitude,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import {
+  contentTranslationLocales,
+  type ContentTranslationLocale,
+} from '../../common/content-locales';
 import { emptyToNull, toOptionalNumber } from '../../common/dto-transform';
+
+export class HeadquartersInfoTranslationDto {
+  @IsIn([...contentTranslationLocales])
+  locale: ContentTranslationLocale;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  name?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  @MaxLength(200)
+  title?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  description?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => emptyToNull(value))
+  @ValidateIf((_, value) => value != null)
+  @IsString()
+  address?: string | null;
+}
 
 export class CreateHeadquartersInfoDto {
   @IsString()
@@ -95,4 +135,10 @@ export class CreateHeadquartersInfoDto {
   @ValidateIf((_, value) => value != null)
   @IsUUID('4')
   logoId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HeadquartersInfoTranslationDto)
+  translations?: HeadquartersInfoTranslationDto[];
 }

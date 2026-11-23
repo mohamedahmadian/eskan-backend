@@ -14,7 +14,6 @@ import { sortDirections } from '../../common/sort-query';
 import { emptyToUndefined, toOptionalBoolean } from '../../common/dto-transform';
 import {
   AccommodationStatus,
-  AccommodationType,
   GenderType,
   ManagementType,
 } from '../../generated/prisma/client';
@@ -24,6 +23,7 @@ export const accommodationSortFields = [
   'type',
   'managementType',
   'genderType',
+  'status',
 ] as const;
 
 export type AccommodationSortField = (typeof accommodationSortFields)[number];
@@ -31,8 +31,8 @@ export type AccommodationSortField = (typeof accommodationSortFields)[number];
 export class FindAccommodationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
-  @IsEnum(AccommodationType)
-  type?: AccommodationType;
+  @IsUUID()
+  typeId?: string;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))
