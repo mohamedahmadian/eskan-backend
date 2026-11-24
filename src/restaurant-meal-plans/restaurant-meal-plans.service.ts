@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { currentJalaliYear } from '../common/jalali-year';
 import { parseIsoDate } from '../common/iso-date';
 import {
   containsInsensitive,
@@ -29,7 +28,7 @@ const DISTRIBUTION_MANAGEMENT_TYPES: ManagementType[] = [
   'SEMI_SELF_SUFFICIENT',
 ];
 
-function distributionInclude(year: number) {
+function distributionInclude() {
   return {
     accommodation: {
       select: {
@@ -37,7 +36,6 @@ function distributionInclude(year: number) {
         name: true,
         managementType: true,
         managers: {
-          where: { year, userId: { not: null } },
           orderBy: [{ isPrimary: 'desc' as const }, { createdAt: 'asc' as const }],
           select: {
             id: true,
@@ -205,7 +203,7 @@ export class RestaurantMealPlansService {
     const mealPlan = await this.findOne(id);
     const items = await this.prisma.restaurantMealPlanDistribution.findMany({
       where: { mealPlanId: id },
-      include: distributionInclude(currentJalaliYear()),
+      include: distributionInclude(),
       orderBy: { createdAt: 'asc' },
     });
     return {

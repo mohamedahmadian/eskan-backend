@@ -10,8 +10,9 @@ import {
 import { emptyToNull } from '../../common/dto-transform';
 
 export class CreateIssuedLicenseDto {
+  @IsOptional()
   @IsUUID()
-  managerUserId: string;
+  managerUserId?: string;
 
   @IsUUID()
   caravanId: string;

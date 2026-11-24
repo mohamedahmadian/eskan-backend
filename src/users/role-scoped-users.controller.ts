@@ -407,7 +407,7 @@ export class AccommodationManagersController extends RoleScopedUsersController {
 
   @Post(':id/accommodations')
   assignAccommodation(@Param('id') id: string, @Body() dto: AssignAccommodationDto) {
-    return this.users.assignAccommodation(id, dto.accommodationId, dto.year);
+    return this.users.assignAccommodation(id, dto.accommodationId);
   }
 
   @Delete(':id/accommodations/:assignmentId')

@@ -474,8 +474,12 @@ export class ProvincialMonitoringService {
             name: true,
             cityId: true,
             city: { select: { nameFa: true, provinceId: true } },
-            years: {
-              where: { year: selectedYear },
+            reservations: {
+              where: {
+                year: selectedYear,
+                type: 'CARAVAN',
+                status: { notIn: [...inactiveReservation] },
+              },
               select: { maleCount: true, femaleCount: true },
             },
           },
@@ -588,16 +592,16 @@ export class ProvincialMonitoringService {
     };
 
     const caravans: CaravanRow[] = caravansRaw.map((item) => {
-      const yearRow = item.years[0];
+      const files = item.reservations;
       const row: CaravanRow = {
         id: item.id,
         name: item.name,
         cityId: item.cityId,
         cityNameFa: item.city.nameFa,
         provinceId: item.city.provinceId,
-        active: Boolean(yearRow),
-        capacityMale: yearRow?.maleCount ?? 0,
-        capacityFemale: yearRow?.femaleCount ?? 0,
+        active: files.length > 0,
+        capacityMale: files.reduce((sum, file) => sum + file.maleCount, 0),
+        capacityFemale: files.reduce((sum, file) => sum + file.femaleCount, 0),
         reservationCount: 0,
         reservationMale: 0,
         reservationFemale: 0,

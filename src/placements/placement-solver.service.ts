@@ -380,7 +380,6 @@ export class PlacementSolverService {
               id: true,
               name: true,
               manager: { select: { id: true, fullName: true, phone: true } },
-              walkingRoute: { select: { id: true, name: true } },
             },
           },
           originCity: {
@@ -403,7 +402,6 @@ export class PlacementSolverService {
           address: true,
           distanceToShrineKm: true,
           managers: {
-            where: { year, userId: { not: null } },
             orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
             take: 1,
             select: {
@@ -426,7 +424,7 @@ export class PlacementSolverService {
         },
       }),
       this.prisma.caravan.count({
-        where: { years: { some: { year } } },
+        where: { status: 'ACTIVE' },
       }),
     ]);
 
@@ -438,7 +436,7 @@ export class PlacementSolverService {
       const reservationManager = row.caravanManager?.fullName?.trim() ? row.caravanManager : null;
       const fallbackManager = row.caravan?.manager?.fullName?.trim() ? row.caravan.manager : null;
       const manager = reservationManager ?? fallbackManager;
-      const route = row.walkingRoute ?? row.caravan?.walkingRoute ?? null;
+      const route = row.walkingRoute ?? null;
       caravans.push({
         id: row.id,
         caravanId: row.caravan?.id ?? null,

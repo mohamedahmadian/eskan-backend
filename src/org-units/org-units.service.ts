@@ -18,7 +18,6 @@ import {
 import { getRequestLocale } from '../common/request-locale';
 import { resolveSortOrder } from '../common/sort-query';
 import { CaravanContactRole, AccommodationContactRole, Prisma } from '../generated/prisma/client';
-import { currentJalaliYear } from '../common/jalali-year';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { UsersService } from '../users/users.service';
@@ -217,18 +216,14 @@ export class OrgUnitsService {
       });
     });
     if (previousManagerId !== item.managerUserId) {
-      await this.syncUnitManagerRole(previousManagerId);
-      await this.syncUnitManagerRole(item.managerUserId);
-    } else if (item.managerUserId) {
       await this.syncUnitManagerRole(item.managerUserId);
     }
     return this.serialize(item);
   }
 
   async remove(id: string) {
-    const current = await this.findOne(id);
+    await this.findOne(id);
     await this.prisma.orgUnit.delete({ where: { id } });
-    await this.syncUnitManagerRole(current.managerUserId);
     return { ok: true };
   }
 
@@ -354,33 +349,19 @@ export class OrgUnitsService {
 
     if (kind === 'accommodation') {
       const accommodationRoles = roles as AccommodationContactRole[];
-      const year = currentJalaliYear();
-      const [permanent, yearly] = await Promise.all([
-        this.prisma.accommodationContact.findMany({
-          where: {
-            role: { in: accommodationRoles },
-            user: userFilter,
-          },
-          include: {
-            user: { select: liaisonUserSelect },
-            accommodation: { select: { id: true, name: true } },
-          },
-        }),
-        this.prisma.accommodationYearContact.findMany({
-          where: {
-            year,
-            role: { in: accommodationRoles },
-            user: userFilter,
-          },
-          include: {
-            user: { select: liaisonUserSelect },
-            accommodation: { select: { id: true, name: true } },
-          },
-        }),
-      ]);
+      const contacts = await this.prisma.accommodationContact.findMany({
+        where: {
+          role: { in: accommodationRoles },
+          user: userFilter,
+        },
+        include: {
+          user: { select: liaisonUserSelect },
+          accommodation: { select: { id: true, name: true } },
+        },
+      });
 
       const seen = new Set<string>();
-      for (const contact of [...yearly, ...permanent]) {
+      for (const contact of contacts) {
         const key = `${contact.userId}:${contact.role}:${contact.accommodationId}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -396,25 +377,30 @@ export class OrgUnitsService {
       }
     } else {
       const caravanRoles = roles as CaravanContactRole[];
-      const contacts = await this.prisma.caravanContact.findMany({
+      const contacts = await this.prisma.reservationCaravanContact.findMany({
         where: {
           role: { in: caravanRoles },
           user: userFilter,
+          reservation: { caravanId: { not: null } },
         },
         include: {
           user: { select: liaisonUserSelect },
-          caravan: { select: { id: true, name: true } },
+          reservation: {
+            select: { caravan: { select: { id: true, name: true } } },
+          },
         },
       });
       for (const contact of contacts) {
-        const key = `${contact.userId}:${contact.role}:${contact.caravanId}`;
+        const caravan = contact.reservation.caravan;
+        if (!caravan) continue;
+        const key = `${contact.userId}:${contact.role}:${caravan.id}`;
         rows.push({
           id: key,
           fullName: contact.user.fullName,
           phone: contact.user.phone,
           nationalId: contact.user.nationalId,
           role: contact.role,
-          place: contact.caravan,
+          place: caravan,
           units: roleToUnits.get(contact.role) ?? [],
         });
       }
@@ -561,16 +547,7 @@ export class OrgUnitsService {
     if (!userId) {
       return;
     }
-    const stillManages = await this.prisma.orgUnit.count({
-      where: { managerUserId: userId },
-    });
-    if (stillManages > 0) {
-      await this.users.ensureRole(userId, 'UNIT_MANAGER');
-      return;
-    }
-    await this.prisma.userRole.deleteMany({
-      where: { userId, role: { code: 'UNIT_MANAGER' } },
-    });
+    await this.users.grantAutoRole(userId, 'UNIT_MANAGER');
   }
 
   private serialize(item: OrgUnitRecord) {
@@ -723,25 +700,14 @@ export class OrgUnitsService {
     if (kind === 'accommodation' || kind === 'all') {
       const roles = unit.accommodationLiaisons.map((row) => row.role);
       if (roles.length) {
-        const year = currentJalaliYear();
-        const [permanent, yearly] = await Promise.all([
-          this.prisma.accommodationContact.findMany({
-            where: {
-              role: { in: roles },
-              user: { status: 'ACTIVE', phone: { not: null } },
-            },
-            select: { user: { select: { phone: true } } },
-          }),
-          this.prisma.accommodationYearContact.findMany({
-            where: {
-              year,
-              role: { in: roles },
-              user: { status: 'ACTIVE', phone: { not: null } },
-            },
-            select: { user: { select: { phone: true } } },
-          }),
-        ]);
-        for (const row of [...permanent, ...yearly]) {
+        const rows = await this.prisma.accommodationContact.findMany({
+          where: {
+            role: { in: roles },
+            user: { status: 'ACTIVE', phone: { not: null } },
+          },
+          select: { user: { select: { phone: true } } },
+        });
+        for (const row of rows) {
           const phone = row.user.phone?.trim();
           if (phone) phones.add(phone);
         }
@@ -751,7 +717,7 @@ export class OrgUnitsService {
     if (kind === 'caravan' || kind === 'all') {
       const roles = unit.caravanLiaisons.map((row) => row.role);
       if (roles.length) {
-        const rows = await this.prisma.caravanContact.findMany({
+        const rows = await this.prisma.reservationCaravanContact.findMany({
           where: {
             role: { in: roles },
             user: { status: 'ACTIVE', phone: { not: null } },

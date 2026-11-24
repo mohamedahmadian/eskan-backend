@@ -158,12 +158,6 @@ export class ReservationsController {
     return this.reservations.findAll(query, actor);
   }
 
-  /** TEMP: admin helper to wipe all pilgrimage cases; remove when no longer needed. */
-  @Delete('purge-all')
-  purgeAll(@CurrentUser() actor: RequestUser) {
-    return this.reservations.purgeAll(actor);
-  }
-
   @Get(':id/insurance')
   @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
   getInsurance(@Param('id') id: string, @CurrentUser() actor: RequestUser) {
@@ -495,15 +489,6 @@ export class ReservationsController {
     @CurrentUser() actor: RequestUser,
   ) {
     return this.reservations.setContact(id, dto, actor);
-  }
-
-  @Post(':id/contacts/from-caravan')
-  @Roles('ADMIN', 'PILGRIM', 'CARAVAN_MANAGER')
-  copyContactsFromCaravan(
-    @Param('id') id: string,
-    @CurrentUser() actor: RequestUser,
-  ) {
-    return this.reservations.copyContactsFromCaravan(id, actor);
   }
 
   @Delete(':id/contacts')

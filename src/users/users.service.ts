@@ -30,6 +30,7 @@ import {
 import { resolveSortOrder } from '../common/sort-query';
 import {
   AllocationStatus,
+  CaravanStatus,
   LocationSource,
   Prisma,
   Religion,
@@ -38,6 +39,7 @@ import {
   UserGender,
   UserStatus,
 } from '../generated/prisma/client';
+import { isCaravanActive } from '../caravans/caravan-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -110,7 +112,7 @@ const publicInclude = {
   },
   managedAccommodations: {
     where: { isPrimary: true },
-    orderBy: { year: 'desc' as const },
+    orderBy: { createdAt: 'desc' as const },
     take: 1,
     include: {
       accommodation: { select: { id: true, name: true } },
@@ -131,8 +133,8 @@ const publicInclude = {
     },
   },
   managedCaravans: {
-    orderBy: [{ isActive: 'desc' as const }, { name: 'asc' as const }],
-    select: { id: true, name: true, isActive: true },
+    orderBy: [{ status: 'asc' as const }, { name: 'asc' as const }],
+    select: { id: true, name: true, status: true, foundedYear: true },
   },
   _count: {
     select: {
@@ -192,10 +194,14 @@ type PublicUserSource = {
   userRoles: { role: { id: string; code: string; nameKey: string } }[];
   managedAccommodations: {
     id: string;
-    year: number;
     isPrimary: boolean;
     createdAt: Date;
-    accommodation: { id: string; name: string; type?: string; status?: string };
+    accommodation: {
+      id: string;
+      name: string;
+      type?: { id: string; code: string; nameFa: string; nameEn: string } | string;
+      status?: string;
+    };
   }[];
   representedProvinces: { id: string; nameFa: string; nameEn: string }[];
   representedCities: {
@@ -208,11 +214,10 @@ type PublicUserSource = {
   managedCaravans: {
     id: string;
     name: string;
-    isActive: boolean;
+    status: CaravanStatus;
+    foundedYear?: number | null;
     licenseNumber?: string | null;
-    totalCount?: number;
     city?: { id: string; nameFa: string; nameEn: string; provinceId: string };
-    walkingRoute?: { id: string; name: string } | null;
   }[];
   _count: {
     managedAccommodations: number;
@@ -875,7 +880,7 @@ export class UsersService {
       include: {
         ...publicInclude,
         managedAccommodations: {
-          orderBy: [{ year: 'desc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
           include: {
             accommodation: {
               select: { id: true, name: true, type: true, status: true },
@@ -883,13 +888,13 @@ export class UsersService {
           },
         },
         managedCaravans: {
-          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
           select: {
             id: true,
             name: true,
-            isActive: true,
+            status: true,
+            foundedYear: true,
             licenseNumber: true,
-            totalCount: true,
             city: {
               select: {
                 id: true,
@@ -898,7 +903,6 @@ export class UsersService {
                 provinceId: true,
               },
             },
-            walkingRoute: { select: { id: true, name: true } },
           },
         },
       },
@@ -918,7 +922,7 @@ export class UsersService {
         province: { select: { ...geoSelect, countryId: true } },
         city: { select: { ...geoSelect, provinceId: true } },
         managedAccommodations: {
-          orderBy: [{ year: 'desc' }, { isPrimary: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
           include: {
             accommodation: {
               select: { id: true, name: true, type: true, status: true },
@@ -926,13 +930,13 @@ export class UsersService {
           },
         },
         managedCaravans: {
-          orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+          orderBy: [{ status: 'asc' }, { name: 'asc' }],
           select: {
             id: true,
             name: true,
-            isActive: true,
+            status: true,
+            foundedYear: true,
             licenseNumber: true,
-            totalCount: true,
             city: {
               select: {
                 id: true,
@@ -941,7 +945,6 @@ export class UsersService {
                 provinceId: true,
               },
             },
-            walkingRoute: { select: { id: true, name: true } },
           },
         },
       },
@@ -976,11 +979,15 @@ export class UsersService {
       province: user.province,
       city: user.city,
       roles,
-      caravans: isCaravanManager ? user.managedCaravans : [],
+      caravans: isCaravanManager
+        ? user.managedCaravans.map((item) => ({
+            ...item,
+            isActive: isCaravanActive(item.status),
+          }))
+        : [],
       accommodations: isAccommodationManager
         ? user.managedAccommodations.map((item) => ({
             id: item.id,
-            year: item.year,
             isPrimary: item.isPrimary,
             accommodation: item.accommodation,
           }))
@@ -992,7 +999,7 @@ export class UsersService {
 
   private async findCurrentYearVisit(userId: string) {
     const year = currentJalaliYear();
-    const [reservation, caravanYear] = await Promise.all([
+    const [reservation, managedCaravan] = await Promise.all([
       this.prisma.reservation.findFirst({
         where: {
           year,
@@ -1038,7 +1045,6 @@ export class UsersService {
                   longitude: true,
                   neshanAddress: true,
                   managers: {
-                    where: { year, userId: { not: null } },
                     orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
                     take: 1,
                     select: { user: { select: { fullName: true, phone: true } } },
@@ -1049,24 +1055,13 @@ export class UsersService {
           },
         },
       }),
-      this.prisma.caravanYear.findFirst({
-        where: {
-          year,
-          OR: [
-            { managerUserId: userId },
-            { caravan: { managerUserId: userId } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
+      this.prisma.caravan.findFirst({
+        where: { managerUserId: userId },
+        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
         select: {
-          caravanId: true,
+          id: true,
+          name: true,
           manager: { select: { fullName: true, phone: true } },
-          caravan: {
-            select: {
-              name: true,
-              manager: { select: { fullName: true, phone: true } },
-            },
-          },
         },
       }),
     ]);
@@ -1097,7 +1092,7 @@ export class UsersService {
           mapUrl,
         }
       : null;
-    const caravanName = reservation?.caravan?.name ?? caravanYear?.caravan.name ?? null;
+    const caravanName = reservation?.caravan?.name ?? managedCaravan?.name ?? null;
     const file = reservation
       ? { code: reservation.code, type: reservation.type, status: reservation.status }
       : null;
@@ -1111,7 +1106,7 @@ export class UsersService {
           arrivalDate: toDateOnly(reservation?.stayStartDate),
         }
       : null;
-    const caravan = this.currentVisitCaravan(reservation, caravanYear);
+    const caravan = this.currentVisitCaravan(reservation, managedCaravan);
     if (!file && !caravanName && !stay && !caravan && !travel) return null;
 
     return {
@@ -1134,13 +1129,10 @@ export class UsersService {
         manager: { fullName: string; phone: string | null } | null;
       } | null;
     } | null,
-    caravanYear: {
-      caravanId: string;
+    managedCaravan: {
+      id: string;
+      name: string;
       manager: { fullName: string; phone: string | null } | null;
-      caravan: {
-        name: string;
-        manager: { fullName: string; phone: string | null } | null;
-      };
     } | null,
   ) {
     const person = (
@@ -1151,18 +1143,16 @@ export class UsersService {
     });
 
     if (reservation?.type === ReservationType.CARAVAN && reservation.caravan) {
-      const yearManager =
-        caravanYear?.caravanId === reservation.caravan.id ? caravanYear.manager : null;
       return {
         name: reservation.caravan.name,
-        ...person(reservation.caravanManager ?? yearManager ?? reservation.caravan.manager),
+        ...person(reservation.caravanManager ?? reservation.caravan.manager),
       };
     }
 
-    if (!reservation && caravanYear?.caravan) {
+    if (!reservation && managedCaravan) {
       return {
-        name: caravanYear.caravan.name,
-        ...person(caravanYear.manager ?? caravanYear.caravan.manager),
+        name: managedCaravan.name,
+        ...person(managedCaravan.manager),
       };
     }
 
@@ -1326,10 +1316,27 @@ export class UsersService {
     try {
       const user = await this.prisma.$transaction(async (tx) => {
         if (dto.roleIds) {
+          const previousIds = current.roles.map((role) => role.id);
+          const nextIds = [...new Set(dto.roleIds)];
+          const removedIds = previousIds.filter((roleId) => !nextIds.includes(roleId));
+          const addedIds = nextIds.filter((roleId) => !previousIds.includes(roleId));
           await tx.userRole.deleteMany({ where: { userId: id } });
-          await tx.userRole.createMany({
-            data: dto.roleIds.map((roleId) => ({ userId: id, roleId })),
-          });
+          if (nextIds.length) {
+            await tx.userRole.createMany({
+              data: nextIds.map((roleId) => ({ userId: id, roleId })),
+            });
+          }
+          if (removedIds.length) {
+            await tx.userRevokedRole.createMany({
+              data: removedIds.map((roleId) => ({ userId: id, roleId })),
+              skipDuplicates: true,
+            });
+          }
+          if (addedIds.length) {
+            await tx.userRevokedRole.deleteMany({
+              where: { userId: id, roleId: { in: addedIds } },
+            });
+          }
         }
 
         const stillOfficer = dto.roleIds
@@ -1665,9 +1672,7 @@ export class UsersService {
       tx.reservationHonoraryAssignment.deleteMany({ where: { userId: id } }),
       tx.reservationMember.deleteMany({ where: { userId: id } }),
       tx.reservationCaravanContact.deleteMany({ where: { userId: id } }),
-      tx.caravanContact.deleteMany({ where: { userId: id } }),
       tx.accommodationContact.deleteMany({ where: { userId: id } }),
-      tx.accommodationYearContact.deleteMany({ where: { userId: id } }),
     ]);
 
     await this.nullOptionalUserRefs(tx, id);
@@ -1776,9 +1781,27 @@ export class UsersService {
   }
 
   async ensureRole(userId: string, roleCode: string) {
-    const role = await this.prisma.role.findUnique({ where: { code: roleCode } });
-    if (!role) {
-      throw new BadRequestException('نقش انتخاب‌شده معتبر نیست');
+    const role = await this.ensureExistingRole(roleCode);
+    await this.prisma.userRevokedRole.deleteMany({
+      where: { userId, roleId: role.id },
+    });
+    await this.prisma.userRole.upsert({
+      where: { userId_roleId: { userId, roleId: role.id } },
+      update: {},
+      create: { userId, roleId: role.id },
+    });
+    return role;
+  }
+
+  /** Grant a role unless an admin previously removed it from this user. */
+  async grantAutoRole(userId: string, roleCode: string) {
+    const role = await this.ensureExistingRole(roleCode);
+    const revoked = await this.prisma.userRevokedRole.findUnique({
+      where: { userId_roleId: { userId, roleId: role.id } },
+      select: { userId: true },
+    });
+    if (revoked) {
+      return role;
     }
     await this.prisma.userRole.upsert({
       where: { userId_roleId: { userId, roleId: role.id } },
@@ -1786,6 +1809,13 @@ export class UsersService {
       create: { userId, roleId: role.id },
     });
     return role;
+  }
+
+  async grantAutoRoles(userIds: string[], roleCode: string) {
+    const unique = [...new Set(userIds.filter(Boolean))];
+    for (const userId of unique) {
+      await this.grantAutoRole(userId, roleCode);
+    }
   }
 
   async setQuickRole(userId: string, roleCode: string, enabled: boolean, actorId: string) {
@@ -1865,9 +1895,20 @@ export class UsersService {
           data: { contactUserId: null },
         });
       }
+      const role = await tx.role.findUnique({
+        where: { code: roleCode },
+        select: { id: true },
+      });
       await tx.userRole.deleteMany({
         where: { userId, role: { code: roleCode } },
       });
+      if (role) {
+        await tx.userRevokedRole.upsert({
+          where: { userId_roleId: { userId, roleId: role.id } },
+          update: {},
+          create: { userId, roleId: role.id },
+        });
+      }
     });
     return this.findOne(userId);
   }
@@ -1884,7 +1925,6 @@ export class UsersService {
           OR: [
             { caravanManagerId: id },
             { caravan: { managerUserId: id } },
-            { caravan: { years: { some: { year, managerUserId: id } } } },
           ],
         },
       },
@@ -1967,10 +2007,10 @@ export class UsersService {
 
   async assertHasRole(id: string, roleCode: string, notFoundMessage = 'کاربر یافت نشد') {
     const user = await this.findOne(id);
-    if (!user.roles.some((role) => role.code === roleCode)) {
-      throw new NotFoundException(notFoundMessage);
+    if (user.roles.some((role) => role.code === roleCode)) {
+      return user;
     }
-    return user;
+    throw new NotFoundException(notFoundMessage);
   }
 
   async findPilgrimageHistory(id: string, query: FindPilgrimHistoryQueryDto) {
@@ -2030,9 +2070,6 @@ export class UsersService {
               foundedYear: true,
               licenseNumber: true,
               isActive: true,
-              maleCount: true,
-              femaleCount: true,
-              totalCount: true,
               city: { select: geoSelect },
               manager: { select: personSelect },
             },
@@ -2345,9 +2382,7 @@ export class UsersService {
       if (existing.status !== UserStatus.ACTIVE) {
         throw new BadRequestException('این شماره تلفن متعلق به حساب غیرفعال است');
       }
-      await this.ensureRole(existing.id, 'PILGRIM');
       const codes = new Set(existing.userRoles.map((item) => item.role.code));
-      codes.add('PILGRIM');
       const userRoles = [...codes].map((code) => ({ role: { code } }));
       const loginWithPhone =
         existing.username === phone &&
@@ -2575,7 +2610,7 @@ export class UsersService {
     return this.findOne(userId);
   }
 
-  async assignAccommodation(userId: string, accommodationId: string, year: number) {
+  async assignAccommodation(userId: string, accommodationId: string) {
     await this.assertHasRole(userId, 'ACCOMMODATION_MANAGER', 'مدیر اسکان یافت نشد');
     const accommodation = await this.prisma.accommodation.findUnique({
       where: { id: accommodationId },
@@ -2587,30 +2622,24 @@ export class UsersService {
 
     const existing = await this.prisma.accommodationManager.findUnique({
       where: {
-        userId_accommodationId_year: { userId, accommodationId, year },
+        userId_accommodationId: { userId, accommodationId },
       },
     });
     if (existing) {
-      throw new ConflictException('این اسکان برای این سال قبلاً به این مدیر تخصیص داده شده است');
+      throw new ConflictException('این اسکان قبلاً به این مدیر تخصیص داده شده است');
     }
 
-    const hasPrimaryThisYear = await this.prisma.accommodationManager.findFirst({
-      where: { userId, year, isPrimary: true },
+    const hasPrimary = await this.prisma.accommodationManager.findFirst({
+      where: { userId, isPrimary: true },
       select: { id: true },
     });
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.accommodationManager.deleteMany({
-        where: { accommodationId, year, userId: null },
-      });
-      await tx.accommodationManager.create({
-        data: {
-          userId,
-          accommodationId,
-          year,
-          isPrimary: !hasPrimaryThisYear,
-        },
-      });
+    await this.prisma.accommodationManager.create({
+      data: {
+        userId,
+        accommodationId,
+        isPrimary: !hasPrimary,
+      },
     });
     return this.findOne(userId);
   }
@@ -2923,7 +2952,6 @@ export class UsersService {
       accommodations: withAccommodations
         ? user.managedAccommodations.map((item) => ({
             id: item.id,
-            year: item.year,
             isPrimary: item.isPrimary,
             createdAt: item.createdAt,
             accommodation: item.accommodation,
@@ -2932,11 +2960,11 @@ export class UsersService {
       caravans: user.managedCaravans?.map((item) => ({
         id: item.id,
         name: item.name,
-        isActive: item.isActive,
+        status: item.status,
+        isActive: isCaravanActive(item.status),
+        foundedYear: item.foundedYear ?? null,
         licenseNumber: item.licenseNumber,
-        totalCount: item.totalCount,
         city: item.city,
-        walkingRoute: item.walkingRoute,
       })),
     };
   }
@@ -3861,7 +3889,7 @@ export class UsersService {
         include: publicInclude,
       });
       if (byNationalId) {
-        await this.ensureRole(byNationalId.id, 'PILGRIM');
+        await this.grantAutoRole(byNationalId.id, 'PILGRIM');
         const patch: Prisma.UserUpdateInput = {};
         if (birthDate && !byNationalId.birthDate) patch.birthDate = birthDate;
         if (dto.gender && !byNationalId.gender) patch.gender = dto.gender;
@@ -3882,7 +3910,7 @@ export class UsersService {
         include: publicInclude,
       });
       if (byPhone) {
-        await this.ensureRole(byPhone.id, 'PILGRIM');
+        await this.grantAutoRole(byPhone.id, 'PILGRIM');
         const patch: Prisma.UserUpdateInput = {};
         if (birthDate && !byPhone.birthDate) patch.birthDate = birthDate;
         if (dto.gender && !byPhone.gender) patch.gender = dto.gender;
@@ -3964,8 +3992,6 @@ export class UsersService {
       },
       id,
     );
-    await this.ensureRole(id, 'PILGRIM');
-
     try {
       await this.prisma.user.update({
         where: { id },

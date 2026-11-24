@@ -180,7 +180,7 @@ export class GroupsService {
     if (!isAdmin(actor) && dto.managerUserId && dto.managerUserId !== actor.id) {
       throw new ForbiddenException('امکان تعیین مدیر گروه برای دیگری وجود ندارد');
     }
-    await this.users.ensureRole(managerUserId, 'GROUP_MANAGER');
+    await this.users.grantAutoRole(managerUserId, 'GROUP_MANAGER');
 
     return this.prisma.group.create({
       data: {

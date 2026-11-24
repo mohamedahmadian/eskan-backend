@@ -332,7 +332,7 @@ export class NationalMonitoringService {
           originCity: { select: { id: true, provinceId: true } },
           caravan: {
             select: {
-              walkingRouteId: true,
+              id: true,
               cityId: true,
               city: { select: { provinceId: true } },
             },
@@ -350,7 +350,6 @@ export class NationalMonitoringService {
         where: { city: { province: iran } },
         select: {
           cityId: true,
-          walkingRouteId: true,
           city: { select: { provinceId: true } },
         },
       }),
@@ -368,11 +367,7 @@ export class NationalMonitoringService {
           cityId: true,
           maleCapacity: true,
           femaleCapacity: true,
-          managers: {
-            where: { year: selectedYear },
-            select: { id: true },
-            take: 1,
-          },
+          status: true,
         },
       }),
     ]);
@@ -452,7 +447,6 @@ export class NationalMonitoringService {
 
       const routeId =
         reservation.walkingRouteId ??
-        reservation.caravan?.walkingRouteId ??
         reservation.group?.walkingRouteId ??
         null;
       const route = routeId ? routes.get(routeId) : unspecifiedRoute;
@@ -461,6 +455,7 @@ export class NationalMonitoringService {
         route.pilgrimMale += male;
         route.pilgrimFemale += female;
         route.reservationCount += 1;
+        if (reservation.caravan) route.caravanCount += 1;
       }
     }
 
@@ -470,10 +465,6 @@ export class NationalMonitoringService {
       const province = provinces.get(caravan.city.provinceId);
       if (city) city.caravanCount += 1;
       if (province) province.caravanCount += 1;
-      const route = caravan.walkingRouteId
-        ? routes.get(caravan.walkingRouteId)
-        : unspecifiedRoute;
-      if (route) route.caravanCount += 1;
     }
 
     for (const group of groups) {
@@ -490,7 +481,7 @@ export class NationalMonitoringService {
     for (const item of accommodations) {
       const provinceId = item.provinceId ?? (item.cityId ? cityProvince.get(item.cityId) : null);
       const cityId = item.cityId;
-      const active = item.managers.length > 0;
+      const active = item.status === 'ACTIVE';
       totals.accommodationCount += 1;
       totals.lodgingMale += item.maleCapacity;
       totals.lodgingFemale += item.femaleCapacity;

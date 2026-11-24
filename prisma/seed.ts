@@ -451,20 +451,12 @@ async function main() {
       sortOrder: 2,
     },
     {
-      code: 'caravans.year-management',
-      moduleId: caravanManagement.id,
-      nameKey: 'menus.caravanYearManagement',
-      path: '/caravan-year-management',
-      icon: 'calendar-range',
-      sortOrder: 3,
-    },
-    {
       code: 'caravans.report',
       moduleId: caravanManagement.id,
       nameKey: 'menus.caravanReport',
       path: '/caravan-report',
       icon: 'chart-column',
-      sortOrder: 4,
+      sortOrder: 3,
     },
     {
       code: 'caravans.register',
@@ -875,20 +867,12 @@ async function main() {
       sortOrder: 6,
     },
     {
-      code: 'accommodation.year-management',
-      moduleId: accommodation.id,
-      nameKey: 'menus.accommodationYearManagement',
-      path: '/accommodation-year-management',
-      icon: 'calendar-range',
-      sortOrder: 7,
-    },
-    {
       code: 'accommodation.report',
       moduleId: accommodation.id,
       nameKey: 'menus.accommodationReport',
       path: '/accommodation-report',
       icon: 'chart-column',
-      sortOrder: 8,
+      sortOrder: 7,
     },
     {
       code: 'accommodation.school-districts',

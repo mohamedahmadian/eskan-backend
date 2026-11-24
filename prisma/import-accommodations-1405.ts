@@ -460,63 +460,28 @@ async function main() {
       managerIds.push(user.id);
     }
 
-    await prisma.accommodationManager.deleteMany({
-      where: { accommodationId, year: YEAR, userId: null },
-    });
-
     if (!managerIds.length) {
-      const existingYear = await prisma.accommodationManager.findFirst({
-        where: { accommodationId, year: YEAR },
-        select: { id: true },
-      });
-      if (!existingYear) {
-        await prisma.accommodationManager.create({
-          data: {
-            accommodationId,
-            userId: null,
-            year: YEAR,
-            isPrimary: false,
-            maleCapacity: venue.maleCapacity,
-            femaleCapacity: venue.femaleCapacity,
-          },
-        });
-      } else {
-        await prisma.accommodationManager.updateMany({
-          where: { accommodationId, year: YEAR },
-          data: {
-            maleCapacity: venue.maleCapacity,
-            femaleCapacity: venue.femaleCapacity,
-          },
-        });
-      }
       stats.withoutManager += 1;
       continue;
     }
 
     for (const [index, userId] of managerIds.entries()) {
       const existingPrimary = await prisma.accommodationManager.findFirst({
-        where: { userId, year: YEAR, isPrimary: true },
+        where: { userId, isPrimary: true },
         select: { id: true },
       });
       await prisma.accommodationManager.upsert({
         where: {
-          userId_accommodationId_year: {
+          userId_accommodationId: {
             userId,
             accommodationId,
-            year: YEAR,
           },
         },
-        update: {
-          maleCapacity: venue.maleCapacity,
-          femaleCapacity: venue.femaleCapacity,
-        },
+        update: {},
         create: {
           accommodationId,
           userId,
-          year: YEAR,
           isPrimary: index === 0 && !existingPrimary,
-          maleCapacity: venue.maleCapacity,
-          femaleCapacity: venue.femaleCapacity,
         },
       });
       stats.managersLinked += 1;

@@ -241,16 +241,13 @@ export class WalkingStationsService {
       include: walkingStationInclude,
     });
     if (previousManagerId !== item.managerUserId) {
-      await this.syncStationManagerRole(previousManagerId);
-      await this.syncStationManagerRole(item.managerUserId);
-    } else if (item.managerUserId) {
       await this.syncStationManagerRole(item.managerUserId);
     }
     return this.serialize(item);
   }
 
   async remove(id: string, actor?: StationActor) {
-    const current = await this.findOne(id, actor);
+    await this.findOne(id, actor);
     const used = await this.prisma.walkingRouteStage.count({
       where: { walkingStationId: id },
     });
@@ -260,7 +257,6 @@ export class WalkingStationsService {
       );
     }
     await this.prisma.walkingStation.delete({ where: { id } });
-    await this.syncStationManagerRole(current.managerUserId);
     return { ok: true };
   }
 
@@ -439,16 +435,7 @@ export class WalkingStationsService {
       return;
     }
     await this.ensureStationManagerRoleRecord();
-    const stillManages = await this.prisma.walkingStation.count({
-      where: { managerUserId: userId },
-    });
-    if (stillManages > 0) {
-      await this.users.ensureRole(userId, STATION_MANAGER_ROLE);
-      return;
-    }
-    await this.prisma.userRole.deleteMany({
-      where: { userId, role: { code: STATION_MANAGER_ROLE } },
-    });
+    await this.users.grantAutoRole(userId, STATION_MANAGER_ROLE);
   }
 
   async history(query: FindStationStaysQueryDto, actor: StationActor) {

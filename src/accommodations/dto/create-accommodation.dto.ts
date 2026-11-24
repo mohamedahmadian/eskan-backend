@@ -5,7 +5,6 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
-  IsIn,
   IsInt,
   IsLatitude,
   IsLongitude,
@@ -34,7 +33,6 @@ import {
 } from '../../common/dto-transform';
 import { AccommodationContactInputDto } from './accommodation-contact-input.dto';
 import { AccommodationTypeDetailsDto } from './accommodation-type-details.dto';
-import { yearContactModes } from './set-accommodation-year-contacts.dto';
 
 export class CreateAccommodationDto extends AccommodationTypeDetailsDto {
   @IsString()
@@ -272,13 +270,6 @@ export class CreateAccommodationDto extends AccommodationTypeDetailsDto {
   operationStatus?: AccommodationOperationStatus;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1300)
-  @Max(1600)
-  year?: number;
-
-  @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   managerUserIds?: string[];
@@ -299,8 +290,4 @@ export class CreateAccommodationDto extends AccommodationTypeDetailsDto {
   @ValidateNested({ each: true })
   @Type(() => AccommodationContactInputDto)
   contacts?: AccommodationContactInputDto[];
-
-  @IsOptional()
-  @IsIn(yearContactModes)
-  yearContactMode?: (typeof yearContactModes)[number];
 }

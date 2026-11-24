@@ -11,6 +11,7 @@ import {
 } from '../common/reservation-code';
 import { localizedGeoName } from '../common/request-locale';
 import { AllocationStatus, Prisma } from '../generated/prisma/client';
+import { isCaravanActive } from '../caravans/caravan-status';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   RECEPTION_SEARCH_PAGE_SIZE,
@@ -55,7 +56,6 @@ const visitReservationSelect = {
     select: {
       id: true,
       name: true,
-      walkingRoute: { select: { id: true, name: true } },
       manager: { select: { fullName: true, phone: true } },
     },
   },
@@ -82,13 +82,11 @@ const visitReservationSelect = {
           otherSocial: true,
           managers: {
             orderBy: [
-              { year: 'desc' as const },
               { isPrimary: 'desc' as const },
               { createdAt: 'asc' as const },
             ],
             select: {
               id: true,
-              year: true,
               isPrimary: true,
               userId: true,
               user: { select: { id: true, fullName: true, phone: true } },
@@ -535,7 +533,7 @@ export class ReceptionService {
       throw new NotFoundException('شخص یافت نشد');
     }
 
-    const kinds = this.kindsFor(user.userRoles, user._count);
+    const kinds = this.kindsFor(user.userRoles);
     const year = currentJalaliYear();
 
     const [memberships, caravans, caravanReservations, honoraryAssignments, managerRows] =
@@ -555,16 +553,13 @@ export class ReceptionService {
         }),
         this.prisma.caravan.findMany({
           where: { managerUserId: id },
-          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
           select: {
             id: true,
             name: true,
-            isActive: true,
+            status: true,
             licenseNumber: true,
             officePhone: true,
-            maleCount: true,
-            femaleCount: true,
-            totalCount: true,
             city: { select: citySelect },
           },
         }),
@@ -591,10 +586,9 @@ export class ReceptionService {
         }),
         this.prisma.accommodationManager.findMany({
           where: { userId: id },
-          orderBy: [{ year: 'desc' }, { isPrimary: 'desc' }, { createdAt: 'desc' }],
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
           select: {
             id: true,
-            year: true,
             isPrimary: true,
             accommodation: {
               select: {
@@ -619,24 +613,20 @@ export class ReceptionService {
     const accIds = [
       ...new Set(managerRows.map((row) => row.accommodation.id)),
     ];
-    const years = [...new Set(managerRows.map((row) => row.year))];
-    const iceGroups =
-      accIds.length && years.length
-        ? await this.prisma.iceVoucher.groupBy({
-            by: ['accommodationId', 'year'],
-            where: {
-              accommodationId: { in: accIds },
-              year: { in: years },
-            },
-            _count: { _all: true },
-            _sum: { moldCount: true },
-          })
-        : [];
-    const iceKey = (accommodationId: string, iceYear: number) =>
-      `${accommodationId}:${iceYear}`;
+    const iceGroups = accIds.length
+      ? await this.prisma.iceVoucher.groupBy({
+          by: ['accommodationId'],
+          where: {
+            accommodationId: { in: accIds },
+            year,
+          },
+          _count: { _all: true },
+          _sum: { moldCount: true },
+        })
+      : [];
     const iceMap = new Map(
       iceGroups.map((row) => [
-        iceKey(row.accommodationId, row.year),
+        row.accommodationId,
         {
           count: row._count._all,
           moldCount: row._sum.moldCount ?? 0,
@@ -684,10 +674,10 @@ export class ReceptionService {
       caravanReservations.length > 0;
 
     const history = managerRows.map((row) => {
-      const ice = iceMap.get(iceKey(row.accommodation.id, row.year));
+      const ice = iceMap.get(row.accommodation.id);
       return {
         assignmentId: row.id,
-        year: row.year,
+        year,
         isPrimary: row.isPrimary,
         iceVoucherCount: ice?.count ?? 0,
         iceMoldCount: ice?.moldCount ?? 0,
@@ -712,12 +702,10 @@ export class ReceptionService {
             caravans: caravans.map((item) => ({
               id: item.id,
               name: item.name,
-              isActive: item.isActive,
+              status: item.status,
+              isActive: isCaravanActive(item.status),
               licenseNumber: item.licenseNumber,
               officePhone: item.officePhone,
-              maleCount: item.maleCount,
-              femaleCount: item.femaleCount,
-              totalCount: item.totalCount,
               city: item.city,
             })),
             visits: caravanReservations.map((item) => this.toVisit(item)),
@@ -725,8 +713,8 @@ export class ReceptionService {
         : null,
       accommodationManager: showHousing
         ? {
-            current: history.filter((item) => item.year === year),
-            history,
+            current: history,
+            history: [],
           }
         : null,
       honorary: showHonorary
@@ -750,7 +738,7 @@ export class ReceptionService {
       status: user.status,
       city: user.city,
       roles: user.userRoles.map((item) => item.role),
-      kinds: this.kindsFor(user.userRoles, user._count),
+      kinds: this.kindsFor(user.userRoles),
       hasHonoraryService: this.hasHonoraryService(
         user.honoraryServiceAnnouncements,
         user._count.honoraryAssignments,
@@ -784,24 +772,16 @@ export class ReceptionService {
     return visits;
   }
 
-  private kindsFor(
-    userRoles: { role: { code: string } }[],
-    counts: {
-      reservationMembers: number;
-      createdReservations: number;
-      managedCaravans: number;
-      managedAccommodations: number;
-    },
-  ): ReceptionKind[] {
+  private kindsFor(userRoles: { role: { code: string } }[]): ReceptionKind[] {
     const codes = new Set(userRoles.map((item) => item.role.code));
     const kinds: ReceptionKind[] = [];
-    if (codes.has('PILGRIM') || counts.reservationMembers > 0 || counts.createdReservations > 0) {
+    if (codes.has('PILGRIM')) {
       kinds.push('pilgrim');
     }
-    if (codes.has('CARAVAN_MANAGER') || counts.managedCaravans > 0) {
+    if (codes.has('CARAVAN_MANAGER')) {
       kinds.push('caravanManager');
     }
-    if (codes.has('ACCOMMODATION_MANAGER') || counts.managedAccommodations > 0) {
+    if (codes.has('ACCOMMODATION_MANAGER')) {
       kinds.push('accommodationManager');
     }
     return kinds;
@@ -835,7 +815,6 @@ export class ReceptionService {
       originCity: reservation.originCity,
       walkingRoute:
         reservation.walkingRoute ??
-        reservation.caravan?.walkingRoute ??
         reservation.group?.walkingRoute ??
         null,
       requestedMaleCount: reservation.requestedMaleCount,

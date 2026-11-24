@@ -268,7 +268,7 @@ export class HonoraryServantsService {
       data,
       include: announcementInclude,
     });
-    await this.users.ensureRole(data.userId, HONORARY_SERVANT_ROLE);
+    await this.users.grantAutoRole(data.userId, HONORARY_SERVANT_ROLE);
     return this.toPublic(item);
   }
 
@@ -305,10 +305,7 @@ export class HonoraryServantsService {
       data,
       include: announcementInclude,
     });
-    await this.users.ensureRole(data.userId, HONORARY_SERVANT_ROLE);
-    if (data.userId !== current.userId) {
-      await this.syncRole(current.userId);
-    }
+    await this.users.grantAutoRole(data.userId, HONORARY_SERVANT_ROLE);
     return this.toPublic(item);
   }
 
@@ -331,7 +328,6 @@ export class HonoraryServantsService {
         where: { userId, serviceTypeId: item.serviceTypeId },
       });
     });
-    await this.syncRole(userId);
     return { ok: true };
   }
 
@@ -344,7 +340,6 @@ export class HonoraryServantsService {
       throw new NotFoundException('اعلام همکاری یافت نشد');
     }
     await this.prisma.honoraryServiceAnnouncement.delete({ where: { id } });
-    await this.syncRole(item.userId);
     return { ok: true };
   }
 
@@ -444,19 +439,6 @@ export class HonoraryServantsService {
     if (!user) {
       throw new NotFoundException('کاربر یافت نشد');
     }
-  }
-
-  private async syncRole(userId: string) {
-    const remaining = await this.prisma.honoraryServiceAnnouncement.count({
-      where: { userId },
-    });
-    if (remaining > 0) {
-      await this.users.ensureRole(userId, HONORARY_SERVANT_ROLE);
-      return;
-    }
-    await this.prisma.userRole.deleteMany({
-      where: { userId, role: { code: HONORARY_SERVANT_ROLE } },
-    });
   }
 
   private toPublic(

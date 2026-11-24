@@ -109,7 +109,6 @@ export class IceVouchersService {
   }
 
   async usableAccommodations(actor: Actor) {
-    const year = currentJalaliYear();
     const where: Prisma.AccommodationWhereInput = isAdmin(actor)
       ? {}
       : { managers: { some: { userId: actor.id } } };
@@ -122,7 +121,6 @@ export class IceVouchersService {
         maleCapacity: true,
         femaleCapacity: true,
         managers: {
-          where: { year },
           orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
           select: {
             user: { select: { fullName: true } },

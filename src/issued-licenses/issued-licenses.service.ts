@@ -14,6 +14,7 @@ import {
   IssuedLicenseStatus,
   Prisma,
 } from '../generated/prisma/client';
+import { withCaravanActiveFlag } from '../caravans/caravan-status';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateIssuedLicenseDto } from './dto/create-issued-license.dto';
 import {
@@ -37,6 +38,18 @@ const geoSelect = {
   nameEn: true,
 } satisfies Prisma.CitySelect;
 
+const managerLookupSelect = {
+  ...personSelect,
+  photoId: true,
+  city: {
+    select: {
+      ...geoSelect,
+      provinceId: true,
+      province: { select: geoSelect },
+    },
+  },
+} satisfies Prisma.UserSelect;
+
 const caravanLookupSelect = {
   id: true,
   name: true,
@@ -44,10 +57,7 @@ const caravanLookupSelect = {
   officePhone: true,
   licenseNumber: true,
   foundedYear: true,
-  isActive: true,
-  maleCount: true,
-  femaleCount: true,
-  totalCount: true,
+  status: true,
   city: {
     select: {
       ...geoSelect,
@@ -87,36 +97,65 @@ export class IssuedLicensesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async lookupManager(query: LookupCaravanManagerQueryDto) {
-    const manager = await this.prisma.user.findFirst({
-      where: {
-        nationalId: query.nationalId,
-        userRoles: { some: { role: { code: 'CARAVAN_MANAGER' } } },
-      },
-      select: {
-        ...personSelect,
-        photoId: true,
-        city: {
-          select: {
-            ...geoSelect,
-            provinceId: true,
-            province: { select: geoSelect },
-          },
-        },
-        managedCaravans: {
-          orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-          select: caravanLookupSelect,
-        },
-      },
-    });
-
-    if (!manager) {
-      throw new NotFoundException('مدیر کاروان با این کد ملی یافت نشد');
+    const nationalId = query.nationalId?.trim();
+    const caravanName = query.caravanName?.trim();
+    if (!nationalId && !caravanName) {
+      throw new BadRequestException('کد ملی یا نام کاروان را وارد کنید');
     }
 
-    const { managedCaravans, ...person } = manager;
+    if (nationalId) {
+      const manager = await this.prisma.user.findFirst({
+        where: {
+          nationalId,
+          userRoles: { some: { role: { code: 'CARAVAN_MANAGER' } } },
+        },
+        select: {
+          ...managerLookupSelect,
+          managedCaravans: {
+            where: caravanName
+              ? { name: containsInsensitive(caravanName) }
+              : undefined,
+            orderBy: [{ status: 'asc' }, { name: 'asc' }],
+            select: caravanLookupSelect,
+          },
+        },
+      });
+
+      if (!manager) {
+        throw new NotFoundException('مدیر کاروان با این کد ملی یافت نشد');
+      }
+
+      const { managedCaravans, ...person } = manager;
+      return {
+        manager: person,
+        caravans: managedCaravans.map(withCaravanActiveFlag),
+      };
+    }
+
+    const caravans = await this.prisma.caravan.findMany({
+      where: { name: containsInsensitive(caravanName!) },
+      orderBy: [{ status: 'asc' }, { name: 'asc' }],
+      take: 50,
+      select: {
+        ...caravanLookupSelect,
+        manager: { select: managerLookupSelect },
+      },
+    });
+    if (!caravans.length) {
+      throw new NotFoundException('کاروانی با این نام یافت نشد');
+    }
+
+    const withManager = caravans.filter((item) => item.manager);
+    const manager = withManager[0]?.manager ?? null;
+    if (!manager) {
+      throw new BadRequestException('کاروان یافت‌شده مدیر ندارد');
+    }
+
     return {
-      manager: person,
-      caravans: managedCaravans,
+      manager,
+      caravans: caravans.map(({ manager: _manager, ...item }) =>
+        withCaravanActiveFlag(item),
+      ),
     };
   }
 
@@ -154,26 +193,23 @@ export class IssuedLicensesService {
   }
 
   async create(dto: CreateIssuedLicenseDto, issuerUserId: string) {
+    const caravan = await this.prisma.caravan.findFirst({
+      where: { id: dto.caravanId },
+      select: { id: true, managerUserId: true },
+    });
+    if (!caravan) {
+      throw new BadRequestException('کاروان انتخاب‌شده یافت نشد');
+    }
+    if (!caravan.managerUserId) {
+      throw new BadRequestException('این کاروان مدیر ندارد');
+    }
+
     const manager = await this.prisma.user.findFirst({
-      where: {
-        id: dto.managerUserId,
-        userRoles: { some: { role: { code: 'CARAVAN_MANAGER' } } },
-      },
+      where: { id: caravan.managerUserId },
       select: { id: true },
     });
     if (!manager) {
       throw new BadRequestException('مدیر کاروان انتخاب‌شده معتبر نیست');
-    }
-
-    const caravan = await this.prisma.caravan.findFirst({
-      where: {
-        id: dto.caravanId,
-        managerUserId: dto.managerUserId,
-      },
-      select: { id: true },
-    });
-    if (!caravan) {
-      throw new BadRequestException('کاروان انتخاب‌شده متعلق به این مدیر نیست');
     }
 
     await this.assertFile(dto.fileId);
@@ -194,7 +230,7 @@ export class IssuedLicensesService {
     const autoApprove = await this.shouldAutoApproveLicenses();
     const item = await this.prisma.issuedLicense.create({
       data: {
-        managerUserId: dto.managerUserId,
+        managerUserId: manager.id,
         caravanId: dto.caravanId,
         issuerUserId,
         organizationId: issuer.issuingOrganizationId,
@@ -371,7 +407,7 @@ export class IssuedLicensesService {
       approvedBy: item.approvedBy,
       revokedBy: item.revokedBy,
       organization: item.organization ?? issuingOrganization ?? null,
-      caravan: item.caravan,
+      caravan: withCaravanActiveFlag(item.caravan),
     };
   }
 }

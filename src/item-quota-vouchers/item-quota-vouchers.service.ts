@@ -438,12 +438,11 @@ export class ItemQuotaVouchersService {
     if (!items.length) {
       return items.map((item) => ({ ...item, currentAccommodation: null }));
     }
-    const year = currentJalaliYear();
     const managerIds = [
       ...new Set(items.map((item) => item.accommodationManagerId)),
     ];
     const assignments = await this.prisma.accommodationManager.findMany({
-      where: { year, userId: { in: managerIds } },
+      where: { userId: { in: managerIds } },
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
       select: {
         userId: true,

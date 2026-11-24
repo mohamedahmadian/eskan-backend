@@ -66,12 +66,13 @@ enum MealType {
 }
 
 model Role {
-  id        String     @id @default(uuid())
-  code      String     @unique
-  nameKey   String
-  userRoles UserRole[]
-  menus     RoleMenu[]
-  createdAt DateTime   @default(now())
+  id               String           @id @default(uuid())
+  code             String           @unique
+  nameKey          String
+  userRoles        UserRole[]
+  revokedUserRoles UserRevokedRole[]
+  menus            RoleMenu[]
+  createdAt        DateTime         @default(now())
 
   @@map("roles")
 }
@@ -85,6 +86,19 @@ model UserRole {
   @@id([userId, roleId])
   @@index([roleId])
   @@map("user_roles")
+}
+
+/// Roles an admin removed so auto-grant (caravan create, pilgrim add, …) will not put them back.
+model UserRevokedRole {
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  revokedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_revoked_roles")
 }
 
 model User {
@@ -136,6 +150,7 @@ model User {
   passportPhotoId     String?
   passportPhoto       StoredImage?  @relation("UserPassport", fields: [passportPhotoId], references: [id], onDelete: SetNull)
   userRoles           UserRole[]
+  revokedRoles        UserRevokedRole[]
   smsMessages         SmsMessage[]
   managedAccommodations AccommodationManager[]
   introducedAccommodations Accommodation[] @relation("AccommodationIntroducer")
@@ -143,11 +158,8 @@ model User {
   schoolManagedAccommodations Accommodation[] @relation("AccommodationSchoolManager")
   accommodationEvaluations AccommodationEvaluation[] @relation("AccommodationEvaluationReviewer")
   accommodationContacts AccommodationContact[]
-  accommodationYearContacts AccommodationYearContact[]
   managedCaravans       Caravan[] @relation("CaravanManager")
-  managedCaravanYears   CaravanYear[] @relation("CaravanYearManager")
   managedGroups         Group[]   @relation("GroupManager")
-  caravanContacts       CaravanContact[]
   createdReservations   Reservation[] @relation("ReservationCreator")
   managedReservations   Reservation[] @relation("ReservationCaravanManager")
   honoraryAssignments   ReservationHonoraryAssignment[] @relation("ReservationHonoraryAssignee")
@@ -331,7 +343,7 @@ model StoredImage {
   photoUsers        User[]   @relation("UserPhoto")
   nationalCardUsers User[]   @relation("UserNationalCard")
   passportUsers     User[]   @relation("UserPassport")
-  caravanLicenses   Caravan[] @relation("CaravanLicenseImage")
+  caravanLicenseImages CaravanLicenseImage[] @relation("CaravanLicensePhoto")
   issuedLicenseFiles IssuedLicense[] @relation("IssuedLicenseFile")
   reservationPermitImages Reservation[] @relation("ReservationPermitImage")
   headquartersLogos HeadquartersInfo[] @relation("HeadquartersLogo")
@@ -354,8 +366,14 @@ enum CaravanContactRole {
   RECEPTION
 }
 
+enum CaravanStatus {
+  ACTIVE
+  PENDING_REVIEW
+  INACTIVE
+}
+
 model Caravan {
-  id             String       @id @default(uuid())
+  id             String         @id @default(uuid())
   name           String
   description    String?
   officeAddress  String?
@@ -363,66 +381,38 @@ model Caravan {
   foundedYear    Int?
   licenseNumber  String?
   cityId         String
-  city           City         @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  walkingRouteId String?
-  walkingRoute   WalkingRoute? @relation(fields: [walkingRouteId], references: [id], onDelete: Restrict)
-  licenseImageId String?
-  licenseImage   StoredImage? @relation("CaravanLicenseImage", fields: [licenseImageId], references: [id], onDelete: SetNull)
+  city           City           @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  licenseImages  CaravanLicenseImage[]
   managerUserId  String?
-  manager        User?        @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
-  contacts       CaravanContact[]
-  years          CaravanYear[]
+  manager        User?          @relation("CaravanManager", fields: [managerUserId], references: [id], onDelete: SetNull)
   reservations   Reservation[]
   issuedLicenses IssuedLicense[]
-  totalCount     Int          @default(0)
-  maleCount      Int          @default(0)
-  femaleCount    Int          @default(0)
   eitaa          String?
   bale           String?
   telegram       String?
   instagram      String?
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  status         CaravanStatus  @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@index([cityId])
-  @@index([walkingRouteId])
   @@index([managerUserId])
-  @@index([isActive])
+  @@index([status])
   @@map("caravans")
 }
 
-model CaravanContact {
-  id        String             @id @default(uuid())
+model CaravanLicenseImage {
+  id        String      @id @default(uuid())
   caravanId String
-  caravan   Caravan            @relation(fields: [caravanId], references: [id], onDelete: Cascade)
-  role      CaravanContactRole
-  userId    String
-  user      User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  caravan   Caravan     @relation(fields: [caravanId], references: [id], onDelete: Cascade)
+  imageId   String
+  image     StoredImage @relation("CaravanLicensePhoto", fields: [imageId], references: [id], onDelete: Cascade)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
 
-  @@unique([caravanId, role])
-  @@index([userId])
-  @@map("caravan_contacts")
-}
-
-model CaravanYear {
-  id            String   @id @default(uuid())
-  caravanId     String
-  caravan       Caravan  @relation(fields: [caravanId], references: [id], onDelete: Cascade)
-  year          Int
-  managerUserId String?
-  manager       User?    @relation("CaravanYearManager", fields: [managerUserId], references: [id], onDelete: SetNull)
-  maleCount     Int      @default(0)
-  femaleCount   Int      @default(0)
-  createdAt     DateTime @default(now())
-
-  @@unique([caravanId, year])
-  @@index([year])
-  @@index([caravanId, year])
-  @@index([managerUserId])
-  @@map("caravan_years")
+  @@index([caravanId, sortOrder])
+  @@index([imageId])
+  @@map("caravan_license_images")
 }
 
 enum IssuedLicenseStatus {
@@ -826,8 +816,6 @@ model ReceptionSettings {
   caravanFemaleCapacity       Int           @default(0)
   caravanAutoApprove          Boolean       @default(false)
   caravanAutoApproveLicenses  Boolean       @default(false)
-  /// Max caravans one national ID may define in this reception year.
-  caravanMaxPerNationalId     Int           @default(1)
   /// Headcount cap on the first pilgrimage file of a newly established caravan.
   /// Caravans that already have a pilgrimage file are not capped.
   caravanNewMaxHeadcount      Int           @default(20)
@@ -1500,7 +1488,6 @@ model Accommodation {
   operationStatus       AccommodationOperationStatus @default(ACTIVE)
   managers              AccommodationManager[]
   contacts              AccommodationContact[]
-  yearContacts          AccommodationYearContact[]
   images                AccommodationImage[]
   evaluations           AccommodationEvaluation[]
   iceVouchers           IceVoucher[]
@@ -1571,40 +1558,18 @@ model AccommodationContact {
   @@map("accommodation_contacts")
 }
 
-model AccommodationYearContact {
-  id              String                    @id @default(uuid())
-  accommodationId String
-  accommodation   Accommodation             @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
-  role            AccommodationContactRole
-  userId          String
-  user            User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  year            Int
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-
-  @@unique([accommodationId, role, year])
-  @@index([userId])
-  @@index([accommodationId, year])
-  @@index([year])
-  @@map("accommodation_year_contacts")
-}
-
 model AccommodationManager {
   id               String        @id @default(uuid())
   accommodationId  String
   accommodation    Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
-  userId           String?
-  user             User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  year             Int
-  maleCapacity     Int           @default(0)
-  femaleCapacity   Int           @default(0)
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   isPrimary        Boolean       @default(false)
   createdAt        DateTime      @default(now())
 
-  @@unique([userId, accommodationId, year])
+  @@unique([userId, accommodationId])
   @@index([userId])
-  @@index([year])
-  @@index([accommodationId, year])
+  @@index([accommodationId])
   @@map("accommodation_managers")
 }
 
@@ -1707,7 +1672,6 @@ model WalkingRoute {
   originCountries     WalkingRouteOriginCountry[]
   stages              WalkingRouteStage[]
   reservations        Reservation[]
-  caravans            Caravan[]
   groups              Group[]
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt

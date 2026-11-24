@@ -89,7 +89,7 @@ export class FindAccommodationsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @Transform(({ value }) => toOptionalBoolean(value))
   @IsBoolean()
-  hasManagerThisYear?: boolean;
+  hasManager?: boolean;
 
   @IsOptional()
   @Transform(({ value }) => emptyToUndefined(value))

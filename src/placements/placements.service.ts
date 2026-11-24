@@ -61,14 +61,20 @@ const userSelect = {
   status: true,
 } satisfies Prisma.UserSelect;
 
-const partySelect = {
+const caravanPartySelect = {
+  id: true,
+  name: true,
+  managerUserId: true,
+} satisfies Prisma.CaravanSelect;
+
+const groupPartySelect = {
   id: true,
   name: true,
   managerUserId: true,
   maleCount: true,
   femaleCount: true,
   totalCount: true,
-} satisfies Prisma.CaravanSelect;
+} satisfies Prisma.GroupSelect;
 
 const allocationInclude = {
   accommodation: {
@@ -91,7 +97,6 @@ const allocationInclude = {
       otherSocial: true,
       managers: {
         orderBy: [
-          { year: 'desc' as const },
           { isPrimary: 'desc' as const },
           { createdAt: 'asc' as const },
         ],
@@ -109,8 +114,8 @@ const queueInclude = {
   originCity: {
     select: { id: true, nameFa: true, nameEn: true, provinceId: true },
   },
-  caravan: { select: partySelect },
-  group: { select: partySelect },
+  caravan: { select: caravanPartySelect },
+  group: { select: groupPartySelect },
   createdBy: { select: userSelect },
   caravanManager: { select: userSelect },
   allocations: {

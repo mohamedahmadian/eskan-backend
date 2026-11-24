@@ -5,6 +5,7 @@ import { PaginationQueryDto } from '../../common/pagination';
 import { sortDirections } from '../../common/sort-query';
 
 export const caravanHistorySortFields = [
+  'code',
   'year',
   'status',
   'stayStartDate',

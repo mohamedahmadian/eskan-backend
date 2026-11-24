@@ -1,8 +1,8 @@
 import { Transform, Type } from 'class-transformer';
 import {
-  ArrayUnique,
+  ArrayMaxSize,
   IsArray,
-  IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -11,10 +11,11 @@ import {
   Min,
   MinLength,
   ValidateIf,
-  ValidateNested,
 } from 'class-validator';
 import { emptyToNull } from '../../common/dto-transform';
-import { CaravanContactInputDto } from './caravan-contact-input.dto';
+import { CaravanStatus } from '../../generated/prisma/client';
+
+export const MAX_CARAVAN_LICENSE_IMAGES = 8;
 
 export class CreateCaravanDto {
   @IsString()
@@ -36,12 +37,6 @@ export class CreateCaravanDto {
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
-  @IsUUID()
-  walkingRouteId?: string | null;
-
-  @IsOptional()
-  @Transform(({ value }) => emptyToNull(value))
-  @ValidateIf((_, value) => value != null)
   @IsString()
   licenseNumber?: string | null;
 
@@ -52,35 +47,16 @@ export class CreateCaravanDto {
   licenseImageId?: string | null;
 
   @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_CARAVAN_LICENSE_IMAGES)
+  @IsUUID('4', { each: true })
+  licenseImageIds?: string[];
+
+  @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
   @ValidateIf((_, value) => value != null)
   @IsUUID('4')
   managerUserId?: string | null;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1300)
-  @Max(1600)
-  year?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  totalCount?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  maleCount?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  femaleCount?: number;
 
   @IsOptional()
   @Transform(({ value }) => emptyToNull(value))
@@ -131,13 +107,6 @@ export class CreateCaravanDto {
   instagram?: string | null;
 
   @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @ArrayUnique((item: CaravanContactInputDto) => item.role)
-  @Type(() => CaravanContactInputDto)
-  contacts?: CaravanContactInputDto[];
+  @IsEnum(CaravanStatus)
+  status?: CaravanStatus;
 }

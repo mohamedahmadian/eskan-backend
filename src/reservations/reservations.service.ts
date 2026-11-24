@@ -36,6 +36,7 @@ import { resolveSortOrder } from '../common/sort-query';
 import {
   AllocationStatus,
   CaravanContactRole,
+  CaravanStatus,
   IssuedLicenseStatus,
   MealType,
   PlacementGenderPolicy,
@@ -172,10 +173,8 @@ const reservationInclude = {
       id: true,
       name: true,
       managerUserId: true,
+      status: true,
       eitaa: true,
-      maleCount: true,
-      femaleCount: true,
-      totalCount: true,
       city: {
         select: {
           id: true,
@@ -270,7 +269,6 @@ const reservationInclude = {
           otherSocial: true,
           managers: {
             orderBy: [
-              { year: 'desc' as const },
               { isPrimary: 'desc' as const },
               { createdAt: 'asc' as const },
             ],
@@ -326,7 +324,6 @@ const emptySettings = (year: number) => ({
   caravanFemaleCapacity: 0,
   caravanAutoApprove: false,
   caravanAutoApproveLicenses: false,
-  caravanMaxPerNationalId: 1,
   caravanNewMaxHeadcount: 20,
   caravanCreateInReception: false,
   caravanPlacementMode: PlacementMode.MANUAL,
@@ -417,7 +414,6 @@ function serializeSettings(row: SettingsWithPlans, exists = true) {
     caravanFemaleCapacity: row.caravanFemaleCapacity,
     caravanAutoApprove: row.caravanAutoApprove,
     caravanAutoApproveLicenses: row.caravanAutoApproveLicenses,
-    caravanMaxPerNationalId: row.caravanMaxPerNationalId ?? 1,
     caravanNewMaxHeadcount: row.caravanNewMaxHeadcount ?? 20,
     caravanCreateInReception: row.caravanCreateInReception ?? false,
     caravanPlacementMode: row.caravanPlacementMode,
@@ -769,6 +765,7 @@ export class ReservationsService {
 
     const createdById = await this.resolveCreatedById(dto.createdById, actor);
     const caravan = await this.resolveCaravan(dto, actor);
+    this.assertCaravanCanOpenFile(caravan);
     const group = await this.resolveGroup(dto, actor);
     const originCountryId = await this.resolvePilgrimOriginCountryId(this.prisma, {
       createdById,
@@ -876,7 +873,7 @@ export class ReservationsService {
         return this.submitDraft(tx, created, actor);
       }),
     );
-    await this.users.ensureRole(createdById, 'PILGRIM');
+    await this.users.grantAutoRole(createdById, 'PILGRIM');
     if (!asDraft) {
       await this.notifyInitialRegistration(result, actor.id);
     }
@@ -1020,6 +1017,9 @@ export class ReservationsService {
       },
       actor,
     );
+    if (caravan && caravan.id !== current.caravanId) {
+      this.assertCaravanCanOpenFile(caravan);
+    }
     const group = await this.resolveGroup(
       {
         type,
@@ -1581,36 +1581,6 @@ export class ReservationsService {
     return this.list(query);
   }
 
-  /** TEMP: hard-delete every reservation (and cascaded members/contacts). */
-  async purgeAll(actor: Actor) {
-    if (!isAdmin(actor)) {
-      throw new ForbiddenException('دسترسی به این بخش مجاز نیست');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const withPermitImage = await tx.reservation.findMany({
-        where: { permitImageId: { not: null } },
-        select: { permitImageId: true },
-      });
-      const permitImageIds = withPermitImage
-        .map((row) => row.permitImageId)
-        .filter((id): id is string => Boolean(id));
-
-      const deleted = await tx.reservation.deleteMany({});
-
-      if (permitImageIds.length) {
-        await tx.storedImage.deleteMany({
-          where: { id: { in: permitImageIds } },
-        });
-      }
-
-      this.logger.warn(
-        `reservation.purgeAll deleted=${deleted.count} by=${actor.id}`,
-      );
-      return { deleted: deleted.count };
-    });
-  }
-
   async findOpen(actor: Actor, userId?: string, year?: number) {
     const subjectId = userId || actor.id;
     if (subjectId !== actor.id && !isAdmin(actor)) {
@@ -1867,7 +1837,9 @@ export class ReservationsService {
       this.reservationStatusSummary(where),
       this.recentReservations(where),
       this.prisma.caravan.count({ where: caravanWhere }),
-      this.prisma.caravan.count({ where: { ...caravanWhere, isActive: true } }),
+      this.prisma.caravan.count({
+        where: { ...caravanWhere, status: CaravanStatus.ACTIVE },
+      }),
       this.prisma.caravan.findMany({
         where: caravanWhere,
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -1875,7 +1847,7 @@ export class ReservationsService {
         select: {
           id: true,
           name: true,
-          isActive: true,
+          status: true,
           city: {
             select: { id: true, nameFa: true, nameEn: true, provinceId: true },
           },
@@ -1886,7 +1858,10 @@ export class ReservationsService {
       caravanCount,
       activeCaravanCount,
       totals,
-      recentCaravans,
+      recentCaravans: recentCaravans.map((item) => ({
+        ...item,
+        isActive: item.status === CaravanStatus.ACTIVE,
+      })),
       recentReservations,
     };
   }
@@ -1976,7 +1951,7 @@ export class ReservationsService {
   }
 
   async addMember(id: string, dto: AddReservationMemberDto, actor: Actor) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await this.requireReservation(id, tx);
       this.assertOwnerOrAdmin(current, actor);
       this.assertGroupOrCaravan(current);
@@ -2009,8 +1984,10 @@ export class ReservationsService {
 
       await this.syncMemberServiceRequests(tx, id);
       const updated = await this.requireReservation(id, tx);
-      return this.serialize(updated, actor);
+      return { serialized: this.serialize(updated, actor), userId: user.id };
     });
+    await this.users.grantAutoRole(result.userId, 'PILGRIM');
+    return result.serialized;
   }
 
   async updateMember(
@@ -2201,7 +2178,7 @@ export class ReservationsService {
     actor: Actor,
     sourceReservationId: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const copied = await this.prisma.$transaction(async (tx) => {
       const current = await this.requireReservation(id, tx);
       this.assertOwnerOrAdmin(current, actor);
       this.assertCaravan(current);
@@ -2248,8 +2225,13 @@ export class ReservationsService {
       });
       await this.syncMemberServiceRequests(tx, id);
 
-      return this.serialize(await this.requireReservation(id, tx), actor);
+      return {
+        serialized: this.serialize(await this.requireReservation(id, tx), actor),
+        userIds: toCreate.map((item) => item.userId),
+      };
     });
+    await this.users.grantAutoRoles(copied.userIds, 'PILGRIM');
+    return copied.serialized;
   }
 
   async memberImportTemplate(id: string, actor: Actor) {
@@ -2374,7 +2356,7 @@ export class ReservationsService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const imported = await this.prisma.$transaction(async (tx) => {
       const fresh = await this.requireReservation(id, tx);
       this.assertCompanionsStatus(fresh, actor);
       this.assertRemainingForImport(
@@ -2393,6 +2375,11 @@ export class ReservationsService {
       await this.syncMemberServiceRequests(tx, id);
       return this.serialize(await this.requireReservation(id, tx), actor);
     });
+    await this.users.grantAutoRoles(
+      resolved.map((item) => item.user.id),
+      'PILGRIM',
+    );
+    return imported;
   }
 
   async completeCompanions(id: string, actor: Actor) {
@@ -2535,61 +2522,6 @@ export class ReservationsService {
         },
       },
     });
-    return this.serialize(await this.requireReservation(id), actor);
-  }
-
-  async copyContactsFromCaravan(id: string, actor: Actor) {
-    const current = await this.requireReservation(id);
-    this.assertOwnerOrAdmin(current, actor);
-    if (current.type !== ReservationType.CARAVAN) {
-      throw new BadRequestException('این پرونده کاروانی نیست');
-    }
-    this.assertWorkflowStatus(
-      current,
-      actor,
-      contactEditStatuses(current.type),
-    );
-    if (!current.caravanId) {
-      throw new BadRequestException('کاروان این پرونده مشخص نیست');
-    }
-
-    const caravan = await this.prisma.caravan.findUnique({
-      where: { id: current.caravanId },
-      include: { contacts: true },
-    });
-    if (!caravan?.contacts.length) {
-      throw new BadRequestException('برای این کاروان مسئولی تعریف نشده است');
-    }
-    const travellers = caravan.contacts.filter((contact) =>
-      current.members.some(
-        (member) =>
-          member.userId === contact.userId &&
-          (member.user.gender === UserGender.MALE ||
-            member.user.gender === UserGender.FEMALE),
-      ),
-    );
-    if (!travellers.length) {
-      throw new BadRequestException(
-        'هیچ‌یک از رابطین تعریف‌شدهٔ کاروان در فهرست زائرین این پرونده نیستند',
-      );
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const contact of travellers) {
-        await tx.reservationCaravanContact.upsert({
-          where: {
-            reservationId_role: { reservationId: id, role: contact.role },
-          },
-          create: {
-            reservationId: id,
-            role: contact.role,
-            userId: contact.userId,
-          },
-          update: { userId: contact.userId },
-        });
-      }
-    });
-
     return this.serialize(await this.requireReservation(id), actor);
   }
 
@@ -3252,7 +3184,6 @@ export class ReservationsService {
         status: {
           in: [IssuedLicenseStatus.ISSUED, IssuedLicenseStatus.APPROVED],
         },
-        managerUserId: caravan.managerUserId,
         caravanId: caravan.id,
         issuedAt: { gte: yearRange.gte, lt: yearRange.lt },
       },
@@ -3756,7 +3687,22 @@ export class ReservationsService {
     const managerUserId = isAdmin(actor)
       ? (dto.caravanManagerId ?? caravan.managerUserId)
       : (caravan.managerUserId ?? actor.id);
-    return { id: caravan.id, managerUserId };
+    return {
+      id: caravan.id,
+      managerUserId,
+      status: caravan.status,
+    };
+  }
+
+  private assertCaravanCanOpenFile(
+    caravan: { status: CaravanStatus } | null,
+  ) {
+    if (!caravan || caravan.status === CaravanStatus.ACTIVE) return;
+    throw new BadRequestException(
+      caravan.status === CaravanStatus.PENDING_REVIEW
+        ? 'این کاروان در انتظار بررسی است و امکان ثبت پرونده جدید ندارد'
+        : 'این کاروان غیرفعال است و امکان ثبت پرونده جدید ندارد',
+    );
   }
 
   private async resolveGroup(
@@ -4141,6 +4087,7 @@ export class ReservationsService {
     await tx.reservationMember.create({
       data: { reservationId: reservation.id, userId },
     });
+    await this.users.grantAutoRole(userId, 'PILGRIM');
   }
 
   private async resolveCompanion(
@@ -4238,7 +4185,7 @@ export class ReservationsService {
       updateYear?: boolean;
     },
   ) {
-    const { type, groupId, caravanId, maleCount, femaleCount, year, updateYear } = params;
+    const { type, groupId, maleCount, femaleCount } = params;
     const totalCount = maleCount + femaleCount;
     if (type === ReservationType.GROUP && groupId) {
       await tx.group.update({
@@ -4246,25 +4193,6 @@ export class ReservationsService {
         data: { maleCount, femaleCount, totalCount },
       });
       return;
-    }
-    if (type === ReservationType.CARAVAN && caravanId) {
-      await tx.caravan.update({
-        where: { id: caravanId },
-        data: { maleCount, femaleCount, totalCount },
-      });
-      const yearRow =
-        updateYear && year
-          ? await tx.caravanYear.findUnique({
-              where: { caravanId_year: { caravanId, year } },
-              select: { id: true },
-            })
-          : null;
-      if (yearRow) {
-        await tx.caravanYear.update({
-          where: { id: yearRow.id },
-          data: { maleCount, femaleCount },
-        });
-      }
     }
   }
 
@@ -4592,8 +4520,11 @@ export class ReservationsService {
       throw new NotFoundException('کاروان یافت نشد');
     }
     if (isAdmin(actor) || caravan.managerUserId === actor.id) return;
-    const contact = await this.prisma.caravanContact.findFirst({
-      where: { caravanId, userId: actor.id },
+    const contact = await this.prisma.reservationCaravanContact.findFirst({
+      where: {
+        userId: actor.id,
+        reservation: { caravanId },
+      },
       select: { id: true },
     });
     if (contact) return;

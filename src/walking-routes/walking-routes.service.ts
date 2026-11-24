@@ -155,14 +155,6 @@ export class WalkingRoutesService {
       return { route: await this.findOne(preferred.walkingRouteId) };
     }
 
-    const caravan = await this.prisma.caravan.findFirst({
-      where: { managerUserId: userId, walkingRouteId: { not: null } },
-      orderBy: [{ isActive: 'desc' }, { updatedAt: 'desc' }],
-      select: { walkingRouteId: true },
-    });
-    if (caravan?.walkingRouteId) {
-      return { route: await this.findOne(caravan.walkingRouteId) };
-    }
     return { route: null };
   }
 
